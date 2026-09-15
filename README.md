@@ -25,6 +25,30 @@ npm run db:demo            # equipamento completo, com estrutura, estoque, cota�
 npm run db:demo -- limpar  # apaga tudo isso (usuários e configurações ficam)
 ```
 
+## Deploy na Vercel
+
+1. Importe o repositório na Vercel — ela detecta o Next.js sozinha, não precisa
+   mexer em build command nem output directory.
+2. Em **Settings → Environment Variables**, adicione:
+
+   | Variável | Valor |
+   |---|---|
+   | `DATABASE_URL` | a connection string **pooled** do Neon |
+   | `AUTH_SECRET` | o mesmo valor usado no `.env.local` |
+
+   O `AUTH_SECRET` precisa ser idêntico entre os ambientes: é o que assina o
+   cookie de sessão. Valores diferentes fazem a sessão de um não valer no outro.
+
+3. O `vercel.json` fixa as funções em `gru1` (São Paulo), a mesma região do
+   banco no Neon. Sem isso a Vercel roda em `iad1` (Washington) e cada consulta
+   vira uma ida e volta de ~200 ms — com várias consultas por tela, a diferença
+   é grande. Se um dia o banco mudar de região, mude aqui junto.
+
+> **Atenção:** o `npm run dev` local aponta para o **mesmo banco** da produção.
+> É prático para duas pessoas, mas um lançamento de teste feito na sua máquina
+> é um lançamento real. Se isso incomodar, crie uma branch no Neon (Branches →
+> New branch) e use a connection string dela só no `.env.local`.
+
 ## Módulos
 
 | Tela | O que faz |

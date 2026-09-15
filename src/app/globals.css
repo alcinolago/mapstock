@@ -1,0 +1,157 @@
+@import "tailwindcss";
+
+/* next-themes marca o tema com a classe .dark no <html>. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ---------------------------------------------------------------------------
+ * Tokens de cor
+ *
+ * A identidade vem do sistema desktop: azul #0ea5e9 como cor de marca, fundo
+ * slate claro, e no escuro o mesmo #0b1220 que ele ja usava. Cada token e
+ * definido nos dois temas — nenhuma cor existe so num deles.
+ * ------------------------------------------------------------------------ */
+
+:root {
+  --fundo: #f1f5f9;
+  --superficie: #ffffff;
+  --superficie-2: #f8fafc;
+  --borda: #e2e8f0;
+  --borda-forte: #cbd5e1;
+
+  --texto: #0f172a;
+  --texto-suave: #475569;
+  --texto-fraco: #64748b;
+
+  /* sky-600 em vez do 500 do desktop: contraste bem melhor sobre branco */
+  --marca: #0284c7;
+  --marca-suave: #e0f2fe;
+  --marca-texto: #ffffff;
+
+  --ok: #15803d;
+  --ok-suave: #dcfce7;
+  --alerta: #b45309;
+  --alerta-suave: #fef3c7;
+  --perigo: #b91c1c;
+  --perigo-suave: #fee2e2;
+  --info: #0369a1;
+  --info-suave: #e0f2fe;
+
+  --anel: #0284c7;
+  --sombra: 0 1px 2px 0 rgb(15 23 42 / 0.05), 0 1px 3px 0 rgb(15 23 42 / 0.06);
+}
+
+.dark {
+  --fundo: #0b1220;
+  --superficie: #131d2f;
+  --superficie-2: #1a2639;
+  --borda: #24324a;
+  --borda-forte: #33425c;
+
+  --texto: #e6edf6;
+  --texto-suave: #b6c3d4;
+  --texto-fraco: #8b9ab0;
+
+  /* sky-400: sobre fundo escuro o 600 fica ilegivel */
+  --marca: #38bdf8;
+  --marca-suave: #0c2c42;
+  --marca-texto: #06263a;
+
+  --ok: #4ade80;
+  --ok-suave: #0d2c1b;
+  --alerta: #fbbf24;
+  --alerta-suave: #362408;
+  --perigo: #f87171;
+  --perigo-suave: #3a1414;
+  --info: #56ccf2;
+  --info-suave: #0c2c42;
+
+  --anel: #38bdf8;
+  --sombra: 0 1px 2px 0 rgb(0 0 0 / 0.4), 0 1px 3px 0 rgb(0 0 0 / 0.3);
+}
+
+@theme inline {
+  --color-fundo: var(--fundo);
+  --color-superficie: var(--superficie);
+  --color-superficie-2: var(--superficie-2);
+  --color-borda: var(--borda);
+  --color-borda-forte: var(--borda-forte);
+
+  --color-texto: var(--texto);
+  --color-texto-suave: var(--texto-suave);
+  --color-texto-fraco: var(--texto-fraco);
+
+  --color-marca: var(--marca);
+  --color-marca-suave: var(--marca-suave);
+  --color-marca-texto: var(--marca-texto);
+
+  --color-ok: var(--ok);
+  --color-ok-suave: var(--ok-suave);
+  --color-alerta: var(--alerta);
+  --color-alerta-suave: var(--alerta-suave);
+  --color-perigo: var(--perigo);
+  --color-perigo-suave: var(--perigo-suave);
+  --color-info: var(--info);
+  --color-info-suave: var(--info-suave);
+
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+}
+
+@layer base {
+  * {
+    border-color: var(--borda);
+  }
+
+  html {
+    color-scheme: light;
+  }
+
+  .dark html,
+  html.dark {
+    color-scheme: dark;
+  }
+
+  body {
+    background-color: var(--fundo);
+    color: var(--texto);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Um unico anel de foco no sistema inteiro. */
+  :focus-visible {
+    outline: 2px solid var(--anel);
+    outline-offset: 2px;
+  }
+
+  /* Codigos de item (FIX-PAR-M6X20) leem melhor em monoespacada. */
+  .codigo {
+    font-family: var(--font-mono);
+    font-variant-ligatures: none;
+    letter-spacing: -0.01em;
+  }
+
+  /* Numero em tabela: alinhado pela casa decimal. */
+  .num {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* Barra de rolagem discreta, coerente nos dois temas. */
+@layer utilities {
+  .rolagem-fina {
+    scrollbar-width: thin;
+    scrollbar-color: var(--borda-forte) transparent;
+  }
+  .rolagem-fina::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  .rolagem-fina::-webkit-scrollbar-thumb {
+    background-color: var(--borda-forte);
+    border-radius: 9999px;
+  }
+  .rolagem-fina::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}

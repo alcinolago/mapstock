@@ -1,17 +1,17 @@
 "use client";
 
-import { AlertCircle, Eye, EyeOff, LoaderCircle } from "lucide-react";
-import { useActionState, useState } from "react";
+import { AlertCircle, LoaderCircle } from "lucide-react";
+import { useActionState } from "react";
 
 import { AlternarTema } from "@/components/layout/alternar-tema";
 import { MarcaCompleta } from "@/components/layout/marca";
 import { Botao } from "@/components/ui/botao";
 import { Entrada, Grupo } from "@/components/ui/campo";
+import { CampoSenha } from "@/components/ui/campo-senha";
 import { entrar, type EstadoLogin } from "@/lib/acoes/sessao";
 
 export function PaginaLogin({ destino }: { destino?: string }) {
   const [estado, acao, pendente] = useActionState<EstadoLogin, FormData>(entrar, {});
-  const [verSenha, setVerSenha] = useState(false);
 
   return (
     <main className="relative flex min-h-dvh items-center justify-center overflow-hidden px-4 py-10">
@@ -49,25 +49,13 @@ export function PaginaLogin({ destino }: { destino?: string }) {
             </Grupo>
 
             <Grupo rotulo="Senha" htmlFor="senha" obrigatorio>
-              <div className="relative">
-                <Entrada
-                  id="senha"
-                  name="senha"
-                  type={verSenha ? "text" : "password"}
-                  autoComplete="current-password"
-                  placeholder="••••••••"
-                  required
-                  className="pr-10"
-                />
-                <button
-                  type="button"
-                  onClick={() => setVerSenha((v) => !v)}
-                  aria-label={verSenha ? "Ocultar senha" : "Mostrar senha"}
-                  className="absolute inset-y-0 right-0 grid w-10 place-items-center text-texto-fraco transition-colors hover:text-texto"
-                >
-                  {verSenha ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
-                </button>
-              </div>
+              <CampoSenha
+                id="senha"
+                name="senha"
+                autoComplete="current-password"
+                placeholder="••••••••"
+                required
+              />
             </Grupo>
 
             {estado.erro && (

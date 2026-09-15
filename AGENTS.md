@@ -28,7 +28,7 @@ src/lib/codigo.ts       sugestão de código e classificação (portado do deskt
 src/lib/sessao.ts       JWT + cookie          src/lib/auth.ts  guardas de página
 src/lib/acoes/*         server actions, uma por módulo
 src/proxy.ts            proteção de rota (era `middleware` até o Next 15)
-src/components/ui/*     primitivos: Botao, Entrada, Cartao, Selo, Tabela
+src/components/ui/*     primitivos: Botao, Entrada, CampoSenha, Cartao, Selo, Tabela
 ```
 
 ## O sistema é colaborativo
@@ -52,6 +52,12 @@ listagem, é bug.
 - **Nível 0 é o equipamento montado**: não se movimenta e nunca conta falta.
 - **Toda server action que escreve chama `exigirEdicao()`** (ou `exigirAdmin()`)
   e registra em `logAuditoria` via `registrar()`.
+
+## Campos de senha
+
+Sempre `<CampoSenha>` de `components/ui/campo-senha.tsx`, nunca um
+`<Entrada type="password">` solto — é ele que traz o olhinho de mostrar e
+ocultar, igual nas três telas que pedem senha.
 
 ## Cores
 

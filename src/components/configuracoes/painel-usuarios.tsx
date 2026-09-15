@@ -6,6 +6,7 @@ import { useState, useTransition } from "react";
 
 import { Botao } from "@/components/ui/botao";
 import { Entrada, Grupo, Selecao } from "@/components/ui/campo";
+import { CampoSenha } from "@/components/ui/campo-senha";
 import { Selo } from "@/components/ui/selo";
 import {
   Cabecalho,
@@ -113,8 +114,7 @@ export function PainelUsuarios({ usuarios }: { usuarios: Usuario[] }) {
               obrigatorio={editando === "novo"}
               ajuda={editando === "novo" ? "Mínimo 6 caracteres" : "Deixe em branco para manter a atual"}
             >
-              <Entrada
-                type="password"
+              <CampoSenha
                 value={rascunho.senha}
                 onChange={(e) => setRascunho((r) => ({ ...r, senha: e.target.value }))}
                 autoComplete="new-password"

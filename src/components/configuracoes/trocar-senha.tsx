@@ -4,7 +4,8 @@ import { Check, KeyRound } from "lucide-react";
 import { useState, useTransition } from "react";
 
 import { Botao } from "@/components/ui/botao";
-import { Entrada, Grupo } from "@/components/ui/campo";
+import { Grupo } from "@/components/ui/campo";
+import { CampoSenha } from "@/components/ui/campo-senha";
 import { trocarMinhaSenha } from "@/lib/acoes/configuracoes";
 
 export function TrocarSenha() {
@@ -42,8 +43,7 @@ export function TrocarSenha() {
       </p>
 
       <Grupo rotulo="Senha atual" obrigatorio>
-        <Entrada
-          type="password"
+        <CampoSenha
           value={atual}
           onChange={(e) => setAtual(e.target.value)}
           autoComplete="current-password"
@@ -51,8 +51,7 @@ export function TrocarSenha() {
       </Grupo>
 
       <Grupo rotulo="Nova senha" obrigatorio>
-        <Entrada
-          type="password"
+        <CampoSenha
           value={nova}
           onChange={(e) => setNova(e.target.value)}
           autoComplete="new-password"
@@ -60,8 +59,7 @@ export function TrocarSenha() {
       </Grupo>
 
       <Grupo rotulo="Confirme a nova senha" obrigatorio>
-        <Entrada
-          type="password"
+        <CampoSenha
           value={confirma}
           onChange={(e) => setConfirma(e.target.value)}
           autoComplete="new-password"

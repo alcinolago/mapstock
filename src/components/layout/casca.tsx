@@ -7,10 +7,30 @@ import { AlternarTema } from "./alternar-tema";
 import { BarraLateral } from "./barra-lateral";
 import { Marca } from "./marca";
 import { MenuUsuario } from "./menu-usuario";
+import { COOKIE_MENU } from "./preferencias";
 import type { Sessao } from "@/lib/sessao";
 
-export function Casca({ sessao, children }: { sessao: Sessao; children: ReactNode }) {
+export function Casca({
+  sessao,
+  menuRecolhido,
+  children,
+}: {
+  sessao: Sessao;
+  /** Vem do cookie, lido no servidor: a barra já renderiza no estado certo. */
+  menuRecolhido: boolean;
+  children: ReactNode;
+}) {
   const [menuAberto, setMenuAberto] = useState(false);
+  const [recolhida, setRecolhida] = useState(menuRecolhido);
+
+  function alternarRecolher() {
+    const novo = !recolhida;
+    setRecolhida(novo);
+    /* Cookie em vez de localStorage: o layout roda no servidor e precisa
+       saber a preferência antes do primeiro render, senão a barra pisca
+       aberta e encolhe depois da hidratação. Um ano é tempo de sobra. */
+    document.cookie = `${COOKIE_MENU}=${novo ? "1" : "0"}; path=/; max-age=31536000; samesite=lax`;
+  }
 
   return (
     <div className="flex min-h-dvh">
@@ -18,6 +38,8 @@ export function Casca({ sessao, children }: { sessao: Sessao; children: ReactNod
         papel={sessao.papel}
         aberta={menuAberto}
         aoFechar={() => setMenuAberto(false)}
+        recolhida={recolhida}
+        aoAlternarRecolher={alternarRecolher}
       />
 
       <div className="flex min-w-0 flex-1 flex-col">

@@ -56,10 +56,18 @@ npm run db:demo -- limpar  # apaga tudo isso (usuários e configurações ficam)
 | **Painel** | Em falta, abaixo do mínimo, valor em estoque, pedidos a receber |
 | **Itens** | Cadastro com código e classificação sugeridos, fornecedores, parâmetros 3D |
 | **Fornecedores** | Cadastro único, com os itens que cada um fornece |
-| **Estrutura** | Árvore de componentes (BOM), com trava contra ciclo |
+| **Estrutura** | Árvore de componentes (BOM), reordenável, com trava contra ciclo |
 | **Estoque** | Entradas, saídas, reservas e ajustes; saldo físico / reservado / disponível |
 | **Compras** | Cotação → comparativo de preços → pedido → recebimento |
 | **Configurações** | Níveis, classificações e prefixos, unidades, usuários |
+| **Minha conta** | Qualquer perfil troca a própria senha aqui |
+
+### Exportar para Excel
+
+As telas de **Itens** e **Estoque** têm botão de exportar CSV. O arquivo sai
+com ponto e vírgula, BOM UTF-8 e vírgula decimal — abre direto no Excel em
+português, com os acentos certos. A exportação de itens leva os filtros da
+tela junto: o que você está vendo é o que baixa.
 
 ## Como funciona a cotação de compra
 

@@ -1,7 +1,9 @@
 import { desc, eq } from "drizzle-orm";
+import { Download } from "lucide-react";
 
 import { FormularioMovimento } from "@/components/estoque/formulario-movimento";
 import { Historico } from "@/components/estoque/historico";
+import { Botao } from "@/components/ui/botao";
 import { CabecalhoPagina } from "@/components/ui/cabecalho-pagina";
 import { db } from "@/db";
 import { listarItensComSaldo } from "@/db/consultas";
@@ -54,6 +56,14 @@ export default async function PaginaEstoque() {
       <CabecalhoPagina
         titulo="Estoque"
         descricao="Entradas, saídas, reservas e ajustes. O saldo é sempre a soma do histórico."
+        acao={
+          <a href="/api/exportar/movimentos">
+            <Botao variante="contorno">
+              <Download className="size-4" />
+              Exportar CSV
+            </Botao>
+          </a>
+        }
       />
 
       <div className="grid gap-5 xl:grid-cols-[22rem_1fr]">

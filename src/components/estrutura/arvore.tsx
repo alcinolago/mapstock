@@ -1,13 +1,13 @@
 "use client";
 
-import { ChevronRight, Package, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronRight, ChevronUp, Package, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
 import { Botao } from "@/components/ui/botao";
 import { Selo } from "@/components/ui/selo";
-import { desvincularDaEstrutura } from "@/lib/acoes/estrutura";
+import { desvincularDaEstrutura, moverNaEstrutura } from "@/lib/acoes/estrutura";
 import { cn, numero } from "@/lib/utils";
 
 export type NoEstrutura = {
@@ -37,7 +37,14 @@ export function Arvore({ raizes, podeEditar }: { raizes: NoEstrutura[]; podeEdit
   return (
     <ul className="p-2">
       {raizes.map((no) => (
-        <No key={no.itemId} no={no} profundidade={0} podeEditar={podeEditar} />
+        <No
+          key={no.itemId}
+          no={no}
+          profundidade={0}
+          podeEditar={podeEditar}
+          primeiro
+          ultimo
+        />
       ))}
     </ul>
   );
@@ -47,16 +54,31 @@ function No({
   no,
   profundidade,
   podeEditar,
+  primeiro,
+  ultimo,
 }: {
   no: NoEstrutura;
   profundidade: number;
   podeEditar: boolean;
+  /* Nos extremos as setas ficam desabilitadas, em vez de sumirem: assim a
+     linha não muda de largura conforme a peça sobe e desce. */
+  primeiro: boolean;
+  ultimo: boolean;
 }) {
   const router = useRouter();
   const [aberto, setAberto] = useState(profundidade < 2);
   const [pendente, iniciar] = useTransition();
 
   const temFilhos = no.filhos.length > 0;
+
+  function mover(direcao: "cima" | "baixo") {
+    if (!no.vinculoId) return;
+    iniciar(async () => {
+      const r = await moverNaEstrutura(no.vinculoId!, direcao);
+      if (r.erro) alert(r.erro);
+      else router.refresh();
+    });
+  }
 
   function remover() {
     if (!no.vinculoId) return;
@@ -119,27 +141,54 @@ function No({
         )}
 
         {podeEditar && no.vinculoId && (
-          <Botao
-            variante="fantasma"
-            tamanho="sm"
-            onClick={remover}
-            disabled={pendente}
-            title="Remover desta montagem"
-            className="shrink-0 opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
-          >
-            <Trash2 className="size-3.5 text-perigo" />
-          </Botao>
+          <div className="flex shrink-0 items-center opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100">
+            <Botao
+              variante="fantasma"
+              tamanho="sm"
+              onClick={() => mover("cima")}
+              disabled={pendente || primeiro}
+              title="Subir na ordem de montagem"
+              aria-label={`Subir ${no.codigo}`}
+              className="px-1.5"
+            >
+              <ChevronUp className="size-3.5" />
+            </Botao>
+            <Botao
+              variante="fantasma"
+              tamanho="sm"
+              onClick={() => mover("baixo")}
+              disabled={pendente || ultimo}
+              title="Descer na ordem de montagem"
+              aria-label={`Descer ${no.codigo}`}
+              className="px-1.5"
+            >
+              <ChevronDown className="size-3.5" />
+            </Botao>
+            <Botao
+              variante="fantasma"
+              tamanho="sm"
+              onClick={remover}
+              disabled={pendente}
+              title="Remover desta montagem"
+              aria-label={`Remover ${no.codigo}`}
+              className="px-1.5"
+            >
+              <Trash2 className="size-3.5 text-perigo" />
+            </Botao>
+          </div>
         )}
       </div>
 
       {aberto && temFilhos && (
         <ul>
-          {no.filhos.map((f) => (
+          {no.filhos.map((f, i) => (
             <No
               key={f.vinculoId ?? f.itemId}
               no={f}
               profundidade={profundidade + 1}
               podeEditar={podeEditar}
+              primeiro={i === 0}
+              ultimo={i === no.filhos.length - 1}
             />
           ))}
         </ul>

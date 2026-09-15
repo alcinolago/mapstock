@@ -1,6 +1,6 @@
 "use server";
 
-import { and, eq, sql } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
@@ -143,6 +143,64 @@ export async function atualizarQuantidadeEstrutura(
     acao: "atualizar",
     depois: { quantidade },
   });
+  revalidatePath("/estrutura");
+  return {};
+}
+
+/**
+ * Sobe ou desce um componente dentro da mesma montagem.
+ *
+ * Porte de move_bom() do desktop (linha 1128): troca a ordem com o vizinho,
+ * em vez de renumerar a lista inteira. Nos extremos não faz nada.
+ *
+ * A ordem é o que define a sequência de montagem na tela de Estrutura — é
+ * informação de processo, não enfeite: quem monta segue a lista de cima
+ * para baixo.
+ */
+export async function moverNaEstrutura(
+  id: string,
+  direcao: "cima" | "baixo",
+): Promise<{ erro?: string }> {
+  const sessao = await exigirEdicao();
+
+  const [alvo] = await db.select().from(bom).where(eq(bom.id, id));
+  if (!alvo) return { erro: "Vínculo não encontrado." };
+
+  /* Irmãos: os outros componentes da mesma montagem, na ordem atual. */
+  const irmaos = await db
+    .select()
+    .from(bom)
+    .where(eq(bom.paiId, alvo.paiId))
+    .orderBy(asc(bom.ordem), asc(bom.id));
+
+  const posicao = irmaos.findIndex((v) => v.id === id);
+  const destino = direcao === "cima" ? posicao - 1 : posicao + 1;
+  if (destino < 0 || destino >= irmaos.length) return {};
+
+  const vizinho = irmaos[destino];
+
+  /* Empate de ordem (dado antigo, ou tudo em zero) faria a troca não surtir
+     efeito nenhum. Nesse caso renumera pela posição atual antes de trocar. */
+  if (alvo.ordem === vizinho.ordem) {
+    for (const [i, v] of irmaos.entries()) {
+      await db.update(bom).set({ ordem: i + 1 }).where(eq(bom.id, v.id));
+    }
+    await db.update(bom).set({ ordem: destino + 1 }).where(eq(bom.id, alvo.id));
+    await db.update(bom).set({ ordem: posicao + 1 }).where(eq(bom.id, vizinho.id));
+  } else {
+    await db.update(bom).set({ ordem: vizinho.ordem }).where(eq(bom.id, alvo.id));
+    await db.update(bom).set({ ordem: alvo.ordem }).where(eq(bom.id, vizinho.id));
+  }
+
+  await registrar({
+    usuarioId: sessao.id,
+    tabela: "bom",
+    registroId: id,
+    acao: "atualizar",
+    antes: { ordem: alvo.ordem },
+    depois: { ordem: vizinho.ordem },
+  });
+
   revalidatePath("/estrutura");
   return {};
 }

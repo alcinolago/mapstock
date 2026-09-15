@@ -1,4 +1,4 @@
-import { Plus } from "lucide-react";
+import { Download, Plus } from "lucide-react";
 import Link from "next/link";
 
 import { FiltrosItens } from "@/components/itens/filtros-itens";
@@ -59,14 +59,25 @@ export default async function PaginaItens({
         titulo="Itens"
         descricao={`${lista.length} ${lista.length === 1 ? "item" : "itens"} — peças, componentes e consumíveis`}
         acao={
-          podeEditar && (
-            <Link href="/itens/novo">
-              <Botao>
-                <Plus className="size-4" />
-                Novo item
+          <>
+            {/* Leva os filtros da tela junto: baixa o que está sendo visto. */}
+            <a href={`/api/exportar/itens?${new URLSearchParams(
+              Object.entries(p).filter(([, v]) => v) as [string, string][],
+            )}`}>
+              <Botao variante="contorno">
+                <Download className="size-4" />
+                Exportar CSV
               </Botao>
-            </Link>
-          )
+            </a>
+            {podeEditar && (
+              <Link href="/itens/novo">
+                <Botao>
+                  <Plus className="size-4" />
+                  Novo item
+                </Botao>
+              </Link>
+            )}
+          </>
         }
       />
 

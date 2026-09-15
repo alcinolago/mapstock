@@ -15,7 +15,7 @@ export function BarraLateral({
   aberta,
   aoFechar,
   recolhida,
-  aoAlternarRecolher,
+  aoDefinirRecolhida,
 }: {
   papel: PapelUsuario;
   /** Só no celular: a barra entra por cima da tela. */
@@ -23,9 +23,22 @@ export function BarraLateral({
   aoFechar: () => void;
   /** Só no desktop: a barra encolhe para a faixa de ícones. */
   recolhida: boolean;
-  aoAlternarRecolher: () => void;
+  aoDefinirRecolhida: (valor: boolean) => void;
 }) {
   const caminho = usePathname();
+
+  /**
+   * Ao escolher uma tela, o menu sai da frente sozinho — ele serve para
+   * escolher o destino, não para ficar ocupando largura depois disso.
+   *
+   * A checagem de viewport evita gravar uma preferência de desktop a partir
+   * do celular, onde a barra some inteira e "recolhida" não significa nada.
+   */
+  function aoNavegar() {
+    aoFechar();
+    const noDesktop = window.matchMedia("(min-width: 1024px)").matches;
+    if (noDesktop && !recolhida) aoDefinirRecolhida(true);
+  }
 
   /* No celular a barra cobre a tela; navegar tem que fechar ela. */
   useEffect(() => {
@@ -79,6 +92,7 @@ export function BarraLateral({
                 /* Recolhida, o rótulo vira tooltip do navegador — é a única
                    pista que sobra de para onde o ícone leva. */
                 title={recolhida ? rotulo : undefined}
+                onClick={aoNavegar}
                 className={cn(
                   "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
                   recolhida && "lg:justify-center lg:px-0",
@@ -97,7 +111,7 @@ export function BarraLateral({
         <div className="shrink-0 border-t border-borda p-3">
           <button
             type="button"
-            onClick={aoAlternarRecolher}
+            onClick={() => aoDefinirRecolhida(!recolhida)}
             title={recolhida ? "Expandir menu" : "Recolher menu"}
             aria-label={recolhida ? "Expandir menu" : "Recolher menu"}
             className={cn(

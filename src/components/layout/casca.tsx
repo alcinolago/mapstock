@@ -23,13 +23,12 @@ export function Casca({
   const [menuAberto, setMenuAberto] = useState(false);
   const [recolhida, setRecolhida] = useState(menuRecolhido);
 
-  function alternarRecolher() {
-    const novo = !recolhida;
-    setRecolhida(novo);
+  function definirRecolhida(valor: boolean) {
+    setRecolhida(valor);
     /* Cookie em vez de localStorage: o layout roda no servidor e precisa
        saber a preferência antes do primeiro render, senão a barra pisca
        aberta e encolhe depois da hidratação. Um ano é tempo de sobra. */
-    document.cookie = `${COOKIE_MENU}=${novo ? "1" : "0"}; path=/; max-age=31536000; samesite=lax`;
+    document.cookie = `${COOKIE_MENU}=${valor ? "1" : "0"}; path=/; max-age=31536000; samesite=lax`;
   }
 
   return (
@@ -39,7 +38,7 @@ export function Casca({
         aberta={menuAberto}
         aoFechar={() => setMenuAberto(false)}
         recolhida={recolhida}
-        aoAlternarRecolher={alternarRecolher}
+        aoDefinirRecolhida={definirRecolhida}
       />
 
       <div className="flex min-w-0 flex-1 flex-col">

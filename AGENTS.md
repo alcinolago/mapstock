@@ -31,6 +31,17 @@ src/proxy.ts            proteção de rota (era `middleware` até o Next 15)
 src/components/ui/*     primitivos: Botao, Entrada, Cartao, Selo, Tabela
 ```
 
+## O sistema é colaborativo
+
+Tudo que é cadastrado é visível para todo mundo que tem acesso. **Nenhuma
+consulta de listagem filtra por usuário** — `criadoPor`, `atualizadoPor` e
+`movimentos.usuarioId` existem só para mostrar quem fez e alimentar a
+auditoria, nunca para esconder dado de ninguém.
+
+O que varia entre pessoas é permissão de ação (`exigirEdicao`, `exigirAdmin`),
+não visibilidade. Se algum dia aparecer um `where` contra usuário numa
+listagem, é bug.
+
 ## Regras que não podem quebrar
 
 - **`EFEITO_MOVIMENTO` (labels.ts) e o `CASE` do saldo (consultas.ts) espelham

@@ -1,6 +1,7 @@
 "use client";
 
 import { ChevronDown, LogOut, UserRound } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
 import { Botao } from "@/components/ui/botao";
@@ -68,7 +69,16 @@ export function MenuUsuario({
             <p className="truncate text-sm font-semibold text-texto">{nome}</p>
             <p className="truncate text-xs text-texto-fraco">{email}</p>
           </div>
-          <form action={sair}>
+          <Link
+            href="/conta"
+            onClick={() => setAberto(false)}
+            className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-texto-suave transition-colors hover:bg-superficie-2 hover:text-texto"
+          >
+            <UserRound className="size-4" />
+            Minha conta
+          </Link>
+
+          <form action={sair} className="border-t border-borda">
             <Botao
               type="submit"
               variante="fantasma"

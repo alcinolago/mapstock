@@ -7,7 +7,6 @@ import {
   type Classificacao,
 } from "@/components/configuracoes/painel-listas";
 import { PainelUsuarios } from "@/components/configuracoes/painel-usuarios";
-import { TrocarSenha } from "@/components/configuracoes/trocar-senha";
 import { Abas } from "@/components/ui/abas";
 import { CabecalhoPagina } from "@/components/ui/cabecalho-pagina";
 import { Cartao, CorpoCartao } from "@/components/ui/cartao";
@@ -67,7 +66,6 @@ export default async function PaginaConfiguracoes() {
               },
               { id: "niveis", rotulo: "Níveis", conteudo: <PainelNiveis niveis={listaNiveis} /> },
               { id: "unidades", rotulo: "Unidades", conteudo: <PainelUnidades lista={listaUnidades} /> },
-              { id: "senha", rotulo: "Minha senha", conteudo: <TrocarSenha /> },
             ]}
           />
         </CorpoCartao>

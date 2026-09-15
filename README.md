@@ -105,9 +105,16 @@ sessão própria com `jose` + `bcryptjs`.
 
 ## Perfis de acesso
 
-- **Administrador** — tudo, incluindo Configurações e usuários
-- **Editor** — cadastra e movimenta, sem acesso a Configurações
+Todo mundo enxerga todos os dados — o sistema é colaborativo. O que muda entre
+os perfis é o que cada um **pode fazer**:
+
+- **Administrador** — tudo, incluindo Configurações e gestão de usuários
+- **Editor** — cadastra itens e lança movimentação, sem acesso a Configurações
 - **Somente leitura** — só consulta
+
+Qualquer perfil troca a própria senha em **Minha conta** (menu do usuário, no
+canto superior direito). Um administrador pode redefinir a senha de outra
+pessoa em **Configurações → Usuários**, útil para quem esqueceu a dela.
 
 ## Scripts
 

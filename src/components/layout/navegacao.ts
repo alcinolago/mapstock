@@ -1,5 +1,6 @@
 import {
   Boxes,
+  Car,
   ClipboardList,
   LayoutDashboard,
   Network,
@@ -14,6 +15,7 @@ export const NAVEGACAO = [
   { href: "/fornecedores", rotulo: "Fornecedores", Icone: Truck },
   { href: "/estrutura", rotulo: "Estrutura", Icone: Network },
   { href: "/estoque", rotulo: "Estoque", Icone: ClipboardList },
+  { href: "/carros", rotulo: "Carros", Icone: Car },
   { href: "/compras", rotulo: "Compras", Icone: ShoppingCart },
   { href: "/configuracoes", rotulo: "Configurações", Icone: Settings, somenteAdmin: true },
 ] as const;

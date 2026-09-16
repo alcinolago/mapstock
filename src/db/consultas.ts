@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, ilike, inArray, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, inArray, isNull, or, sql, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
 import { db } from "./index";
@@ -17,6 +17,7 @@ import {
   pedidosCompra,
   unidades,
   usuarios,
+  versoes,
 } from "./schema";
 
 /**
@@ -408,3 +409,95 @@ export async function listarMontagens(filtros?: { itemId?: string; incluirDesmon
 
 export type Montagem = Awaited<ReturnType<typeof listarMontagens>>[number];
 
+/* --------------------------------------------------------------- Frota --- */
+
+export async function listarCarros() {
+  const sistema = alias(versoes, "versao_sistema");
+  const tablet = alias(versoes, "versao_tablet");
+
+  return db
+    .select({
+      id: carros.id,
+      placa: carros.placa,
+      fabricante: carros.fabricante,
+      modelo: carros.modelo,
+      pc: carros.pc,
+      versaoSistemaId: carros.versaoSistemaId,
+      versaoSistema: sistema.numero,
+      versaoTabletId: carros.versaoTabletId,
+      versaoTablet: tablet.numero,
+      montagemId: montagens.id,
+      montagemNumero: montagens.numero,
+      equipamentoId: itens.id,
+      equipamentoCodigo: itens.codigo,
+      equipamento: itens.descricao,
+    })
+    .from(carros)
+    .leftJoin(sistema, eq(sistema.id, carros.versaoSistemaId))
+    .leftJoin(tablet, eq(tablet.id, carros.versaoTabletId))
+    /* O equipamento do carro e a montagem que aponta para ele. */
+    .leftJoin(montagens, eq(montagens.carroId, carros.id))
+    .leftJoin(itens, eq(itens.id, montagens.itemId))
+    .orderBy(asc(carros.placa));
+}
+
+export type Carro = Awaited<ReturnType<typeof listarCarros>>[number];
+
+export async function listarVersoes() {
+  return db
+    .select({
+      id: versoes.id,
+      tipo: versoes.tipo,
+      numero: versoes.numero,
+      notas: versoes.notas,
+      lancadaEm: versoes.lancadaEm,
+      emUso: sql<number>`(
+        select count(*)::int from ${carros}
+        where ${carros.versaoSistemaId} = ${versoes.id}
+           or ${carros.versaoTabletId} = ${versoes.id}
+      )`,
+    })
+    .from(versoes)
+    .orderBy(asc(versoes.tipo), desc(versoes.lancadaEm), desc(versoes.numero));
+}
+
+export type Versao = Awaited<ReturnType<typeof listarVersoes>>[number];
+
+/**
+ * Montagens que podem ser escolhidas como equipamento de um carro: as que
+ * estao prontas no estoque, mais a que ja esta neste carro — senao o proprio
+ * equipamento instalado sumiria da lista na hora de editar.
+ */
+export async function montagensParaCarro(carroId?: string) {
+  return db
+    .select({
+      id: montagens.id,
+      numero: montagens.numero,
+      status: montagens.status,
+      local: montagens.local,
+      montadaEm: montagens.montadaEm,
+      codigo: itens.codigo,
+      descricao: itens.descricao,
+    })
+    .from(montagens)
+    .innerJoin(itens, eq(itens.id, montagens.itemId))
+    .where(
+      or(
+        and(eq(montagens.status, "montada"), isNull(montagens.carroId)),
+        carroId ? eq(montagens.carroId, carroId) : undefined,
+      ),
+    )
+    .orderBy(desc(montagens.montadaEm));
+}
+
+export async function carroPorId(id: string) {
+  const [carro] = await db.select().from(carros).where(eq(carros.id, id));
+  if (!carro) return null;
+
+  const [equipamento] = await db
+    .select({ id: montagens.id })
+    .from(montagens)
+    .where(eq(montagens.carroId, id));
+
+  return { ...carro, montagemId: equipamento?.id ?? null };
+}

@@ -27,20 +27,13 @@ export function BarraLateral({
 }) {
   const caminho = usePathname();
 
-  /**
-   * Ao escolher uma tela, o menu sai da frente sozinho — ele serve para
-   * escolher o destino, não para ficar ocupando largura depois disso.
-   *
-   * A checagem de viewport evita gravar uma preferência de desktop a partir
-   * do celular, onde a barra some inteira e "recolhida" não significa nada.
-   */
-  function aoNavegar() {
-    aoFechar();
-    const noDesktop = window.matchMedia("(min-width: 1024px)").matches;
-    if (noDesktop && !recolhida) aoDefinirRecolhida(true);
-  }
+  /* No desktop a barra fica como a pessoa deixou: navegar não recolhe nada.
+     Ela recolhia sozinha ao escolher uma tela: ajudava num notebook de 13
+     polegadas e atrapalhava em todo monitor grande. Quem quiser a faixa de
+     ícones clica no botão de recolher, e o cookie lembra da escolha.
 
-  /* No celular a barra cobre a tela; navegar tem que fechar ela. */
+     No celular e no tablet é outra história: lá a barra entra por cima do
+     conteúdo, então escolher um destino tem que fechar ela. */
   useEffect(() => {
     aoFechar();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -92,7 +85,7 @@ export function BarraLateral({
                 /* Recolhida, o rótulo vira tooltip do navegador — é a única
                    pista que sobra de para onde o ícone leva. */
                 title={recolhida ? rotulo : undefined}
-                onClick={aoNavegar}
+                onClick={aoFechar}
                 className={cn(
                   "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
                   recolhida && "lg:justify-center lg:px-0",

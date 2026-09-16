@@ -14,7 +14,12 @@ export function Abas({
 
   return (
     <div>
-      <div role="tablist" className="flex gap-1 border-b border-borda">
+      {/* Rola na horizontal em vez de espremer: no celular cabem umas duas
+          abas por vez, e aba espremida nao da para ler nem para acertar. */}
+      <div
+        role="tablist"
+        className="rolagem-fina flex gap-1 overflow-x-auto border-b border-borda"
+      >
         {abas.map((a) => (
           <button
             key={a.id}
@@ -25,7 +30,7 @@ export function Abas({
             aria-controls={`${base}-painel-${a.id}`}
             onClick={() => setAtiva(a.id)}
             className={cn(
-              "-mb-px border-b-2 px-3 py-2 text-xs font-semibold transition-colors",
+              "-mb-px shrink-0 border-b-2 px-3 py-2 text-xs font-semibold whitespace-nowrap transition-colors",
               ativa === a.id
                 ? "border-marca text-marca"
                 : "border-transparent text-texto-fraco hover:text-texto",

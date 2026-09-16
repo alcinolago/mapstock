@@ -8,8 +8,11 @@ import type {
 
 import { cn } from "@/lib/utils";
 
+/* text-base no celular e text-sm a partir do sm: o Safari do iPhone dá zoom
+   sozinho em qualquer campo com fonte menor que 16px, e a tela inteira fica
+   torta depois — a pessoa toca no campo de busca e perde o resto da página. */
 const base =
-  "w-full rounded-lg border border-borda-forte bg-superficie px-3 text-sm text-texto placeholder:text-texto-fraco transition-colors hover:border-marca/50 disabled:cursor-not-allowed disabled:opacity-60";
+  "w-full rounded-lg border border-borda-forte bg-superficie px-3 text-base text-texto transition-colors placeholder:text-texto-fraco hover:border-marca/50 disabled:cursor-not-allowed disabled:opacity-60 sm:text-sm";
 
 export function Entrada({ className, ...props }: InputHTMLAttributes<HTMLInputElement>) {
   return <input className={cn(base, "h-10", className)} {...props} />;

@@ -9,7 +9,7 @@ import { saldoDoItem } from "@/db/consultas";
 import { itens, movimentos } from "@/db/schema";
 import { exigirEdicao } from "@/lib/auth";
 import { registrar } from "@/lib/auditoria";
-import { EFEITO_MOVIMENTO, MOVIMENTOS } from "@/lib/labels";
+import { EFEITO_MOVIMENTO, MOVIMENTOS, OPOSTO_MOVIMENTO } from "@/lib/labels";
 
 const esquema = z.object({
   itemId: z.uuid("Escolha o item"),
@@ -105,18 +105,9 @@ export async function lancarMovimento(
 
 /**
  * Movimento nao se apaga: se foi lancado errado, lanca-se o oposto. Assim o
- * historico continua contando a verdade do que aconteceu.
+ * historico continua contando a verdade do que aconteceu. A tabela do oposto
+ * vive em labels.ts, junto do EFEITO_MOVIMENTO.
  */
-const OPOSTO = {
-  entrada_compra: "ajuste_negativo",
-  entrada_fabricacao: "ajuste_negativo",
-  ajuste_positivo: "ajuste_negativo",
-  saida_producao: "ajuste_positivo",
-  ajuste_negativo: "ajuste_positivo",
-  reserva: "liberacao_reserva",
-  liberacao_reserva: "reserva",
-} as const;
-
 export async function estornarMovimento(id: string): Promise<{ erro?: string }> {
   const sessao = await exigirEdicao();
 
@@ -127,7 +118,7 @@ export async function estornarMovimento(id: string): Promise<{ erro?: string }> 
     .insert(movimentos)
     .values({
       itemId: original.itemId,
-      tipo: OPOSTO[original.tipo],
+      tipo: OPOSTO_MOVIMENTO[original.tipo],
       quantidade: original.quantidade,
       referencia: original.referencia,
       observacao: `Estorno da movimentação de ${original.criadoEm.toLocaleString("pt-BR")}`,

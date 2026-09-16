@@ -7,6 +7,7 @@ import { useState, useTransition } from "react";
 
 import { Botao } from "@/components/ui/botao";
 import { Selo } from "@/components/ui/selo";
+import { Montar } from "./montar";
 import { desvincularDaEstrutura, moverNaEstrutura } from "@/lib/acoes/estrutura";
 import { cn, numero } from "@/lib/utils";
 
@@ -22,6 +23,8 @@ export type NoEstrutura = {
   obrigatorio: boolean;
   localMontagem: string | null;
   disponivel: number;
+  /* Unidades desta estrutura que existem montadas hoje. */
+  montadas: number;
   filhos: NoEstrutura[];
 };
 
@@ -138,6 +141,18 @@ function No({
             )}
             {no.nivel > 0 && no.disponivel <= 0 && <Selo tom="perigo">em falta</Selo>}
           </>
+        )}
+
+        {no.montadas > 0 && (
+          <Selo tom="marca" title="Unidades montadas a partir desta estrutura">
+            {no.montadas} montada{no.montadas > 1 ? "s" : ""}
+          </Selo>
+        )}
+
+        {/* Montar aparece em qualquer nó com componentes, não só na raiz: o
+            sub-conjunto é montado antes e entra pronto no equipamento. */}
+        {podeEditar && temFilhos && (
+          <Montar itemId={no.itemId} codigo={no.codigo} descricao={no.descricao} />
         )}
 
         {podeEditar && no.vinculoId && (

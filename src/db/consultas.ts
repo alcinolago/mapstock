@@ -3,12 +3,15 @@ import { alias } from "drizzle-orm/pg-core";
 
 import { db } from "./index";
 import {
+  bom,
+  carros,
   classificacoes,
   cotacoes,
   fornecedores,
   itemFornecedores,
   itens,
   itensParametros3d,
+  montagens,
   movimentos,
   pedidoItens,
   pedidosCompra,
@@ -61,15 +64,20 @@ export type ItemComSaldo = {
 };
 
 /**
- * Nivel 0 e o equipamento montado: nao se compra nem se estoca, entao nunca
- * conta como falta. Mesma decisao do desktop, so que agora explicita.
+ * Nivel 0 e o equipamento montado: nao se compra, entao nunca conta como
+ * falta nem entra no alerta de reposicao. Essa parte vem do desktop.
+ *
+ * O que mudou: montar uma estrutura passou a dar entrada de uma unidade no
+ * nivel 0, e uma unidade pronta na prateleira nao pode aparecer como "nao
+ * estocavel". Com saldo, ele e um item normal; sem saldo, continua fora da
+ * conta de falta — ninguem compra um equipamento montado.
  */
 export function situacaoDoItem(
   nivel: number,
   disponivel: number,
   estoqueMinimo: number,
 ): SituacaoItem {
-  if (nivel === 0) return "nao_estocavel";
+  if (nivel === 0) return disponivel > 0 ? "ok" : "nao_estocavel";
   if (disponivel <= 0) return "falta";
   if (estoqueMinimo > 0 && disponivel < estoqueMinimo) return "abaixo_minimo";
   return "ok";
@@ -303,4 +311,100 @@ export async function pedidoCompleto(id: string) {
 
 export type PedidoCompleto = NonNullable<Awaited<ReturnType<typeof pedidoCompleto>>>;
 export type LinhaPedidoCompleta = PedidoCompleto["linhas"][number];
+
+/* ------------------------------------------------------------ Montagem --- */
+
+export type ComponenteDaMontagem = {
+  itemId: string;
+  codigo: string;
+  descricao: string;
+  unidade: string;
+  necessario: number;
+  disponivel: number;
+  obrigatorio: boolean;
+  localMontagem: string | null;
+  temEstrutura: boolean;
+};
+
+/**
+ * O que e preciso ter em maos para montar uma unidade deste item.
+ *
+ * So os filhos diretos, de proposito. Montar EQP-001 consome o conjunto
+ * EST-001 inteiro, e nao os 24 parafusos dele — os parafusos ja sairam do
+ * estoque quando EST-001 foi montada. Cada nivel tem saldo proprio e o
+ * historico mostra a montagem de cada etapa.
+ */
+export async function componentesDaMontagem(
+  itemId: string,
+  quantidade = 1,
+): Promise<ComponenteDaMontagem[]> {
+  const linhas = await db
+    .select({
+      itemId: itens.id,
+      codigo: itens.codigo,
+      descricao: itens.descricao,
+      unidade: unidades.sigla,
+      necessario: bom.quantidade,
+      obrigatorio: bom.obrigatorio,
+      localMontagem: bom.localMontagem,
+      fisico: sql<number>`coalesce(${saldos.fisico}, 0)`,
+      reservado: sql<number>`coalesce(${saldos.reservado}, 0)`,
+      /* Filho que tambem tem estrutura pode ser montado antes, e a tela
+         oferece esse caminho quando ele esta em falta. O nome da tabela vai
+         cru porque o bom ja esta no from de fora: o alias do drizzle nao
+         sobrevive dentro do exists. */
+      temEstrutura: sql<boolean>`exists (select 1 from bom sub where sub.pai_id = ${itens.id})`,
+    })
+    .from(bom)
+    .innerJoin(itens, eq(itens.id, bom.filhoId))
+    .innerJoin(unidades, eq(unidades.id, itens.unidadeId))
+    .leftJoin(saldos, eq(saldos.itemId, bom.filhoId))
+    .where(eq(bom.paiId, itemId))
+    .orderBy(asc(bom.ordem), asc(itens.codigo));
+
+  return linhas.map((l) => ({
+    itemId: l.itemId,
+    codigo: l.codigo,
+    descricao: l.descricao,
+    unidade: l.unidade,
+    necessario: l.necessario * quantidade,
+    disponivel: l.fisico - l.reservado,
+    obrigatorio: l.obrigatorio,
+    localMontagem: l.localMontagem,
+    temEstrutura: l.temEstrutura,
+  }));
+}
+
+export async function listarMontagens(filtros?: { itemId?: string; incluirDesmontadas?: boolean }) {
+  const condicoes: SQL[] = [];
+  if (filtros?.itemId) condicoes.push(eq(montagens.itemId, filtros.itemId));
+  if (!filtros?.incluirDesmontadas) {
+    condicoes.push(sql`${montagens.status} <> 'desmontada'`);
+  }
+
+  return db
+    .select({
+      id: montagens.id,
+      numero: montagens.numero,
+      status: montagens.status,
+      local: montagens.local,
+      observacoes: montagens.observacoes,
+      montadaEm: montagens.montadaEm,
+      desmontadaEm: montagens.desmontadaEm,
+      itemId: itens.id,
+      codigo: itens.codigo,
+      descricao: itens.descricao,
+      montadaPor: usuarios.nome,
+      carroId: carros.id,
+      placa: carros.placa,
+    })
+    .from(montagens)
+    .innerJoin(itens, eq(itens.id, montagens.itemId))
+    .leftJoin(usuarios, eq(usuarios.id, montagens.montadaPor))
+    .leftJoin(carros, eq(carros.id, montagens.carroId))
+    .where(condicoes.length ? and(...condicoes) : undefined)
+    .orderBy(desc(montagens.montadaEm));
+}
+
+export type Montagem = Awaited<ReturnType<typeof listarMontagens>>[number];
 

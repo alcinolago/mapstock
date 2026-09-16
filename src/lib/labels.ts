@@ -14,9 +14,11 @@ import type {
   papelUsuario,
   statusCotacao,
   statusFornecedor,
+  statusMontagem,
   statusPedido,
   tipoAquisicao,
   tipoMovimento,
+  tipoVersao,
   unidadePrazo,
 } from "@/db/schema";
 
@@ -28,6 +30,8 @@ export type OrigemFabricacao = Valor<typeof origemFabricacao>;
 export type StatusFornecedor = Valor<typeof statusFornecedor>;
 export type StatusCotacao = Valor<typeof statusCotacao>;
 export type StatusPedido = Valor<typeof statusPedido>;
+export type StatusMontagem = Valor<typeof statusMontagem>;
+export type TipoVersao = Valor<typeof tipoVersao>;
 export type PapelUsuario = Valor<typeof papelUsuario>;
 export type UnidadePrazo = Valor<typeof unidadePrazo>;
 export type AcaoAuditoria = Valor<typeof acaoAuditoria>;
@@ -54,6 +58,21 @@ export const EFEITO_MOVIMENTO: Record<
   ajuste_negativo: { fisico: -1, reservado: 0 },
   reserva: { fisico: 0, reservado: 1 },
   liberacao_reserva: { fisico: 0, reservado: -1 },
+};
+
+/**
+ * Movimento nao se apaga: lanca-se o oposto. Mora aqui junto do EFEITO
+ * porque quem estorna precisa da mesma regra em mais de um lugar — a tela de
+ * estoque e a desmontagem de uma estrutura.
+ */
+export const OPOSTO_MOVIMENTO: Record<TipoMovimento, TipoMovimento> = {
+  entrada_compra: "ajuste_negativo",
+  entrada_fabricacao: "ajuste_negativo",
+  ajuste_positivo: "ajuste_negativo",
+  saida_producao: "ajuste_positivo",
+  ajuste_negativo: "ajuste_positivo",
+  reserva: "liberacao_reserva",
+  liberacao_reserva: "reserva",
 };
 
 export const AQUISICOES: Record<TipoAquisicao, string> = {
@@ -101,6 +120,17 @@ export const STATUS_PEDIDO: Record<StatusPedido, string> = {
   parcial: "Recebido parcial",
   recebido: "Recebido",
   cancelado: "Cancelado",
+};
+
+export const STATUS_MONTAGEM: Record<StatusMontagem, string> = {
+  montada: "Montada, em estoque",
+  instalada: "Instalada em carro",
+  desmontada: "Desmontada",
+};
+
+export const TIPOS_VERSAO: Record<TipoVersao, string> = {
+  sistema: "Sistema do PC",
+  tablet: "App do tablet",
 };
 
 export const PAPEIS: Record<PapelUsuario, string> = {

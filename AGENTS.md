@@ -29,7 +29,7 @@ src/lib/sessao.ts       JWT + cookie          src/lib/auth.ts  guardas de págin
 src/lib/acoes/*         server actions, uma por módulo
 src/lib/pdf.ts          montagem de PDF (A4, quebra de linha, link clicável)
 src/proxy.ts            proteção de rota (era `middleware` até o Next 15)
-src/components/ui/*     primitivos: Botao, Entrada, CampoSenha, Cartao, Selo, Tabela
+src/components/ui/*     primitivos: Botao, Entrada, CampoSenha, Cartao, Selo, Tabela, Modal
 ```
 
 ## O sistema é colaborativo
@@ -50,7 +50,12 @@ listagem, é bug.
 - **Saldo é sempre a soma do histórico de `movimentos`** — nunca um campo
   gravado. Quantidade inicial e recebimento de pedido viram movimento.
 - **Movimento não se apaga, se estorna** (lança o oposto).
-- **Nível 0 é o equipamento montado**: não se movimenta e nunca conta falta.
+- **Nível 0 é o equipamento montado**: nunca conta falta nem entra no alerta
+  de reposição, porque equipamento não se compra. Movimenta só por montagem
+  (`src/lib/acoes/montagens.ts`), nunca por compra.
+- **Montar consome os filhos diretos, não as folhas.** Montar EQP-001 dá saída
+  no conjunto EST-001 inteiro; os 24 parafusos dele já saíram quando EST-001
+  foi montada. Cada nível tem saldo próprio.
 - **Toda server action que escreve chama `exigirEdicao()`** (ou `exigirAdmin()`)
   e registra em `logAuditoria` via `registrar()`.
 

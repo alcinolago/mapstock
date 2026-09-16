@@ -1,5 +1,6 @@
 import {
   boolean,
+  date,
   integer,
   jsonb,
   numeric,
@@ -76,6 +77,15 @@ export const statusPedido = pgEnum("status_pedido", [
 ]);
 
 export const unidadePrazo = pgEnum("unidade_prazo", ["horas", "dias"]);
+
+/* Versao do sistema que roda no PC do carro e do app que roda no tablet. */
+export const tipoVersao = pgEnum("tipo_versao", ["sistema", "tablet"]);
+
+export const statusMontagem = pgEnum("status_montagem", [
+  "montada",
+  "instalada",
+  "desmontada",
+]);
 
 export const acaoAuditoria = pgEnum("acao_auditoria", ["criar", "atualizar", "excluir"]);
 
@@ -372,7 +382,78 @@ export const movimentos = pgTable("movimentos", {
   pedidoItemId: uuid("pedido_item_id").references(() => pedidoItens.id, {
     onDelete: "set null",
   }),
+  /* Idem para montagem: uma montagem gera a saida de cada componente e a
+     entrada do equipamento, e e por este campo que o estorno acha todos. */
+  montagemId: uuid("montagem_id").references(() => montagens.id, {
+    onDelete: "set null",
+  }),
   criadoEm,
+});
+
+/* -------------------------------------------------------------------------
+ * Frota e montagens
+ *
+ * A estrutura (bom) e a receita; a montagem e uma unidade que existe de
+ * verdade, feita a partir dessa receita. Cada montagem e rastreada uma a uma
+ * porque a pergunta que importa e "qual equipamento esta no carro ABC-1234",
+ * e nao "quantos equipamentos existem".
+ * ---------------------------------------------------------------------- */
+
+export const versoes = pgTable(
+  "versoes",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tipo: tipoVersao("tipo").notNull(),
+    numero: text("numero").notNull(),
+    notas: text("notas"),
+    lancadaEm: date("lancada_em"),
+    criadoEm,
+  },
+  /* A mesma numeracao pode existir nos dois tipos: o sistema 3.2 e o app do
+     tablet 3.2 sao coisas diferentes. */
+  (t) => [unique("versao_unica").on(t.tipo, t.numero)],
+);
+
+export const carros = pgTable("carros", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  placa: text("placa").notNull().unique(),
+  fabricante: text("fabricante").notNull(),
+  modelo: text("modelo").notNull(),
+  /* Identificacao livre do computador de bordo: nome da maquina, patrimonio
+     ou numero de serie — o que estiver colado nele. */
+  pc: text("pc"),
+  versaoSistemaId: uuid("versao_sistema_id").references(() => versoes.id, {
+    onDelete: "set null",
+  }),
+  versaoTabletId: uuid("versao_tablet_id").references(() => versoes.id, {
+    onDelete: "set null",
+  }),
+  criadoEm,
+  criadoPor: uuid("criado_por").references(() => usuarios.id, { onDelete: "set null" }),
+  atualizadoEm: timestamp("atualizado_em", { withTimezone: true }).notNull().defaultNow(),
+  atualizadoPor: uuid("atualizado_por").references(() => usuarios.id, { onDelete: "set null" }),
+});
+
+export const montagens = pgTable("montagens", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  numero: text("numero").notNull().unique(),
+  itemId: uuid("item_id")
+    .notNull()
+    .references(() => itens.id, { onDelete: "restrict" }),
+  status: statusMontagem("status").notNull().default("montada"),
+  /* Onde a unidade esta enquanto nao tem carro: prateleira, bancada, ou a
+     placa escrita a mao de um carro que ainda nao foi cadastrado. */
+  local: text("local"),
+  /* O campo "equipamento" do carro e este vinculo visto do outro lado. Unico
+     porque um carro leva um equipamento; no Postgres varios nulos convivem,
+     entao montagem sem carro nao briga com montagem sem carro. */
+  carroId: uuid("carro_id")
+    .references(() => carros.id, { onDelete: "set null" })
+    .unique(),
+  observacoes: text("observacoes"),
+  montadaEm: timestamp("montada_em", { withTimezone: true }).notNull().defaultNow(),
+  montadaPor: uuid("montada_por").references(() => usuarios.id, { onDelete: "set null" }),
+  desmontadaEm: timestamp("desmontada_em", { withTimezone: true }),
 });
 
 /* -------------------------------------------------------------------------

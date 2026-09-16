@@ -12,17 +12,20 @@ import {
   classificacoes,
   cotacaoItens,
   cotacaoPrecos,
+  carros,
   cotacoes,
   fornecedores,
   itemFornecedores,
   itens,
   itensParametros3d,
   logAuditoria,
+  montagens,
   movimentos,
   pedidoItens,
   pedidosCompra,
   unidades,
   usuarios,
+  versoes,
 } from "./schema";
 async function limpar() {
   /* Ordem importa: filho antes de pai, senao a FK barra. */
@@ -35,6 +38,10 @@ async function limpar() {
   await db.delete(bom);
   await db.delete(itemFornecedores);
   await db.delete(itensParametros3d);
+  /* Montagem aponta para item com restrict: sai antes dele. */
+  await db.delete(montagens);
+  await db.delete(carros);
+  await db.delete(versoes);
   await db.delete(itens);
   await db.delete(fornecedores);
   await db.delete(logAuditoria);
@@ -133,7 +140,10 @@ async function criar() {
     { itemId: i("CNS-FIL-PETG"), tipo: "saida_producao", quantidade: 3, referencia: "Impressão lote 7", usuarioId: admin.id },
     { itemId: i("AUT-PLACA-001"), tipo: "entrada_compra", quantidade: 5, referencia: "NF 7710", usuarioId: admin.id },
     { itemId: i("AUT-PLACA-001"), tipo: "saida_producao", quantidade: 4, referencia: "SEN-CAM-001", usuarioId: admin.id },
-    /* SEN-CAM-001 fica sem nenhuma entrada de proposito: aparece EM FALTA. */
+    /* As duas cameras compradas sao consumidas pela montagem do EQP-001 logo
+       abaixo: o saldo volta a zero e SEN-CAM-001 continua sendo o item EM
+       FALTA do demo — so que agora com historia, e nao por ausencia. */
+    { itemId: i("SEN-CAM-001"), tipo: "entrada_compra", quantidade: 2, referencia: "NF 8123", usuarioId: admin.id },
   ]);
   /* Cotacao respondida: dois fornecedores no mesmo item, vencedor escolhido. */
   const ano = new Date().getFullYear();
@@ -269,11 +279,124 @@ async function criar() {
     { pedidoId: pedidoMl.id, itemId: i("FIX-INS-M3"), quantidade: 2, precoUnitario: 62 },
   ]);
 
+  /* ---------------------------------------------------------------- Frota */
+
+  const vers = await db
+    .insert(versoes)
+    .values([
+      { tipo: "sistema", numero: "3.12.0", lancadaEm: `${ano - 1}-11-20`, notas: "Versão que ainda roda nos carros mais antigos." },
+      { tipo: "sistema", numero: "3.14.2", lancadaEm: `${ano}-03-08`, notas: "Leitura de placa funcionando offline." },
+      { tipo: "sistema", numero: "4.0.0", lancadaEm: `${ano}-08-01`, notas: "Reescrita da captura. Exige o PC novo." },
+      { tipo: "tablet", numero: "2.6.1", lancadaEm: `${ano - 1}-12-02` },
+      { tipo: "tablet", numero: "2.8.0", lancadaEm: `${ano}-09-05`, notas: "Fila de envio quando o carro fica sem sinal." },
+    ])
+    .returning();
+  const v = (tipo: string, numero: string) =>
+    vers.find((x) => x.tipo === tipo && x.numero === numero)!.id;
+
+  const frota = await db
+    .insert(carros)
+    .values([
+      { placa: "ABC1D23", fabricante: "Fiat", modelo: "Fiorino", pc: "MPZ-PC-014", versaoSistemaId: v("sistema", "4.0.0"), versaoTabletId: v("tablet", "2.8.0"), criadoPor: admin.id, atualizadoPor: admin.id },
+      { placa: "DEF2G45", fabricante: "Renault", modelo: "Kangoo", pc: "MPZ-PC-022", versaoSistemaId: v("sistema", "3.14.2"), versaoTabletId: v("tablet", "2.8.0"), criadoPor: admin.id, atualizadoPor: admin.id },
+      /* Carro atrasado nas duas versoes: e o que a tela de frota serve para
+         enxergar de relance. */
+      { placa: "GHI3J67", fabricante: "Volkswagen", modelo: "Saveiro", pc: "MPZ-PC-031", versaoSistemaId: v("sistema", "3.12.0"), versaoTabletId: v("tablet", "2.6.1"), criadoPor: admin.id, atualizadoPor: admin.id },
+    ])
+    .returning();
+  const carro = (placa: string) => frota.find((c) => c.placa === placa)!.id;
+
+  /* ------------------------------------------------------------ Montagens */
+
+  /**
+   * Cada montagem lanca os movimentos dela, do mesmo jeito que a acao faz na
+   * tela: sai cada filho direto, entra uma unidade do equipamento. Sem isso o
+   * demo mostraria equipamento montado com o estoque de pecas intacto.
+   */
+  async function montar(
+    numero: string,
+    codigo: string,
+    consumo: [string, number][],
+    extras: { local?: string; carroId?: string; observacoes?: string } = {},
+  ) {
+    const [montagem] = await db
+      .insert(montagens)
+      .values({
+        numero,
+        itemId: i(codigo),
+        status: extras.carroId ? "instalada" : "montada",
+        local: extras.local ?? null,
+        carroId: extras.carroId ?? null,
+        observacoes: extras.observacoes ?? null,
+        montadaPor: admin.id,
+      })
+      .returning();
+
+    await db.insert(movimentos).values([
+      ...consumo.map(([filho, quantidade]) => ({
+        itemId: i(filho),
+        tipo: "saida_producao" as const,
+        quantidade,
+        referencia: numero,
+        usuarioId: admin.id,
+        observacao: `Consumido na montagem ${numero} de ${codigo}`,
+        montagemId: montagem.id,
+      })),
+      {
+        itemId: i(codigo),
+        tipo: "entrada_fabricacao" as const,
+        quantidade: 1,
+        referencia: numero,
+        usuarioId: admin.id,
+        observacao: `Montagem ${numero}`,
+        montagemId: montagem.id,
+      },
+    ]);
+
+    /* Instalada num carro sai do estoque: esta em uso, nao na prateleira. */
+    if (extras.carroId) {
+      await db.insert(movimentos).values({
+        itemId: i(codigo),
+        tipo: "saida_producao",
+        quantidade: 1,
+        referencia: numero,
+        usuarioId: admin.id,
+        observacao: `Instalada no carro ${extras.local}`,
+        montagemId: montagem.id,
+      });
+    }
+
+    return montagem;
+  }
+
+  await montar(`MNT-${ano}-0001`, "EST-001", [["FIX-PAR-M6X20", 24], ["FIX-POR-M6", 24]], {
+    local: "Prateleira A1",
+  });
+
+  await montar(
+    `MNT-${ano}-0002`,
+    "EQP-001",
+    [["EST-001", 1], ["DOM-CAR-PETG", 1], ["SEN-CAM-001", 2]],
+    {
+      carroId: carro("ABC1D23"),
+      local: "ABC1D23",
+      observacoes: "Primeiro equipamento da frota. Câmeras apontadas 15° para baixo.",
+    },
+  );
+
+  /* Uma sobrando no estoque, pronta para instalar no proximo carro. */
+  await montar(`MNT-${ano}-0003`, "EST-001", [["FIX-PAR-M6X20", 24], ["FIX-POR-M6", 24]], {
+    local: "Prateleira A1",
+  });
+
   console.log(`  ${forns.length} fornecedores`);
   console.log(`  ${criados.length} itens`);
   console.log(`  1 cotação com comparativo de preços`);
   console.log(`  1 pedido parcialmente recebido`);
   console.log(`  2 pedidos de site (AliExpress e Mercado Livre) com link e parâmetros de compra`);
+  console.log(`  ${vers.length} versões (sistema e tablet)`);
+  console.log(`  ${frota.length} carros, um deles com equipamento instalado`);
+  console.log(`  3 montagens: uma no carro, uma pronta no estoque, uma virou o equipamento`);
   console.log("\nPronto. Entre no sistema para ver.");
 }
 const acao = process.argv[2] === "limpar" ? limpar : criar;

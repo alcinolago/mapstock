@@ -27,6 +27,7 @@ src/lib/labels.ts       chave ASCII → rótulo em português; EFEITO_MOVIMENTO
 src/lib/codigo.ts       sugestão de código e classificação (portado do desktop)
 src/lib/sessao.ts       JWT + cookie          src/lib/auth.ts  guardas de página
 src/lib/acoes/*         server actions, uma por módulo
+src/lib/pdf.ts          montagem de PDF (A4, quebra de linha, link clicável)
 src/proxy.ts            proteção de rota (era `middleware` até o Next 15)
 src/components/ui/*     primitivos: Botao, Entrada, CampoSenha, Cartao, Selo, Tabela
 ```

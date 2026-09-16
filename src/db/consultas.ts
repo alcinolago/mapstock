@@ -1,11 +1,16 @@
 import { and, asc, desc, eq, ilike, inArray, or, sql, type SQL } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 
 import { db } from "./index";
 import {
   classificacoes,
   cotacoes,
+  fornecedores,
+  itemFornecedores,
   itens,
+  itensParametros3d,
   movimentos,
+  pedidoItens,
   pedidosCompra,
   unidades,
   usuarios,
@@ -190,3 +195,112 @@ export async function resumoPainel() {
       .slice(0, 8),
   };
 }
+
+/**
+ * Tudo que se sabe sobre um pedido e sobre cada linha dele — inclusive o que
+ * mora no cadastro do item e no vinculo com aquele fornecedor especifico.
+ *
+ * Uma consulta so, usada pela tela do pedido e pelo PDF que vai para o
+ * pessoal de compras: assim as duas nunca mostram coisas diferentes. O PDF
+ * precisa de bem mais do que a tela de recebimento mostrava (link do produto,
+ * SKU, quantidade minima, ficha tecnica, parametros de impressao), e e por
+ * isso que a consulta busca tanta coisa.
+ */
+export async function pedidoCompleto(id: string) {
+  const [pedido] = await db
+    .select({
+      id: pedidosCompra.id,
+      numero: pedidosCompra.numero,
+      status: pedidosCompra.status,
+      frete: pedidosCompra.frete,
+      condicaoPagamento: pedidosCompra.condicaoPagamento,
+      observacoes: pedidosCompra.observacoes,
+      criadoEm: pedidosCompra.criadoEm,
+      criadoPor: usuarios.nome,
+      fornecedorId: fornecedores.id,
+      fornecedor: fornecedores.nome,
+      fornecedorContato: fornecedores.contato,
+      fornecedorTelefone: fornecedores.telefone,
+      fornecedorEmail: fornecedores.email,
+      fornecedorSite: fornecedores.site,
+      fornecedorFrete: fornecedores.frete,
+      fornecedorObservacoes: fornecedores.observacoes,
+      cotacaoId: cotacoes.id,
+      cotacaoNumero: cotacoes.numero,
+    })
+    .from(pedidosCompra)
+    .innerJoin(fornecedores, eq(fornecedores.id, pedidosCompra.fornecedorId))
+    .leftJoin(cotacoes, eq(cotacoes.id, pedidosCompra.cotacaoId))
+    .leftJoin(usuarios, eq(usuarios.id, pedidosCompra.criadoPor))
+    .where(eq(pedidosCompra.id, id));
+
+  if (!pedido) return null;
+
+  const unidadeMinima = alias(unidades, "unidade_minima");
+
+  const linhas = await db
+    .select({
+      id: pedidoItens.id,
+      quantidade: pedidoItens.quantidade,
+      recebida: pedidoItens.quantidadeRecebida,
+      precoUnitario: pedidoItens.precoUnitario,
+      parametrosCompra: pedidoItens.parametrosCompra,
+
+      itemId: itens.id,
+      codigo: itens.codigo,
+      descricao: itens.descricao,
+      classificacao: classificacoes.nome,
+      unidade: unidades.sigla,
+      nivel: itens.nivel,
+      aquisicao: itens.aquisicao,
+      origemFabricacao: itens.origemFabricacao,
+      linkCompra: itens.linkCompra,
+      localizacao: itens.localizacao,
+      estoqueMinimo: itens.estoqueMinimo,
+      observacoesItem: itens.observacoes,
+      fichaTecnica: itens.fichaTecnica,
+      prazoItem: itens.prazoValor,
+      prazoItemUnidade: itens.prazoUnidade,
+
+      /* Do vinculo com o fornecedor deste pedido — e onde esta o link do
+         produto na loja e o codigo que o fornecedor usa. */
+      sku: itemFornecedores.skuFornecedor,
+      linkFornecedor: itemFornecedores.linkItem,
+      precoTabela: itemFornecedores.preco,
+      qtdMinima: itemFornecedores.qtdMinima,
+      unidadeMinima: unidadeMinima.sigla,
+      prazoFornecedor: itemFornecedores.prazoValor,
+      prazoFornecedorUnidade: itemFornecedores.prazoUnidade,
+      observacoesFornecedor: itemFornecedores.observacoes,
+
+      material3d: itensParametros3d.material,
+      alturaCamada3d: itensParametros3d.alturaCamada,
+      preenchimento3d: itensParametros3d.preenchimento,
+      pesoEstimado3d: itensParametros3d.pesoEstimado,
+
+      fisico: sql<number>`coalesce(${saldos.fisico}, 0)`,
+      reservado: sql<number>`coalesce(${saldos.reservado}, 0)`,
+    })
+    .from(pedidoItens)
+    .innerJoin(itens, eq(itens.id, pedidoItens.itemId))
+    .innerJoin(classificacoes, eq(classificacoes.id, itens.classificacaoId))
+    .innerJoin(unidades, eq(unidades.id, itens.unidadeId))
+    .leftJoin(
+      itemFornecedores,
+      and(
+        eq(itemFornecedores.itemId, pedidoItens.itemId),
+        eq(itemFornecedores.fornecedorId, pedido.fornecedorId),
+      ),
+    )
+    .leftJoin(unidadeMinima, eq(unidadeMinima.id, itemFornecedores.unidadeMinimaId))
+    .leftJoin(itensParametros3d, eq(itensParametros3d.itemId, pedidoItens.itemId))
+    .leftJoin(saldos, eq(saldos.itemId, pedidoItens.itemId))
+    .where(eq(pedidoItens.pedidoId, id))
+    .orderBy(asc(itens.codigo));
+
+  return { pedido, linhas };
+}
+
+export type PedidoCompleto = NonNullable<Awaited<ReturnType<typeof pedidoCompleto>>>;
+export type LinhaPedidoCompleta = PedidoCompleto["linhas"][number];
+

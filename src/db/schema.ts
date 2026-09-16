@@ -346,6 +346,11 @@ export const pedidoItens = pgTable("pedido_itens", {
   quantidade: quantidade("quantidade"),
   precoUnitario: dinheiro("preco_unitario"),
   quantidadeRecebida: quantidade("quantidade_recebida"),
+  /* O que quem compra precisa escolher no site do fornecedor: cor, tamanho,
+     voltagem, o kit com 50 em vez do avulso. Fica na linha do pedido, e nao
+     no item, porque muda de compra para compra — e e o campo que sai em
+     destaque no PDF mandado para o pessoal de compras. */
+  parametrosCompra: text("parametros_compra"),
 });
 
 /* -------------------------------------------------------------------------

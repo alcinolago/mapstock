@@ -405,6 +405,41 @@ export async function receberItemDoPedido(
   return {};
 }
 
+/**
+ * Parâmetros de compra da linha: o texto livre que diz o que escolher no site
+ * do fornecedor — cor, tamanho, voltagem, o kit de 50 em vez do avulso.
+ *
+ * Fica na linha do pedido, e não no cadastro do item, porque a escolha muda
+ * de compra para compra. É o campo que sai em destaque no PDF que vai para
+ * quem compra, que não tem acesso ao sistema para conferir.
+ */
+export async function salvarParametrosCompra(
+  pedidoItemId: string,
+  texto: string,
+): Promise<{ erro?: string }> {
+  const sessao = await exigirEdicao();
+  const limpo = texto.trim();
+
+  const [linha] = await db
+    .update(pedidoItens)
+    .set({ parametrosCompra: limpo || null })
+    .where(eq(pedidoItens.id, pedidoItemId))
+    .returning();
+
+  if (!linha) return { erro: "Linha do pedido não encontrada." };
+
+  await registrar({
+    usuarioId: sessao.id,
+    tabela: "pedido_itens",
+    registroId: linha.id,
+    acao: "atualizar",
+    depois: { parametrosCompra: limpo || null },
+  });
+
+  revalidatePath(`/compras/pedidos/${linha.pedidoId}`);
+  return {};
+}
+
 /** O status do pedido é derivado das linhas, nunca digitado à mão. */
 async function atualizarStatusPedido(pedidoId: string) {
   const linhas = await db

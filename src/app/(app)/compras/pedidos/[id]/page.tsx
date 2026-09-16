@@ -1,22 +1,14 @@
-import { asc, eq } from "drizzle-orm";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { Recebimento } from "@/components/compras/recebimento";
+import { AcoesPedido } from "@/components/compras/acoes-pedido";
+import { ItensPedido } from "@/components/compras/itens-pedido";
 import { SeloPedido } from "@/components/situacao";
 import { CabecalhoPagina } from "@/components/ui/cabecalho-pagina";
-import { db } from "@/db";
-import {
-  cotacoes,
-  fornecedores,
-  itens,
-  pedidoItens,
-  pedidosCompra,
-  unidades,
-} from "@/db/schema";
+import { pedidoCompleto } from "@/db/consultas";
 import { exigirSessao } from "@/lib/auth";
-import { data } from "@/lib/utils";
+import { data, moeda } from "@/lib/utils";
 
 export const metadata = { title: "Pedido de compra" };
 
@@ -28,45 +20,12 @@ export default async function PaginaPedido({
   const sessao = await exigirSessao();
   const { id } = await params;
 
-  const [pedido] = await db
-    .select({
-      id: pedidosCompra.id,
-      numero: pedidosCompra.numero,
-      status: pedidosCompra.status,
-      frete: pedidosCompra.frete,
-      condicaoPagamento: pedidosCompra.condicaoPagamento,
-      observacoes: pedidosCompra.observacoes,
-      criadoEm: pedidosCompra.criadoEm,
-      fornecedorId: fornecedores.id,
-      fornecedor: fornecedores.nome,
-      cotacaoId: cotacoes.id,
-      cotacaoNumero: cotacoes.numero,
-    })
-    .from(pedidosCompra)
-    .innerJoin(fornecedores, eq(fornecedores.id, pedidosCompra.fornecedorId))
-    .leftJoin(cotacoes, eq(cotacoes.id, pedidosCompra.cotacaoId))
-    .where(eq(pedidosCompra.id, id));
+  const dados = await pedidoCompleto(id);
+  if (!dados) notFound();
 
-  if (!pedido) notFound();
-
-  const linhas = await db
-    .select({
-      id: pedidoItens.id,
-      itemId: pedidoItens.itemId,
-      codigo: itens.codigo,
-      descricao: itens.descricao,
-      unidade: unidades.sigla,
-      quantidade: pedidoItens.quantidade,
-      recebida: pedidoItens.quantidadeRecebida,
-      precoUnitario: pedidoItens.precoUnitario,
-    })
-    .from(pedidoItens)
-    .innerJoin(itens, eq(itens.id, pedidoItens.itemId))
-    .innerJoin(unidades, eq(unidades.id, itens.unidadeId))
-    .where(eq(pedidoItens.pedidoId, id))
-    .orderBy(asc(itens.codigo));
-
+  const { pedido, linhas } = dados;
   const encerrado = pedido.status === "recebido" || pedido.status === "cancelado";
+  const total = linhas.reduce((s, l) => s + l.quantidade * l.precoUnitario, 0) + pedido.frete;
 
   return (
     <div className="mx-auto max-w-5xl">
@@ -81,11 +40,25 @@ export default async function PaginaPedido({
       <CabecalhoPagina
         titulo={pedido.fornecedor}
         descricao={`${pedido.numero} · ${data(pedido.criadoEm)}`}
-        acao={<SeloPedido status={pedido.status} />}
+        acao={
+          <>
+            <SeloPedido status={pedido.status} />
+            <AcoesPedido
+              pedidoId={pedido.id}
+              numero={pedido.numero}
+              fornecedor={pedido.fornecedor}
+              totalItens={linhas.length}
+              total={moeda(total)}
+            />
+          </>
+        }
       />
 
       <div className="mb-4 flex flex-wrap gap-x-6 gap-y-1 text-xs text-texto-fraco">
-        <Link href={`/fornecedores/${pedido.fornecedorId}`} className="font-semibold text-marca hover:underline">
+        <Link
+          href={`/fornecedores/${pedido.fornecedorId}`}
+          className="font-semibold text-marca hover:underline"
+        >
           Ver fornecedor
         </Link>
         {pedido.cotacaoId && (
@@ -99,7 +72,7 @@ export default async function PaginaPedido({
         {pedido.condicaoPagamento && <span>Pagamento: {pedido.condicaoPagamento}</span>}
       </div>
 
-      <Recebimento
+      <ItensPedido
         pedidoId={pedido.id}
         linhas={linhas}
         frete={pedido.frete}

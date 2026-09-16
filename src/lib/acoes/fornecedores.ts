@@ -8,6 +8,7 @@ import { db } from "@/db";
 import { fornecedores, itemFornecedores } from "@/db/schema";
 import { exigirEdicao } from "@/lib/auth";
 import { registrar } from "@/lib/auditoria";
+import { ehDuplicado } from "@/lib/erros";
 
 const esquema = z.object({
   id: z.uuid().optional(),
@@ -83,8 +84,7 @@ export async function salvarFornecedor(
     revalidatePath("/fornecedores");
     return { ok: true };
   } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    if (msg.includes("duplicate key")) {
+    if (ehDuplicado(e)) {
       return { erro: "Já existe um fornecedor com esse nome.", campo: "nome" };
     }
     console.error(e);

@@ -15,6 +15,7 @@ import {
 } from "@/db/schema";
 import { exigirEdicao } from "@/lib/auth";
 import { registrar } from "@/lib/auditoria";
+import { ehDuplicado } from "@/lib/erros";
 import { codigoBase, codigoDisponivel } from "@/lib/codigo";
 import { ORIGENS_3D } from "@/lib/labels";
 
@@ -248,8 +249,7 @@ export async function salvarItem(
     revalidatePath("/");
     return { ok: true, id: itemId };
   } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    if (msg.includes("itens_codigo_unique") || msg.includes("duplicate key")) {
+    if (ehDuplicado(e)) {
       return { erro: `O código ${d.codigo} já está em uso por outro item.`, campo: "codigo" };
     }
     console.error(e);

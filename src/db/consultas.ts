@@ -171,7 +171,7 @@ export async function contarItens(filtros?: FiltrosItens): Promise<number> {
 
 export async function listarItensComSaldo(
   filtros?: FiltrosItens & {
-    /** Sem isto a consulta traz tudo — o CSV e as outras telas dependem. */
+    /** Sem isto a consulta traz tudo — as outras telas dependem disso. */
     porPagina?: number;
     pular?: number;
   },

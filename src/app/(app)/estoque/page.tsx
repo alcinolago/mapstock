@@ -1,9 +1,7 @@
 import { and, desc, eq, ilike, or, sql } from "drizzle-orm";
-import { Download } from "lucide-react";
 
 import { FormularioMovimento } from "@/components/estoque/formulario-movimento";
 import { Historico } from "@/components/estoque/historico";
-import { Botao } from "@/components/ui/botao";
 import { CabecalhoPagina } from "@/components/ui/cabecalho-pagina";
 import { db } from "@/db";
 import {
@@ -108,17 +106,6 @@ export default async function PaginaEstoque({
       <CabecalhoPagina
         titulo="Estoque"
         descricao="Entradas, saídas, reservas e ajustes. O saldo é sempre a soma do histórico."
-        acao={
-          /* Leva o recorte junto: baixa o que esta sendo visto. */
-          <a href={`/api/exportar/movimentos?${new URLSearchParams(
-            Object.entries({ de, ate, item, busca }).filter(([, v]) => v) as [string, string][],
-          )}`}>
-            <Botao variante="contorno">
-              <Download className="size-4" />
-              Exportar CSV
-            </Botao>
-          </a>
-        }
       />
 
       <div className="grid gap-5 xl:grid-cols-[22rem_1fr]">

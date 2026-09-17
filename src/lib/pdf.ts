@@ -1,5 +1,5 @@
 /**
- * Montagem de PDF em A4, no mesmo espirito do csv.ts: um punhado de funcoes
+ * Montagem de PDF em A4: um punhado de funcoes
  * que resolvem os detalhes chatos uma vez so.
  *
  * Tres coisas que decidem se o arquivo abre certo do outro lado:
@@ -52,7 +52,7 @@ const TROCAS: [RegExp, string][] = [
   [/[≈]/g, "~"],
   /* Escritos pelo codigo do caractere, nao pelo caractere: espaco nao
      separavel e separador de linha sao invisiveis no editor e se perdem em
-     qualquer edicao descuidada — mesmo motivo do BOM escapado no csv.ts. */
+     qualquer edicao descuidada. */
   [new RegExp(`[${String.fromCharCode(0xa0)}\\t]`, "g"), " "],
   [new RegExp(`[${String.fromCharCode(0x2028, 0x2029)}]`, "g"), "\n"],
 ];

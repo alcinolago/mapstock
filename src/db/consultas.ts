@@ -30,14 +30,7 @@ import {
  * EFEITO_MOVIMENTO de src/lib/labels.ts — se um tipo novo aparecer, os dois
  * precisam mudar juntos.
  */
-/**
- * A mesma agregacao recortada numa data: "como estava o estoque em 31/08".
- *
- * So e possivel porque saldo nunca e campo gravado — e sempre a soma do
- * historico. Sem data, soma tudo e o resultado e a posicao de hoje.
- */
-export function saldosAte(data?: string) {
-  return db
+export const saldos = db
   .select({
     itemId: movimentos.itemId,
     fisico: sql<number>`coalesce(sum(case
@@ -50,15 +43,11 @@ export function saldosAte(data?: string) {
       else 0 end), 0)::float8`.as("reservado"),
   })
   .from(movimentos)
-  .where(recorteAte(movimentos.criadoEm, data))
   .groupBy(movimentos.itemId)
   .as("saldos");
-}
-
-export const saldos = saldosAte();
 
 /**
- * O custo do item vindo do recebimento — sem data, o da ultima compra.
+ * O custo do item, vindo do preco da ultima compra recebida.
  *
  * Isto e a fonte do custo, e nao `itens.custoUnitario`. Aquele campo e
  * gravado pelo recebimento e ficava sozinho com a verdade, entao bastava um
@@ -68,14 +57,12 @@ export const saldos = saldosAte();
  * vez de corrigir caso a caso.
  *
  * `pedidoItens.precoUnitario` nao e sobrescrito, e o movimento de
- * recebimento aponta para a linha do pedido. Com data, para no ultimo
- * recebimento ate ali; e assim que a posicao retroativa deixa de valorizar a
- * quantidade de agosto pelo preco de hoje.
+ * recebimento aponta para a linha do pedido.
  *
  * So `entrada_compra`: devolucao tambem carrega `pedidoItemId`, e devolver
  * nao redefine custo nenhum.
  */
-function custoAte(data?: string) {
+function custoDoUltimoRecebimento() {
   return db
     .selectDistinctOn([movimentos.itemId], {
       itemId: movimentos.itemId,
@@ -83,9 +70,9 @@ function custoAte(data?: string) {
     })
     .from(movimentos)
     .innerJoin(pedidoItens, eq(pedidoItens.id, movimentos.pedidoItemId))
-    .where(and(eq(movimentos.tipo, "entrada_compra"), recorteAte(movimentos.criadoEm, data)))
+    .where(eq(movimentos.tipo, "entrada_compra"))
     .orderBy(movimentos.itemId, desc(movimentos.criadoEm))
-    .as("custo_ate");
+    .as("custo_recebido");
 }
 
 export type SituacaoItem = "ok" | "falta" | "abaixo_minimo" | "nao_estocavel";
@@ -98,8 +85,6 @@ export type ItemComSaldo = {
   unidade: string;
   nivel: number;
   custoUnitario: number;
-  /** Nao houve recebimento ate a data: o custo veio do cadastro de hoje. */
-  custoDoCadastro: boolean;
   estoqueMinimo: number;
   localizacao: string | null;
   ativo: boolean;
@@ -136,22 +121,18 @@ export async function listarItensComSaldo(filtros?: {
   nivel?: number;
   situacao?: SituacaoItem;
   incluirInativos?: boolean;
-  /** "2026-08-31" — a posicao daquele dia, em vez da de hoje. */
-  em?: string;
+  /** Um item so, escolhido pelo codigo no seletor. */
+  itemId?: string;
 }): Promise<ItemComSaldo[]> {
   const condicoes: SQL[] = [];
 
-  if (!filtros?.incluirInativos) condicoes.push(eq(itens.ativo, true));
+  /* O item escolhido no seletor aparece mesmo inativo: quem o escolheu pelo
+     codigo ja sabe qual quer, e sumir seria a tela discordar do proprio
+     seletor. */
+  if (filtros?.itemId) condicoes.push(eq(itens.id, filtros.itemId));
+  else if (!filtros?.incluirInativos) condicoes.push(eq(itens.ativo, true));
 
-  /* Item cadastrado depois da data nao estava na prateleira naquele dia, e
-     apareceria zerado sujando a lista inteira. */
-  const recorte = recorteAte(itens.criadoEm, filtros?.em);
-  if (recorte) condicoes.push(recorte);
-
-  const saldoNaData = filtros?.em ? saldosAte(filtros.em) : saldos;
-  /* Sempre derivado, com ou sem data: e o que mantem a posicao de hoje e a
-     listagem normal dando o mesmo numero. */
-  const custoNaData = custoAte(filtros?.em);
+  const custo = custoDoUltimoRecebimento();
   if (filtros?.classificacaoId) {
     condicoes.push(eq(itens.classificacaoId, filtros.classificacaoId));
   }
@@ -176,18 +157,18 @@ export async function listarItensComSaldo(filtros?: {
       unidade: unidades.sigla,
       nivel: itens.nivel,
       custoUnitario: itens.custoUnitario,
-      custoRecebido: sql<number | null>`${custoNaData.preco}`,
+      custoRecebido: sql<number | null>`${custo.preco}`,
       estoqueMinimo: itens.estoqueMinimo,
       localizacao: itens.localizacao,
       ativo: itens.ativo,
-      fisico: sql<number>`coalesce(${saldoNaData.fisico}, 0)`,
-      reservado: sql<number>`coalesce(${saldoNaData.reservado}, 0)`,
+      fisico: sql<number>`coalesce(${saldos.fisico}, 0)`,
+      reservado: sql<number>`coalesce(${saldos.reservado}, 0)`,
     })
     .from(itens)
     .innerJoin(classificacoes, eq(classificacoes.id, itens.classificacaoId))
     .innerJoin(unidades, eq(unidades.id, itens.unidadeId))
-    .leftJoin(saldoNaData, eq(saldoNaData.itemId, itens.id))
-    .leftJoin(custoNaData, eq(custoNaData.itemId, itens.id))
+    .leftJoin(saldos, eq(saldos.itemId, itens.id))
+    .leftJoin(custo, eq(custo.itemId, itens.id))
     .$dynamic();
 
   const linhas = await consulta
@@ -198,13 +179,11 @@ export async function listarItensComSaldo(filtros?: {
     const disponivel = l.fisico - l.reservado;
     /* Item que nunca foi comprado — fabricado, impresso, equipamento
        montado — nao tem recebimento de onde tirar custo, e ai vale o do
-       cadastro. Nao e erro; so vira aviso na posicao retroativa, onde
-       significa que a reconstrucao nao alcancou aquela data. */
+       cadastro. */
     const custoUnitario = l.custoRecebido !== null ? Number(l.custoRecebido) : l.custoUnitario;
     return {
       ...l,
       custoUnitario,
-      custoDoCadastro: Boolean(filtros?.em) && l.custoRecebido === null,
       disponivel,
       valorEstoque: l.fisico * custoUnitario,
       situacao: situacaoDoItem(l.nivel, disponivel, l.estoqueMinimo),
@@ -595,17 +574,6 @@ export function recorteDoMes(coluna: PgColumn, mes: string | undefined): SQL | u
 }
 
 /**
- * Tudo ate o fim de um dia, na fronteira de Sao Paulo.
- *
- * O corte e `< o dia seguinte`, e nao `<= o dia`: a comparacao carrega a
- * hora, entao com `<=` so entraria o que foi lancado a meia-noite em ponto.
- */
-export function recorteAte(coluna: PgColumn, data: string | undefined): SQL | undefined {
-  if (!data) return undefined;
-  return sql`${coluna} < (${diaSeguinte(data)}::timestamp AT TIME ZONE ${FUSO})`;
-}
-
-/**
  * Intervalo fechado de datas, com as duas pontas opcionais.
  *
  * O fim e `< o dia seguinte` pelo mesmo motivo de `recorteAte`: a comparacao
@@ -621,6 +589,19 @@ export function recorteEntre(
   if (de) partes.push(sql`${coluna} >= (${de}::timestamp AT TIME ZONE ${FUSO})`);
   if (ate) partes.push(sql`${coluna} < (${diaSeguinte(ate)}::timestamp AT TIME ZONE ${FUSO})`);
   return partes.length ? and(...partes) : undefined;
+}
+
+/**
+ * Codigo e descricao de todo item cadastrado, para o seletor da tela de
+ * itens. Vem completa e nao filtrada: e ela que deixa escolher o item sem
+ * digitar, entao encolher conforme os outros filtros tiraria justamente a
+ * opcao que a pessoa esta procurando.
+ */
+export async function codigosDeItens() {
+  return db
+    .select({ id: itens.id, codigo: itens.codigo, descricao: itens.descricao, ativo: itens.ativo })
+    .from(itens)
+    .orderBy(asc(itens.codigo));
 }
 
 /**

@@ -17,10 +17,9 @@ import {
   Vazio,
 } from "@/components/ui/tabela";
 import { db } from "@/db";
-import { listarItensComSaldo, type SituacaoItem } from "@/db/consultas";
+import { codigosDeItens, listarItensComSaldo, type SituacaoItem } from "@/db/consultas";
 import { classificacoes, niveis } from "@/db/schema";
 import { exigirSessao } from "@/lib/auth";
-import { dataValida, rotuloData } from "@/lib/periodo";
 import { moeda, numero } from "@/lib/utils";
 
 export const metadata = { title: "Itens" };
@@ -39,27 +38,21 @@ export default async function PaginaItens({
     ? (p.situacao as SituacaoItem)
     : undefined;
 
-  /* Posicao retroativa: "como estava o estoque em 31/08". So existe porque
-     saldo e sempre a soma do historico, nunca um campo gravado. */
-  const em = dataValida(p.em);
-
-  const [lista, listaClassificacoes, listaNiveis] = await Promise.all([
+  const [lista, listaClassificacoes, listaNiveis, cadastro] = await Promise.all([
     listarItensComSaldo({
       busca: p.busca,
       classificacaoId: p.classificacao,
       nivel: p.nivel ? Number(p.nivel) : undefined,
       situacao,
       incluirInativos: p.inativos === "1",
-      em,
+      itemId: p.item?.trim() || undefined,
     }),
     db.select().from(classificacoes).orderBy(classificacoes.ordem),
     db.select().from(niveis).orderBy(niveis.num),
+    codigosDeItens(),
   ]);
 
   const nomeNivel = new Map(listaNiveis.map((n) => [n.num, n.nome]));
-  /* Quantos itens a reconstrucao nao alcancou — o aviso diz o numero em vez
-     de deixar o total parecer exato. */
-  const semRecebimento = lista.filter((i) => i.custoDoCadastro).length;
   const podeEditar = sessao.papel !== "leitura";
 
   return (
@@ -90,34 +83,11 @@ export default async function PaginaItens({
         }
       />
 
-      <FiltrosItens classificacoes={listaClassificacoes} niveis={listaNiveis} />
-
-      {em && (
-        <p className="mb-4 flex flex-wrap items-baseline gap-x-2 gap-y-1 rounded-xl border-l-4 border-alerta bg-alerta-suave px-4 py-3 text-sm">
-          <span className="font-semibold text-alerta">
-            Posição de {rotuloData(em)}, não a de hoje.
-          </span>
-          <span className="text-texto-suave">
-            Quantidade e custo são os daquele dia: o custo vem do último recebimento até
-            {" "}
-            {rotuloData(em)}, e não do cadastro de hoje.
-            {semRecebimento > 0 && (
-              <>
-                {" "}
-                <strong className="font-semibold text-texto">
-                  {semRecebimento}{" "}
-                  {semRecebimento === 1
-                    ? "item não tinha recebimento até essa data e está"
-                    : "itens não tinham recebimento até essa data e estão"}{" "}
-                  com o custo do cadastro
-                </strong>{" "}
-                (marcado com ~ na coluna de custo).
-              </>
-            )}{" "}
-            Estoque mínimo e situação continuam sendo os de hoje.
-          </span>
-        </p>
-      )}
+      <FiltrosItens
+        classificacoes={listaClassificacoes}
+        niveis={listaNiveis}
+        itens={cadastro}
+      />
 
       <Cartao className="overflow-hidden">
         <RolagemTabela>
@@ -175,14 +145,6 @@ export default async function PaginaItens({
                     </Celula>
                     <Celula className="num text-right font-semibold">{numero(i.disponivel)}</Celula>
                     <Celula className="num text-right whitespace-nowrap text-texto-suave">
-                      {i.custoDoCadastro && (
-                        <span
-                          className="text-alerta"
-                          title="Sem recebimento até essa data: custo do cadastro de hoje"
-                        >
-                          ~
-                        </span>
-                      )}
                       {moeda(i.custoUnitario)}
                     </Celula>
                     <Celula className="num text-right font-semibold whitespace-nowrap">

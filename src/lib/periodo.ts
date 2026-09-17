@@ -88,8 +88,6 @@ export function mesesAte(maisAntigo: Date | null, agora = new Date()): string[] 
 
 const DIA = /^\d{4}-\d{2}-\d{2}$/;
 
-const DIA_BR = new Intl.DateTimeFormat("pt-BR", { timeZone: "UTC", dateStyle: "short" });
-
 const DIA_ISO = new Intl.DateTimeFormat("en-CA", {
   timeZone: FUSO,
   year: "numeric",
@@ -110,11 +108,6 @@ export function dataValida(valor: string | undefined): string | undefined {
   if (!valor || !DIA.test(valor)) return undefined;
   const d = new Date(`${valor}T12:00:00Z`);
   return Number.isNaN(d.getTime()) || DIA_ISO.format(d) !== valor ? undefined : valor;
-}
-
-/** "2026-08-31" → "31/08/2026". */
-export function rotuloData(dia: string): string {
-  return DIA_BR.format(new Date(`${dia}T12:00:00Z`));
 }
 
 /**

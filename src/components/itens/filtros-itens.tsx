@@ -6,14 +6,16 @@ import { useEffect, useState, useTransition } from "react";
 
 import { Botao } from "@/components/ui/botao";
 import { Entrada, Selecao } from "@/components/ui/campo";
-import { hoje } from "@/lib/periodo";
 
 export function FiltrosItens({
   classificacoes,
   niveis,
+  itens,
 }: {
   classificacoes: { id: string; nome: string }[];
   niveis: { num: number; nome: string }[];
+  /** Todo o cadastro, para escolher pelo codigo sem digitar. */
+  itens: { id: string; codigo: string; descricao: string; ativo: boolean }[];
 }) {
   const router = useRouter();
   const caminho = usePathname();
@@ -38,7 +40,9 @@ export function FiltrosItens({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [busca]);
 
-  const temFiltro = ["busca", "classificacao", "nivel", "situacao", "em"].some((c) => params.get(c));
+  const temFiltro = ["busca", "classificacao", "nivel", "situacao", "item"].some((c) =>
+    params.get(c),
+  );
 
   return (
     <div className="mb-4 flex flex-wrap items-center gap-2">
@@ -52,6 +56,21 @@ export function FiltrosItens({
           className="pl-9"
         />
       </div>
+
+      <Selecao
+        aria-label="Código do item"
+        value={params.get("item") ?? ""}
+        onChange={(e) => aplicar("item", e.target.value)}
+        className="w-auto min-w-52 max-w-72"
+      >
+        <option value="">Todos os códigos</option>
+        {itens.map((i) => (
+          <option key={i.id} value={i.id}>
+            {i.codigo} — {i.descricao}
+            {i.ativo ? "" : " (inativo)"}
+          </option>
+        ))}
+      </Selecao>
 
       <Selecao
         aria-label="Classificação"
@@ -93,20 +112,6 @@ export function FiltrosItens({
         <option value="abaixo_minimo">Abaixo do mínimo</option>
         <option value="nao_estocavel">Não estocável</option>
       </Selecao>
-
-      {/* Posicao retroativa: so e possivel porque saldo e a soma do
-          historico, nunca um campo gravado. */}
-      <label className="flex items-center gap-2 text-xs font-semibold text-texto-suave">
-        Posição em
-        <Entrada
-          type="date"
-          value={params.get("em") ?? ""}
-          max={hoje()}
-          onChange={(e) => aplicar("em", e.target.value)}
-          className="h-10 w-auto"
-          aria-label="Ver a posição do estoque nesta data"
-        />
-      </label>
 
       {temFiltro && (
         <Botao

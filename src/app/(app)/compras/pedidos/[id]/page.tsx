@@ -1,14 +1,14 @@
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, FileDown } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { AcoesPedido } from "@/components/compras/acoes-pedido";
 import { ItensPedido } from "@/components/compras/itens-pedido";
 import { SeloPedido } from "@/components/situacao";
+import { botao } from "@/components/ui/botao";
 import { CabecalhoPagina } from "@/components/ui/cabecalho-pagina";
 import { pedidoCompleto } from "@/db/consultas";
 import { exigirSessao } from "@/lib/auth";
-import { data, moeda } from "@/lib/utils";
+import { data } from "@/lib/utils";
 
 export const metadata = { title: "Pedido de compra" };
 
@@ -24,7 +24,6 @@ export default async function PaginaPedido({
   if (!dados) notFound();
 
   const { pedido, linhas } = dados;
-  const total = linhas.reduce((s, l) => s + l.quantidade * l.precoUnitario, 0) + pedido.frete;
 
   return (
     <div className="mx-auto max-w-5xl">
@@ -42,13 +41,15 @@ export default async function PaginaPedido({
         acao={
           <>
             <SeloPedido status={pedido.status} />
-            <AcoesPedido
-              pedidoId={pedido.id}
-              numero={pedido.numero}
-              fornecedor={pedido.fornecedor}
-              totalItens={linhas.length}
-              total={moeda(total)}
-            />
+            {/* Link comum de proposito: funciona sem JavaScript, o navegador
+                cuida do arquivo e ninguem fica esperando na tela. */}
+            <a
+              href={`/api/exportar/pedido/${pedido.id}`}
+              className={botao({ variante: "contorno", tamanho: "md" })}
+            >
+              <FileDown className="size-4" />
+              Baixar PDF
+            </a>
           </>
         }
       />

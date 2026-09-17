@@ -6,6 +6,7 @@ import { useEffect, useState, useTransition } from "react";
 
 import { Botao } from "@/components/ui/botao";
 import { Entrada, Selecao } from "@/components/ui/campo";
+import { hoje } from "@/lib/periodo";
 
 export function FiltrosItens({
   classificacoes,
@@ -37,7 +38,7 @@ export function FiltrosItens({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [busca]);
 
-  const temFiltro = ["busca", "classificacao", "nivel", "situacao"].some((c) => params.get(c));
+  const temFiltro = ["busca", "classificacao", "nivel", "situacao", "em"].some((c) => params.get(c));
 
   return (
     <div className="mb-4 flex flex-wrap items-center gap-2">
@@ -92,6 +93,20 @@ export function FiltrosItens({
         <option value="abaixo_minimo">Abaixo do mínimo</option>
         <option value="nao_estocavel">Não estocável</option>
       </Selecao>
+
+      {/* Posicao retroativa: so e possivel porque saldo e a soma do
+          historico, nunca um campo gravado. */}
+      <label className="flex items-center gap-2 text-xs font-semibold text-texto-suave">
+        Posição em
+        <Entrada
+          type="date"
+          value={params.get("em") ?? ""}
+          max={hoje()}
+          onChange={(e) => aplicar("em", e.target.value)}
+          className="h-10 w-auto"
+          aria-label="Ver a posição do estoque nesta data"
+        />
+      </label>
 
       {temFiltro && (
         <Botao

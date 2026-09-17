@@ -20,6 +20,7 @@ import { db } from "@/db";
 import { listarItensComSaldo, type SituacaoItem } from "@/db/consultas";
 import { classificacoes, niveis } from "@/db/schema";
 import { exigirSessao } from "@/lib/auth";
+import { dataValida, rotuloData } from "@/lib/periodo";
 import { moeda, numero } from "@/lib/utils";
 
 export const metadata = { title: "Itens" };
@@ -38,6 +39,10 @@ export default async function PaginaItens({
     ? (p.situacao as SituacaoItem)
     : undefined;
 
+  /* Posicao retroativa: "como estava o estoque em 31/08". So existe porque
+     saldo e sempre a soma do historico, nunca um campo gravado. */
+  const em = dataValida(p.em);
+
   const [lista, listaClassificacoes, listaNiveis] = await Promise.all([
     listarItensComSaldo({
       busca: p.busca,
@@ -45,6 +50,7 @@ export default async function PaginaItens({
       nivel: p.nivel ? Number(p.nivel) : undefined,
       situacao,
       incluirInativos: p.inativos === "1",
+      em,
     }),
     db.select().from(classificacoes).orderBy(classificacoes.ordem),
     db.select().from(niveis).orderBy(niveis.num),
@@ -82,6 +88,19 @@ export default async function PaginaItens({
       />
 
       <FiltrosItens classificacoes={listaClassificacoes} niveis={listaNiveis} />
+
+      {em && (
+        <p className="mb-4 flex flex-wrap items-baseline gap-x-2 gap-y-1 rounded-xl border-l-4 border-alerta bg-alerta-suave px-4 py-3 text-sm">
+          <span className="font-semibold text-alerta">
+            Posição de {rotuloData(em)}, não a de hoje.
+          </span>
+          <span className="text-texto-suave">
+            Físico, reservado e disponível são a soma do histórico até aquele dia. Custo
+            unitário, estoque mínimo e situação são os do cadastro de hoje — o sistema não
+            guarda o custo que o item tinha na época.
+          </span>
+        </p>
+      )}
 
       <Cartao className="overflow-hidden">
         <RolagemTabela>

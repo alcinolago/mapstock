@@ -1,7 +1,7 @@
 import { and, asc, desc, eq, ilike, inArray, isNull, or, sql, type SQL } from "drizzle-orm";
 import { alias, type PgColumn } from "drizzle-orm/pg-core";
 
-import { FUSO, limitesDoMes } from "@/lib/periodo";
+import { diaSeguinte, FUSO, limitesDoMes } from "@/lib/periodo";
 
 import { db } from "./index";
 import {
@@ -30,7 +30,14 @@ import {
  * EFEITO_MOVIMENTO de src/lib/labels.ts — se um tipo novo aparecer, os dois
  * precisam mudar juntos.
  */
-export const saldos = db
+/**
+ * A mesma agregacao recortada numa data: "como estava o estoque em 31/08".
+ *
+ * So e possivel porque saldo nunca e campo gravado — e sempre a soma do
+ * historico. Sem data, soma tudo e o resultado e a posicao de hoje.
+ */
+export function saldosAte(data?: string) {
+  return db
   .select({
     itemId: movimentos.itemId,
     fisico: sql<number>`coalesce(sum(case
@@ -43,8 +50,12 @@ export const saldos = db
       else 0 end), 0)::float8`.as("reservado"),
   })
   .from(movimentos)
+  .where(recorteAte(movimentos.criadoEm, data))
   .groupBy(movimentos.itemId)
   .as("saldos");
+}
+
+export const saldos = saldosAte();
 
 export type SituacaoItem = "ok" | "falta" | "abaixo_minimo" | "nao_estocavel";
 
@@ -92,10 +103,19 @@ export async function listarItensComSaldo(filtros?: {
   nivel?: number;
   situacao?: SituacaoItem;
   incluirInativos?: boolean;
+  /** "2026-08-31" — a posicao daquele dia, em vez da de hoje. */
+  em?: string;
 }): Promise<ItemComSaldo[]> {
   const condicoes: SQL[] = [];
 
   if (!filtros?.incluirInativos) condicoes.push(eq(itens.ativo, true));
+
+  /* Item cadastrado depois da data nao estava na prateleira naquele dia, e
+     apareceria zerado sujando a lista inteira. */
+  const recorte = recorteAte(itens.criadoEm, filtros?.em);
+  if (recorte) condicoes.push(recorte);
+
+  const saldoNaData = filtros?.em ? saldosAte(filtros.em) : saldos;
   if (filtros?.classificacaoId) {
     condicoes.push(eq(itens.classificacaoId, filtros.classificacaoId));
   }
@@ -123,13 +143,13 @@ export async function listarItensComSaldo(filtros?: {
       estoqueMinimo: itens.estoqueMinimo,
       localizacao: itens.localizacao,
       ativo: itens.ativo,
-      fisico: sql<number>`coalesce(${saldos.fisico}, 0)`,
-      reservado: sql<number>`coalesce(${saldos.reservado}, 0)`,
+      fisico: sql<number>`coalesce(${saldoNaData.fisico}, 0)`,
+      reservado: sql<number>`coalesce(${saldoNaData.reservado}, 0)`,
     })
     .from(itens)
     .innerJoin(classificacoes, eq(classificacoes.id, itens.classificacaoId))
     .innerJoin(unidades, eq(unidades.id, itens.unidadeId))
-    .leftJoin(saldos, eq(saldos.itemId, itens.id))
+    .leftJoin(saldoNaData, eq(saldoNaData.itemId, itens.id))
     .where(condicoes.length ? and(...condicoes) : undefined)
     .orderBy(asc(itens.nivel), asc(itens.codigo));
 
@@ -524,6 +544,17 @@ export function recorteDoMes(coluna: PgColumn, mes: string | undefined): SQL | u
     sql`${coluna} >= (${inicio}::timestamp AT TIME ZONE ${FUSO})`,
     sql`${coluna} < (${fim}::timestamp AT TIME ZONE ${FUSO})`,
   );
+}
+
+/**
+ * Tudo ate o fim de um dia, na fronteira de Sao Paulo.
+ *
+ * O corte e `< o dia seguinte`, e nao `<= o dia`: a comparacao carrega a
+ * hora, entao com `<=` so entraria o que foi lancado a meia-noite em ponto.
+ */
+export function recorteAte(coluna: PgColumn, data: string | undefined): SQL | undefined {
+  if (!data) return undefined;
+  return sql`${coluna} < (${diaSeguinte(data)}::timestamp AT TIME ZONE ${FUSO})`;
 }
 
 /** O movimento mais antigo, para a lista de meses nao oferecer mes vazio. */

@@ -6,6 +6,7 @@ import { listarItensComSaldo, type SituacaoItem } from "@/db/consultas";
 import { niveis } from "@/db/schema";
 import { exigirSessao } from "@/lib/auth";
 import { paraCsv, respostaCsv } from "@/lib/csv";
+import { dataValida } from "@/lib/periodo";
 
 const SITUACOES: SituacaoItem[] = ["ok", "falta", "abaixo_minimo", "nao_estocavel"];
 
@@ -25,6 +26,7 @@ export async function GET(request: NextRequest) {
 
   const p = request.nextUrl.searchParams;
   const situacao = SITUACOES.find((s) => s === p.get("situacao"));
+  const em = dataValida(p.get("em") ?? undefined);
 
   const [lista, listaNiveis] = await Promise.all([
     listarItensComSaldo({
@@ -33,6 +35,7 @@ export async function GET(request: NextRequest) {
       nivel: p.get("nivel") ? Number(p.get("nivel")) : undefined,
       situacao,
       incluirInativos: p.get("inativos") === "1",
+      em,
     }),
     db.select().from(niveis).orderBy(desc(niveis.num)),
   ]);
@@ -54,5 +57,5 @@ export async function GET(request: NextRequest) {
     ]),
   );
 
-  return respostaCsv(csv, "mapstock_itens");
+  return respostaCsv(csv, em ? `mapstock_posicao_${em}` : "mapstock_itens");
 }

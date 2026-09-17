@@ -1,14 +1,25 @@
 import { desc, eq } from "drizzle-orm";
 
 import { db } from "@/db";
+import { recorteDoMes } from "@/db/consultas";
 import { itens, movimentos, unidades, usuarios } from "@/db/schema";
 import { exigirSessao } from "@/lib/auth";
 import { paraCsv, respostaCsv } from "@/lib/csv";
 import { MOVIMENTOS } from "@/lib/labels";
+import { mesValido } from "@/lib/periodo";
 
-/** Histórico completo de movimentação, para conferência e contabilidade. */
-export async function GET() {
+/**
+ * Histórico de movimentação, para conferência e contabilidade.
+ *
+ * Aceita o mesmo `mes` da tela para o arquivo bater com o que estava na
+ * frente de quem clicou — planilha de fechamento nasce de um mês só.
+ */
+export async function GET(requisicao: Request) {
   await exigirSessao();
+
+  const mes = mesValido(
+    new URL(requisicao.url).searchParams.get("mes") ?? undefined,
+  );
 
   const linhas = await db
     .select({
@@ -26,6 +37,7 @@ export async function GET() {
     .innerJoin(itens, eq(itens.id, movimentos.itemId))
     .innerJoin(unidades, eq(unidades.id, itens.unidadeId))
     .leftJoin(usuarios, eq(usuarios.id, movimentos.usuarioId))
+    .where(recorteDoMes(movimentos.criadoEm, mes))
     .orderBy(desc(movimentos.criadoEm));
 
   const csv = paraCsv(
@@ -36,5 +48,5 @@ export async function GET() {
     ]),
   );
 
-  return respostaCsv(csv, "mapstock_movimentacoes");
+  return respostaCsv(csv, mes ? `mapstock_movimentacoes_${mes}` : "mapstock_movimentacoes");
 }

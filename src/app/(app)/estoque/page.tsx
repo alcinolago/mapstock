@@ -6,17 +6,28 @@ import { Historico } from "@/components/estoque/historico";
 import { Botao } from "@/components/ui/botao";
 import { CabecalhoPagina } from "@/components/ui/cabecalho-pagina";
 import { db } from "@/db";
-import { listarItensComSaldo } from "@/db/consultas";
+import { listarItensComSaldo, primeiroMovimento, recorteDoMes } from "@/db/consultas";
 import { itens, movimentos, unidades, usuarios } from "@/db/schema";
 import { exigirSessao } from "@/lib/auth";
+import { mesesAte, mesValido } from "@/lib/periodo";
 
 export const metadata = { title: "Estoque" };
 
-export default async function PaginaEstoque() {
+export default async function PaginaEstoque({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | undefined>>;
+}) {
   const sessao = await exigirSessao();
   const podeEditar = sessao.papel !== "leitura";
 
-  const [comSaldo, historico] = await Promise.all([
+  const p = await searchParams;
+  /* O recorte vai para a consulta, nao para o cliente: o historico chega
+     limitado, e filtrar mes depois mostraria so o que coubesse no limite —
+     um mes antigo viria vazio mesmo tendo lancamento. */
+  const mes = mesValido(p.mes);
+
+  const [comSaldo, historico, maisAntigo] = await Promise.all([
     listarItensComSaldo(),
     db
       .select({
@@ -36,8 +47,10 @@ export default async function PaginaEstoque() {
       .innerJoin(itens, eq(itens.id, movimentos.itemId))
       .innerJoin(unidades, eq(unidades.id, itens.unidadeId))
       .leftJoin(usuarios, eq(usuarios.id, movimentos.usuarioId))
+      .where(recorteDoMes(movimentos.criadoEm, mes))
       .orderBy(desc(movimentos.criadoEm))
       .limit(300),
+    primeiroMovimento(),
   ]);
 
   /* Nivel 0 e o equipamento montado — nao se movimenta em estoque. */
@@ -57,7 +70,8 @@ export default async function PaginaEstoque() {
         titulo="Estoque"
         descricao="Entradas, saídas, reservas e ajustes. O saldo é sempre a soma do histórico."
         acao={
-          <a href="/api/exportar/movimentos">
+          /* Leva o recorte junto: baixa o que esta sendo visto. */
+          <a href={`/api/exportar/movimentos${mes ? `?mes=${mes}` : ""}`}>
             <Botao variante="contorno">
               <Download className="size-4" />
               Exportar CSV
@@ -76,7 +90,11 @@ export default async function PaginaEstoque() {
           </p>
         )}
 
-        <Historico movimentos={historico} podeEditar={podeEditar} />
+        <Historico
+          movimentos={historico}
+          podeEditar={podeEditar}
+          meses={mesesAte(maisAntigo)}
+        />
       </div>
     </div>
   );

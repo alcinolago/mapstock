@@ -1,5 +1,7 @@
 import { and, asc, desc, eq, ilike, inArray, isNull, or, sql, type SQL } from "drizzle-orm";
-import { alias } from "drizzle-orm/pg-core";
+import { alias, type PgColumn } from "drizzle-orm/pg-core";
+
+import { FUSO, limitesDoMes } from "@/lib/periodo";
 
 import { db } from "./index";
 import {
@@ -501,4 +503,33 @@ export async function carroPorId(id: string) {
     .where(eq(montagens.carroId, id));
 
   return { ...carro, montagemId: equipamento?.id ?? null };
+}
+
+/**
+ * Recorte de um mes sobre uma coluna de instante.
+ *
+ * A fronteira sai no fuso de Sao Paulo, e nao no do processo: na Vercel ele
+ * roda em UTC, e um lancamento das 22h do dia 30 apareceria no mes seguinte
+ * para quem digitou. Quem faz a conta e o Postgres, que conhece o historico
+ * de horario de verao — aqui so entra a data limite.
+ *
+ * `>= inicio` e `< primeiro dia do mes seguinte`: com `<= ultimo dia` os
+ * lancamentos do proprio ultimo dia ficariam de fora, porque a comparacao
+ * carrega a hora junto.
+ */
+export function recorteDoMes(coluna: PgColumn, mes: string | undefined): SQL | undefined {
+  if (!mes) return undefined;
+  const { inicio, fim } = limitesDoMes(mes);
+  return and(
+    sql`${coluna} >= (${inicio}::timestamp AT TIME ZONE ${FUSO})`,
+    sql`${coluna} < (${fim}::timestamp AT TIME ZONE ${FUSO})`,
+  );
+}
+
+/** O movimento mais antigo, para a lista de meses nao oferecer mes vazio. */
+export async function primeiroMovimento(): Promise<Date | null> {
+  const [linha] = await db
+    .select({ quando: sql<Date | null>`min(${movimentos.criadoEm})` })
+    .from(movimentos);
+  return linha?.quando ? new Date(linha.quando) : null;
 }

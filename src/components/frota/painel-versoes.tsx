@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useActionState, useEffect, useRef, useState } from "react";
 
 import { Botao } from "@/components/ui/botao";
+import { BotaoConfirmar } from "@/components/ui/confirmar";
 import { AreaTexto, Entrada, Grupo, Selecao } from "@/components/ui/campo";
 import { CabecalhoCartao, Cartao, CorpoCartao } from "@/components/ui/cartao";
 import { Selo } from "@/components/ui/selo";
@@ -40,13 +41,10 @@ export function PainelVersoes({
   }, [estado.ok, router]);
 
   async function remover(v: Versao) {
-    if (!confirm(`Excluir a versão ${v.numero}?`)) return;
     const r = await excluirVersao(v.id);
-    if (r.erro) setErro(r.erro);
-    else {
-      setErro(null);
-      router.refresh();
-    }
+    if (r.erro) return r;
+    setErro(null);
+    router.refresh();
   }
 
   return (
@@ -143,16 +141,24 @@ export function PainelVersoes({
                 </span>
 
                 {podeEditar && (
-                  <Botao
-                    variante="fantasma"
+                  <BotaoConfirmar
+                    rotulo={`Excluir versão ${v.numero}`}
+                    Icone={Trash2}
                     tamanho="sm"
-                    onClick={() => remover(v)}
-                    title="Excluir versão"
-                    aria-label={`Excluir versão ${v.numero}`}
+                    somenteIcone
                     className="px-1.5"
+                    iconeClassName="size-3.5 text-perigo"
+                    dica="Excluir versão"
+                    titulo="Excluir versão"
+                    descricao={v.numero}
+                    rotuloConfirmar="Excluir"
+                    aoConfirmar={() => remover(v)}
                   >
-                    <Trash2 className="size-3.5 text-perigo" />
-                  </Botao>
+                    <p>
+                      A versão sai da lista e deixa de ser oferecida no cadastro de carro. Os
+                      carros que já estão nela continuam apontando para o que foi registrado.
+                    </p>
+                  </BotaoConfirmar>
                 )}
               </li>
             ))}

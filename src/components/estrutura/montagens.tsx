@@ -3,9 +3,8 @@
 import { Car, PackageOpen, Warehouse } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useTransition } from "react";
 
-import { Botao } from "@/components/ui/botao";
+import { BotaoConfirmar } from "@/components/ui/confirmar";
 import { Selo, type TomSelo } from "@/components/ui/selo";
 import type { Montagem } from "@/db/consultas";
 import { desmontarMontagem } from "@/lib/acoes/montagens";
@@ -31,22 +30,11 @@ export function Montagens({
   podeEditar: boolean;
 }) {
   const router = useRouter();
-  const [pendente, iniciar] = useTransition();
 
-  function desmontar(m: Montagem) {
-    if (
-      !confirm(
-        `Desmontar ${m.numero} (${m.codigo})?\n\n` +
-          "As peças voltam para o estoque e o equipamento sai do saldo.",
-      )
-    ) {
-      return;
-    }
-    iniciar(async () => {
-      const r = await desmontarMontagem(m.id);
-      if (r.erro) alert(r.erro);
-      else router.refresh();
-    });
+  async function desmontar(m: Montagem) {
+    const r = await desmontarMontagem(m.id);
+    if (r.erro) return r;
+    router.refresh();
   }
 
   if (montagens.length === 0) {
@@ -98,16 +86,23 @@ export function Montagens({
           </span>
 
           {podeEditar && m.status === "montada" && (
-            <Botao
-              variante="fantasma"
+            <BotaoConfirmar
+              rotulo="Desmontar"
+              Icone={PackageOpen}
               tamanho="sm"
-              onClick={() => desmontar(m)}
-              disabled={pendente}
-              title="Desmontar e devolver as peças ao estoque"
+              tom="alerta"
+              iconeClassName="size-3.5"
+              dica="Desmontar e devolver as peças ao estoque"
+              titulo="Desmontar unidade"
+              descricao={`${m.numero} — ${m.codigo}`}
+              rotuloConfirmar="Desmontar"
+              aoConfirmar={() => desmontar(m)}
             >
-              <PackageOpen className="size-3.5" />
-              Desmontar
-            </Botao>
+              <p>
+                As peças que foram consumidas voltam para o estoque e o equipamento sai do
+                saldo — os dois lados viram movimentação, como na montagem.
+              </p>
+            </BotaoConfirmar>
           )}
         </li>
       ))}

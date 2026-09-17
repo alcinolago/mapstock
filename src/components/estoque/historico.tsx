@@ -3,10 +3,10 @@
 import { Undo2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useState } from "react";
 
 import { SeloMovimento } from "@/components/situacao";
-import { Botao } from "@/components/ui/botao";
+import { BotaoConfirmar } from "@/components/ui/confirmar";
 import { Entrada, Selecao } from "@/components/ui/campo";
 import { CabecalhoCartao, Cartao } from "@/components/ui/cartao";
 import {
@@ -45,7 +45,6 @@ export function Historico({
   podeEditar: boolean;
 }) {
   const router = useRouter();
-  const [pendente, iniciar] = useTransition();
   const [tipo, setTipo] = useState("");
   const [busca, setBusca] = useState("");
 
@@ -61,15 +60,10 @@ export function Historico({
     );
   }, [movimentos, tipo, busca]);
 
-  function estornar(id: string, codigo: string) {
-    if (!confirm(`Estornar esta movimentação de ${codigo}?\n\nUm movimento oposto será lançado — o histórico original é preservado.`)) {
-      return;
-    }
-    iniciar(async () => {
-      const r = await estornarMovimento(id);
-      if (r.erro) alert(r.erro);
-      else router.refresh();
-    });
+  async function estornar(id: string) {
+    const r = await estornarMovimento(id);
+    if (r.erro) return r;
+    router.refresh();
   }
 
   return (
@@ -154,15 +148,28 @@ export function Historico({
                   <Celula className="text-xs text-texto-fraco">{m.usuario ?? "—"}</Celula>
                   {podeEditar && (
                     <Celula className="text-right">
-                      <Botao
-                        variante="fantasma"
+                      <BotaoConfirmar
+                        rotulo={`Estornar movimentação de ${m.codigo}`}
+                        Icone={Undo2}
                         tamanho="sm"
-                        onClick={() => estornar(m.id, m.codigo)}
-                        disabled={pendente}
-                        title="Estornar (lança o movimento oposto)"
+                        somenteIcone
+                        tom="alerta"
+                        iconeClassName="size-3.5"
+                        dica="Estornar (lança o movimento oposto)"
+                        titulo="Estornar movimentação"
+                        descricao={`${m.codigo} · ${MOVIMENTOS[m.tipo]} de ${numero(m.quantidade)} ${m.unidade}`}
+                        rotuloConfirmar="Estornar"
+                        aoConfirmar={() => estornar(m.id)}
                       >
-                        <Undo2 className="size-3.5" />
-                      </Botao>
+                        <p>
+                          Movimento não se apaga: entra um movimento oposto, de mesma
+                          quantidade, e o saldo volta ao que era.
+                        </p>
+                        <p className="text-texto-fraco">
+                          O lançamento original continua no histórico — é assim que dá para
+                          reconstruir o que aconteceu depois.
+                        </p>
+                      </BotaoConfirmar>
                     </Celula>
                   )}
                 </Linha>

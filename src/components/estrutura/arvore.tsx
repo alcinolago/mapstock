@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
 import { Botao } from "@/components/ui/botao";
+import { BotaoConfirmar } from "@/components/ui/confirmar";
 import { Selo } from "@/components/ui/selo";
 import { Montar } from "./montar";
 import { desvincularDaEstrutura, moverNaEstrutura } from "@/lib/acoes/estrutura";
@@ -83,16 +84,11 @@ function No({
     });
   }
 
-  function remover() {
+  async function remover() {
     if (!no.vinculoId) return;
-    if (!confirm(`Remover ${no.codigo} desta montagem?\n\nO cadastro do item é preservado.`)) {
-      return;
-    }
-    iniciar(async () => {
-      const r = await desvincularDaEstrutura(no.vinculoId!);
-      if (r.erro) alert(r.erro);
-      else router.refresh();
-    });
+    const r = await desvincularDaEstrutura(no.vinculoId);
+    if (r.erro) return r;
+    router.refresh();
   }
 
   return (
@@ -179,17 +175,25 @@ function No({
             >
               <ChevronDown className="size-3.5" />
             </Botao>
-            <Botao
-              variante="fantasma"
+            <BotaoConfirmar
+              rotulo={`Remover ${no.codigo}`}
+              Icone={Trash2}
               tamanho="sm"
-              onClick={remover}
-              disabled={pendente}
-              title="Remover desta montagem"
-              aria-label={`Remover ${no.codigo}`}
+              somenteIcone
               className="px-1.5"
+              iconeClassName="size-3.5 text-perigo"
+              dica="Remover desta montagem"
+              desabilitado={pendente}
+              titulo="Remover da estrutura"
+              descricao={`${no.codigo} — ${no.descricao}`}
+              rotuloConfirmar="Remover"
+              aoConfirmar={remover}
             >
-              <Trash2 className="size-3.5 text-perigo" />
-            </Botao>
+              <p>
+                Sai só o vínculo com esta montagem: o cadastro do item, o saldo e o histórico
+                dele continuam como estão.
+              </p>
+            </BotaoConfirmar>
           </div>
         )}
       </div>

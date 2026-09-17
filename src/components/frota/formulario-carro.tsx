@@ -2,9 +2,10 @@
 
 import { AlertCircle, Car, LoaderCircle, Save, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useActionState, useEffect, useState } from "react";
+import { useActionState, useEffect } from "react";
 
 import { Botao } from "@/components/ui/botao";
+import { BotaoConfirmar } from "@/components/ui/confirmar";
 import { Entrada, Grupo, Selecao } from "@/components/ui/campo";
 import { CabecalhoCartao, Cartao, CorpoCartao } from "@/components/ui/cartao";
 import { excluirCarro, salvarCarro, type EstadoCarro } from "@/lib/acoes/frota";
@@ -44,7 +45,6 @@ export function FormularioCarro({
 }) {
   const router = useRouter();
   const [estado, acao, salvando] = useActionState<EstadoCarro, FormData>(salvarCarro, {});
-  const [erroExcluir, setErroExcluir] = useState<string | null>(null);
 
   useEffect(() => {
     if (estado.ok) router.push("/carros");
@@ -55,10 +55,9 @@ export function FormularioCarro({
 
   async function aoExcluir() {
     if (!carro) return;
-    if (!confirm(`Excluir o carro ${carro.placa}?`)) return;
     const r = await excluirCarro(carro.id);
-    if (r.erro) setErroExcluir(r.erro);
-    else router.push("/carros");
+    if (r.erro) return r;
+    router.push("/carros");
   }
 
   return (
@@ -180,24 +179,29 @@ export function FormularioCarro({
         </CorpoCartao>
       </Cartao>
 
-      {(estado.erro && !estado.campo) || erroExcluir ? (
+      {estado.erro && !estado.campo ? (
         <p className="flex items-start gap-2 rounded-lg bg-perigo-suave px-3 py-2 text-sm text-perigo">
           <AlertCircle className="mt-0.5 size-4 shrink-0" />
-          {erroExcluir ?? estado.erro}
+          {estado.erro}
         </p>
       ) : null}
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         {carro && podeExcluir ? (
-          <Botao
-            type="button"
-            variante="fantasma"
-            onClick={aoExcluir}
+          <BotaoConfirmar
+            rotulo="Excluir carro"
+            Icone={Trash2}
             className="text-perigo hover:bg-perigo-suave hover:text-perigo"
+            titulo="Excluir carro"
+            descricao={carro.placa}
+            rotuloConfirmar="Excluir"
+            aoConfirmar={aoExcluir}
           >
-            <Trash2 />
-            Excluir carro
-          </Botao>
+            <p>
+              O carro sai da frota. Se ele tem equipamento instalado, a montagem continua
+              registrada e volta a aparecer como disponível no estoque.
+            </p>
+          </BotaoConfirmar>
         ) : (
           <span />
         )}

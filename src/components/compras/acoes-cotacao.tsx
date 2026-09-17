@@ -1,11 +1,11 @@
 "use client";
 
-import { FileCheck2, LoaderCircle } from "lucide-react";
+import { FileCheck2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useTransition } from "react";
 
-import { Botao } from "@/components/ui/botao";
 import { Selecao } from "@/components/ui/campo";
+import { BotaoConfirmar } from "@/components/ui/confirmar";
 import { atualizarStatusCotacao, gerarPedidos } from "@/lib/acoes/compras";
 import { opcoes, STATUS_COTACAO, type StatusCotacao } from "@/lib/labels";
 
@@ -23,18 +23,10 @@ export function AcoesCotacao({
 
   const fechada = status === "fechada" || status === "cancelada";
 
-  function gerar() {
-    if (!confirm("Gerar os pedidos de compra e fechar esta cotação?\n\nUm pedido por fornecedor escolhido.")) {
-      return;
-    }
-    iniciar(async () => {
-      const r = await gerarPedidos(cotacaoId);
-      if (r.erro) alert(r.erro);
-      else {
-        alert(`${r.pedidos} ${r.pedidos === 1 ? "pedido gerado" : "pedidos gerados"}.`);
-        router.push("/compras/pedidos");
-      }
-    });
+  async function gerar() {
+    const r = await gerarPedidos(cotacaoId);
+    if (r.erro) return r;
+    router.push("/compras/pedidos");
   }
 
   return (
@@ -59,14 +51,24 @@ export function AcoesCotacao({
       </Selecao>
 
       {!fechada && (
-        <Botao onClick={gerar} disabled={pendente || !temEscolhido}>
-          {pendente ? (
-            <LoaderCircle className="size-4 animate-spin" />
-          ) : (
-            <FileCheck2 className="size-4" />
-          )}
-          Gerar pedidos
-        </Botao>
+        <BotaoConfirmar
+          rotulo="Gerar pedidos"
+          Icone={FileCheck2}
+          variante="primario"
+          tom="marca"
+          desabilitado={pendente || !temEscolhido}
+          titulo="Gerar pedidos de compra"
+          rotuloConfirmar="Gerar e fechar"
+          aoConfirmar={gerar}
+        >
+          <p>
+            Sai um pedido por fornecedor escolhido no comparativo, com os itens e os preços
+            que venceram.
+          </p>
+          <p className="text-texto-fraco">
+            A cotação é fechada no mesmo passo e deixa de aceitar alteração de preço.
+          </p>
+        </BotaoConfirmar>
       )}
     </div>
   );

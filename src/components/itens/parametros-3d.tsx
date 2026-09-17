@@ -1,6 +1,7 @@
 "use client";
 
 import { Entrada, Grupo, Selecao } from "@/components/ui/campo";
+import { CampoNumero } from "@/components/ui/campo-mascarado";
 import { MATERIAIS_3D } from "@/lib/labels";
 
 export type Params3D = {
@@ -50,18 +51,10 @@ export function Parametros3D({
         </Selecao>
       </Grupo>
       <Grupo rotulo="Temp. bico (°C)">
-        <Entrada
-          inputMode="decimal"
-          value={valor.tempBico}
-          onChange={(e) => definir("tempBico")(e.target.value)}
-        />
+        <CampoNumero valor={valor.tempBico} aoMudar={definir("tempBico")} />
       </Grupo>
       <Grupo rotulo="Temp. mesa (°C)">
-        <Entrada
-          inputMode="decimal"
-          value={valor.tempMesa}
-          onChange={(e) => definir("tempMesa")(e.target.value)}
-        />
+        <CampoNumero valor={valor.tempMesa} aoMudar={definir("tempMesa")} />
       </Grupo>
       <Grupo rotulo="Preenchimento">
         <Entrada
@@ -71,25 +64,13 @@ export function Parametros3D({
         />
       </Grupo>
       <Grupo rotulo="Altura da camada (mm)">
-        <Entrada
-          inputMode="decimal"
-          value={valor.alturaCamada}
-          onChange={(e) => definir("alturaCamada")(e.target.value)}
-        />
+        <CampoNumero valor={valor.alturaCamada} aoMudar={definir("alturaCamada")} />
       </Grupo>
       <Grupo rotulo="Diâmetro do bico (mm)">
-        <Entrada
-          inputMode="decimal"
-          value={valor.diametroBico}
-          onChange={(e) => definir("diametroBico")(e.target.value)}
-        />
+        <CampoNumero valor={valor.diametroBico} aoMudar={definir("diametroBico")} />
       </Grupo>
       <Grupo rotulo="Peso estimado (g)">
-        <Entrada
-          inputMode="decimal"
-          value={valor.pesoEstimado}
-          onChange={(e) => definir("pesoEstimado")(e.target.value)}
-        />
+        <CampoNumero valor={valor.pesoEstimado} aoMudar={definir("pesoEstimado")} />
       </Grupo>
       <Grupo rotulo="Tempo estimado">
         <Entrada

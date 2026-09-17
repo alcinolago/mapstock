@@ -10,6 +10,7 @@ import { BotaoExcluir } from "@/components/exclusao/botao-excluir";
 import { Abas } from "@/components/ui/abas";
 import { Botao } from "@/components/ui/botao";
 import { AreaTexto, Entrada, Grupo, Selecao } from "@/components/ui/campo";
+import { CampoNumero } from "@/components/ui/campo-mascarado";
 import { CabecalhoCartao, Cartao, CorpoCartao } from "@/components/ui/cartao";
 import {
   alternarAtivoItem,
@@ -273,12 +274,10 @@ export function FormularioItem({
             htmlFor="estoqueMinimo"
             ajuda="Abaixo disso o item aparece no painel como reposição."
           >
-            <Entrada
+            <CampoNumero
               id="estoqueMinimo"
               name="estoqueMinimo"
-              inputMode="decimal"
-              defaultValue={item ? String(item.estoqueMinimo) : "0"}
-              className="num"
+              padrao={item ? String(item.estoqueMinimo) : "0"}
             />
           </Grupo>
 

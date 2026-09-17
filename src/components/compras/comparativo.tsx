@@ -7,7 +7,8 @@ import { useMemo, useState, useTransition } from "react";
 
 import { SeletorItem, type ItemBusca } from "@/components/estoque/seletor-item";
 import { Botao } from "@/components/ui/botao";
-import { Entrada, Selecao } from "@/components/ui/campo";
+import { Selecao } from "@/components/ui/campo";
+import { CampoMoeda, CampoNumero } from "@/components/ui/campo-mascarado";
 import { Selo } from "@/components/ui/selo";
 import { RolagemTabela } from "@/components/ui/tabela";
 import {
@@ -106,11 +107,10 @@ export function Comparativo({
               aoEscolher={setNovoItem}
             />
           </div>
-          <Entrada
-            value={novaQtd}
-            onChange={(e) => setNovaQtd(e.target.value)}
-            inputMode="decimal"
-            className="num w-24"
+          <CampoNumero
+            valor={novaQtd}
+            aoMudar={setNovaQtd}
+            className="w-24"
             aria-label="Quantidade"
           />
           <Botao
@@ -207,17 +207,10 @@ export function Comparativo({
 
                       <td className="px-3 py-2.5 text-right">
                         {editavel ? (
-                          <Entrada
-                            defaultValue={String(item.quantidade)}
-                            inputMode="decimal"
-                            onBlur={(e) => {
-                              const q = paraNumero(e.target.value);
-                              if (q > 0 && q !== item.quantidade) {
-                                agir(() => atualizarQuantidadeCotacao(item.id, cotacaoId, q));
-                              }
-                            }}
-                            className="num h-8 w-20 text-right text-xs"
-                            aria-label={`Quantidade de ${item.codigo}`}
+                          <QuantidadeCotada
+                            item={item}
+                            cotacaoId={cotacaoId}
+                            agir={agir}
                           />
                         ) : (
                           <span className="num text-xs">{numero(item.quantidade)}</span>
@@ -332,6 +325,11 @@ function Celula({
 }) {
   const total = (preco?.precoUnitario ?? 0) * quantidade;
 
+  /* Enquanto ninguem digita, o campo mostra o que veio do servidor; assim o
+     refresh depois de salvar chega sozinho na tela, sem efeito para
+     ressincronizar. */
+  const [rascunho, setRascunho] = useState<string | null>(null);
+
   function salvar(valor: string) {
     const p = paraNumero(valor);
     if (p === (preco?.precoUnitario ?? 0)) return;
@@ -357,12 +355,15 @@ function Celula({
       )}
     >
       {editavel ? (
-        <Entrada
-          defaultValue={preco ? String(preco.precoUnitario) : ""}
-          onBlur={(e) => salvar(e.target.value)}
-          inputMode="decimal"
+        <CampoMoeda
+          valor={rascunho ?? (preco?.precoUnitario ? String(preco.precoUnitario) : "")}
+          aoMudar={setRascunho}
+          onBlur={() => {
+            if (rascunho !== null) salvar(rascunho);
+            setRascunho(null);
+          }}
           placeholder="—"
-          className="num h-8 text-right text-xs"
+          className="h-8 text-xs"
           aria-label="Preço unitário"
         />
       ) : (
@@ -419,5 +420,38 @@ function Celula({
         <span className="mt-0.5 block text-[10px] font-semibold text-ok">menor preço</span>
       )}
     </td>
+  );
+}
+
+/**
+ * Quantidade da linha cotada. Salva ao sair do campo — a cotacao e planilha,
+ * e parar para clicar em salvar a cada celula atrapalharia quem digita a
+ * coluna inteira de uma vez.
+ */
+function QuantidadeCotada({
+  item,
+  cotacaoId,
+  agir,
+}: {
+  item: ItemCotado;
+  cotacaoId: string;
+  agir: (fn: () => Promise<unknown>) => void;
+}) {
+  const [rascunho, setRascunho] = useState<string | null>(null);
+
+  return (
+    <CampoNumero
+      valor={rascunho ?? String(item.quantidade)}
+      aoMudar={setRascunho}
+      onBlur={() => {
+        const q = paraNumero(rascunho ?? "");
+        if (q > 0 && q !== item.quantidade) {
+          agir(() => atualizarQuantidadeCotacao(item.id, cotacaoId, q));
+        }
+        setRascunho(null);
+      }}
+      className="h-8 w-20 text-right text-xs"
+      aria-label={`Quantidade de ${item.codigo}`}
+    />
   );
 }

@@ -6,6 +6,7 @@ import { useActionState, useEffect, useState } from "react";
 
 import { Botao } from "@/components/ui/botao";
 import { AreaTexto, Entrada, Grupo, Selecao } from "@/components/ui/campo";
+import { CampoNumero } from "@/components/ui/campo-mascarado";
 import { CabecalhoCartao, Cartao, CorpoCartao } from "@/components/ui/cartao";
 import { criarCotacao, type EstadoCotacao } from "@/lib/acoes/compras";
 import { cn } from "@/lib/utils";
@@ -125,13 +126,7 @@ export function FormularioCotacao({
                 </Selecao>
               </Grupo>
               <Grupo rotulo="Quantas unidades" htmlFor="multiplicador">
-                <Entrada
-                  id="multiplicador"
-                  name="multiplicador"
-                  inputMode="decimal"
-                  defaultValue="1"
-                  className="num"
-                />
+                <CampoNumero id="multiplicador" name="multiplicador" padrao="1" />
               </Grupo>
             </div>
           )}

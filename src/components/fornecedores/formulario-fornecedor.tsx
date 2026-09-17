@@ -7,6 +7,7 @@ import { useActionState, useEffect, useState } from "react";
 import { BotaoExcluir } from "@/components/exclusao/botao-excluir";
 import { Botao } from "@/components/ui/botao";
 import { AreaTexto, Entrada, Grupo, Selecao } from "@/components/ui/campo";
+import { CampoTelefone } from "@/components/ui/campo-mascarado";
 import { CabecalhoCartao, Cartao, CorpoCartao } from "@/components/ui/cartao";
 import {
   alternarAtivoFornecedor,
@@ -16,6 +17,7 @@ import {
   type EstadoFornecedor,
 } from "@/lib/acoes/fornecedores";
 import { opcoes, STATUS_FORNECEDOR } from "@/lib/labels";
+import { mascaraTelefone } from "@/lib/mascaras";
 
 export type DadosFornecedor = {
   id: string;
@@ -51,7 +53,7 @@ export function FormularioFornecedor({
     salvarFornecedor,
     {},
   );
-  const [telefone, setTelefone] = useState(fornecedor?.telefone ?? "");
+  const [telefone, setTelefone] = useState(mascaraTelefone(fornecedor?.telefone ?? ""));
 
   useEffect(() => {
     if (estado.ok) router.push("/fornecedores");
@@ -84,12 +86,11 @@ export function FormularioFornecedor({
 
           <Grupo rotulo="Telefone / WhatsApp" htmlFor="telefone">
             <div className="flex gap-2">
-              <Entrada
+              <CampoTelefone
                 id="telefone"
                 name="telefone"
-                value={telefone}
-                onChange={(e) => setTelefone(e.target.value)}
-                placeholder="(11) 90000-0000"
+                valor={telefone}
+                aoMudar={setTelefone}
               />
               {whatsapp && (
                 <a href={whatsapp} target="_blank" rel="noopener noreferrer">

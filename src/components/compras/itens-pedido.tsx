@@ -13,7 +13,8 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
 import { Botao } from "@/components/ui/botao";
-import { AreaTexto, Entrada } from "@/components/ui/campo";
+import { AreaTexto } from "@/components/ui/campo";
+import { CampoNumero } from "@/components/ui/campo-mascarado";
 import { BotaoConfirmar } from "@/components/ui/confirmar";
 import { Selo } from "@/components/ui/selo";
 import {
@@ -150,12 +151,11 @@ export function ItensPedido({
             {podeEditar && !cancelado && (
               <div className="mt-3 flex flex-wrap items-center justify-end gap-2 border-t border-borda pt-3">
                 {!completo && !devolvido && (
-                  <Entrada
-                    value={quantidades[l.id] ?? ""}
-                    onChange={(e) => setQuantidades((s) => ({ ...s, [l.id]: e.target.value }))}
+                  <CampoNumero
+                    valor={quantidades[l.id] ?? ""}
+                    aoMudar={(v) => setQuantidades((s) => ({ ...s, [l.id]: v }))}
                     placeholder={String(falta)}
-                    inputMode="decimal"
-                    className="num h-9 w-24 text-right"
+                    className="h-9 w-24 text-right"
                     aria-label={`Quantidade recebida de ${l.codigo}`}
                   />
                 )}

@@ -6,6 +6,7 @@ import { useActionState, useState } from "react";
 import { SeletorItem, type ItemBusca } from "@/components/estoque/seletor-item";
 import { Botao } from "@/components/ui/botao";
 import { Entrada, Grupo, Selecao } from "@/components/ui/campo";
+import { CampoNumero } from "@/components/ui/campo-mascarado";
 import { CabecalhoCartao, Cartao, CorpoCartao } from "@/components/ui/cartao";
 import { vincularNaEstrutura, type EstadoEstrutura } from "@/lib/acoes/estrutura";
 
@@ -51,14 +52,7 @@ export function FormularioVinculo({ itens }: { itens: ItemBusca[] }) {
 
           <div className="grid gap-4 sm:grid-cols-2">
             <Grupo rotulo="Quantidade" obrigatorio htmlFor="quantidade">
-              <Entrada
-                id="quantidade"
-                name="quantidade"
-                inputMode="decimal"
-                defaultValue="1"
-                className="num"
-                required
-              />
+              <CampoNumero id="quantidade" name="quantidade" padrao="1" required />
             </Grupo>
 
             <Grupo rotulo="Obrigatório" htmlFor="obrigatorio">

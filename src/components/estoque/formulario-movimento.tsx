@@ -6,6 +6,7 @@ import { useActionState, useState } from "react";
 import { SeletorItem, type ItemBusca } from "./seletor-item";
 import { Botao } from "@/components/ui/botao";
 import { Entrada, Grupo, Selecao } from "@/components/ui/campo";
+import { CampoNumero } from "@/components/ui/campo-mascarado";
 import { CabecalhoCartao, Cartao, CorpoCartao } from "@/components/ui/cartao";
 import { lancarMovimento, type EstadoMovimento } from "@/lib/acoes/estoque";
 import { EFEITO_MOVIMENTO, MOVIMENTOS, opcoes, type TipoMovimento } from "@/lib/labels";
@@ -74,14 +75,7 @@ export function FormularioMovimento({ itens }: { itens: ItemBusca[] }) {
                   : undefined
               }
             >
-              <Entrada
-                id="quantidade"
-                name="quantidade"
-                inputMode="decimal"
-                defaultValue="1"
-                className="num"
-                required
-              />
+              <CampoNumero id="quantidade" name="quantidade" padrao="1" required />
             </Grupo>
 
             <Grupo rotulo="Referência" htmlFor="referencia">

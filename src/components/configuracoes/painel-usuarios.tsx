@@ -64,6 +64,14 @@ export function PainelUsuarios({ usuarios }: { usuarios: Usuario[] }) {
     });
   }
 
+  /* Sem <form> em volta, o `required` nao dispara sozinho — a mesma regra do
+     `esquemaUsuario` fica aqui para a recusa acontecer antes da ida. Senha so
+     e exigida no cadastro novo; em branco na edicao mantem a atual. */
+  const podeSalvar =
+    Boolean(rascunho.nome.trim()) &&
+    Boolean(rascunho.email.trim()) &&
+    (editando !== "novo" || rascunho.senha.length >= 6);
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -85,6 +93,7 @@ export function PainelUsuarios({ usuarios }: { usuarios: Usuario[] }) {
               <Entrada
                 value={rascunho.nome}
                 onChange={(e) => setRascunho((r) => ({ ...r, nome: e.target.value }))}
+                required
                 autoFocus
               />
             </Grupo>
@@ -93,6 +102,7 @@ export function PainelUsuarios({ usuarios }: { usuarios: Usuario[] }) {
                 type="email"
                 value={rascunho.email}
                 onChange={(e) => setRascunho((r) => ({ ...r, email: e.target.value }))}
+                required
               />
             </Grupo>
             <Grupo rotulo="Perfil">
@@ -139,7 +149,12 @@ export function PainelUsuarios({ usuarios }: { usuarios: Usuario[] }) {
           )}
 
           <div className="flex gap-2">
-            <Botao variante="salvar" tamanho="sm" onClick={salvar} disabled={pendente}>
+            <Botao
+              variante="salvar"
+              tamanho="sm"
+              onClick={salvar}
+              disabled={pendente || !podeSalvar}
+            >
               <Check className="size-4" />
               Salvar
             </Botao>

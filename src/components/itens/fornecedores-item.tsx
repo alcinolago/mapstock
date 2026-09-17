@@ -5,6 +5,7 @@ import Link from "next/link";
 
 import { Botao } from "@/components/ui/botao";
 import { Entrada, Grupo, Selecao } from "@/components/ui/campo";
+import { CampoMoeda, CampoNumero } from "@/components/ui/campo-mascarado";
 import { cn } from "@/lib/utils";
 
 export type VinculoFornecedor = {
@@ -127,10 +128,9 @@ export function FornecedoresItem({
               </Grupo>
 
               <Grupo rotulo="Preço (R$)">
-                <Entrada
-                  inputMode="decimal"
-                  value={v.preco}
-                  onChange={(e) => atualizar(i, { preco: e.target.value })}
+                <CampoMoeda
+                  valor={v.preco}
+                  aoMudar={(preco) => atualizar(i, { preco })}
                   placeholder="0,00"
                 />
               </Grupo>
@@ -144,10 +144,9 @@ export function FornecedoresItem({
 
               <Grupo rotulo="Prazo de entrega">
                 <div className="flex gap-2">
-                  <Entrada
-                    inputMode="decimal"
-                    value={v.prazoValor}
-                    onChange={(e) => atualizar(i, { prazoValor: e.target.value })}
+                  <CampoNumero
+                    valor={v.prazoValor}
+                    aoMudar={(prazoValor) => atualizar(i, { prazoValor })}
                     placeholder="0"
                   />
                   <Selecao
@@ -165,10 +164,9 @@ export function FornecedoresItem({
               </Grupo>
 
               <Grupo rotulo="Quantidade mínima">
-                <Entrada
-                  inputMode="decimal"
-                  value={v.qtdMinima}
-                  onChange={(e) => atualizar(i, { qtdMinima: e.target.value })}
+                <CampoNumero
+                  valor={v.qtdMinima}
+                  aoMudar={(qtdMinima) => atualizar(i, { qtdMinima })}
                   placeholder="0"
                 />
               </Grupo>

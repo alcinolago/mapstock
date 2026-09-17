@@ -39,6 +39,16 @@ function useAcao() {
   return { pendente, erro, setErro, executar };
 }
 
+/* Estes painéis editam na propria linha, sem <form> em volta — entao o
+   `required` do navegador nunca dispara. A trava fica no botao, com a mesma
+   regra que a action aplica do outro lado, para a recusa aparecer antes da
+   ida ao servidor em vez de depois. */
+const classificacaoCompleta = (r: { nome: string; prefixoCodigo: string }) =>
+  Boolean(r.nome.trim()) && /^[A-Za-z]{2,5}$/.test(r.prefixoCodigo.trim());
+
+const unidadeCompleta = (r: { sigla: string; nome: string }) =>
+  Boolean(r.sigla.trim()) && Boolean(r.nome.trim());
+
 function Erro({ texto }: { texto: string | null }) {
   if (!texto) return null;
   return (
@@ -74,13 +84,15 @@ export function PainelNiveis({ niveis }: { niveis: { num: number; nome: string }
                 <Entrada
                   value={rascunho}
                   onChange={(e) => setRascunho(e.target.value)}
+                  placeholder="Nome do nível *"
+                  required
                   className="h-8 flex-1 text-sm"
                   autoFocus
                 />
                 <Botao
                   variante="salvar"
                   tamanho="sm"
-                  disabled={pendente}
+                  disabled={pendente || !rascunho.trim()}
                   onClick={() => executar(() => renomearNivel(n.num, rascunho), () => setEditando(null))}
                 >
                   <Check className="size-3.5" />
@@ -122,7 +134,8 @@ export function PainelNiveis({ niveis }: { niveis: { num: number; nome: string }
         <Entrada
           value={novo}
           onChange={(e) => setNovo(e.target.value)}
-          placeholder="Nome do novo nível"
+          placeholder="Nome do novo nível *"
+          required
           className="max-w-64"
         />
         <Botao
@@ -173,7 +186,8 @@ export function PainelClassificacoes({ lista }: { lista: Classificacao[] }) {
                   value={rascunho.nome}
                   onChange={(e) => setRascunho((r) => ({ ...r, nome: e.target.value }))}
                   className="h-9 min-w-48 flex-1 text-sm"
-                  placeholder="Nome"
+                  placeholder="Nome *"
+                  required
                   autoFocus
                 />
                 <Entrada
@@ -182,7 +196,8 @@ export function PainelClassificacoes({ lista }: { lista: Classificacao[] }) {
                     setRascunho((r) => ({ ...r, prefixoCodigo: e.target.value.toUpperCase() }))
                   }
                   className="codigo h-9 w-24 text-sm"
-                  placeholder="FIX"
+                  placeholder="FIX *"
+                  required
                   maxLength={5}
                 />
                 <label className="flex h-9 items-center gap-2 text-xs text-texto-suave">
@@ -197,7 +212,7 @@ export function PainelClassificacoes({ lista }: { lista: Classificacao[] }) {
                 <Botao
                   variante="salvar"
                   tamanho="sm"
-                  disabled={pendente}
+                  disabled={pendente || !classificacaoCompleta(rascunho)}
                   onClick={() =>
                     executar(() => salvarClassificacao({ id: c.id, ...rascunho }), () => setEditando(null))
                   }
@@ -285,7 +300,8 @@ export function PainelClassificacoes({ lista }: { lista: Classificacao[] }) {
             value={rascunho.nome}
             onChange={(e) => setRascunho((r) => ({ ...r, nome: e.target.value }))}
             className="h-9 min-w-48 flex-1 text-sm"
-            placeholder="Nome da classificação"
+            placeholder="Nome da classificação *"
+            required
             autoFocus
           />
           <Entrada
@@ -294,13 +310,14 @@ export function PainelClassificacoes({ lista }: { lista: Classificacao[] }) {
               setRascunho((r) => ({ ...r, prefixoCodigo: e.target.value.toUpperCase() }))
             }
             className="codigo h-9 w-24 text-sm"
-            placeholder="FIX"
+            placeholder="FIX *"
+            required
             maxLength={5}
           />
           <Botao
             variante="salvar"
             tamanho="sm"
-            disabled={pendente}
+            disabled={pendente || !classificacaoCompleta(rascunho)}
             onClick={() => executar(() => salvarClassificacao(rascunho), () => setEditando(null))}
           >
             <Check className="size-3.5" />
@@ -351,18 +368,22 @@ export function PainelUnidades({
                 <Entrada
                   value={rascunho.sigla}
                   onChange={(e) => setRascunho((r) => ({ ...r, sigla: e.target.value }))}
+                  placeholder="Sigla *"
+                  required
                   className="h-8 w-24 text-sm"
                   autoFocus
                 />
                 <Entrada
                   value={rascunho.nome}
                   onChange={(e) => setRascunho((r) => ({ ...r, nome: e.target.value }))}
+                  placeholder="Nome por extenso *"
+                  required
                   className="h-8 flex-1 text-sm"
                 />
                 <Botao
                   variante="salvar"
                   tamanho="sm"
-                  disabled={pendente}
+                  disabled={pendente || !unidadeCompleta(rascunho)}
                   onClick={() =>
                     executar(() => salvarUnidade({ id: u.id, ...rascunho }), () => setEditando(null))
                   }
@@ -407,19 +428,21 @@ export function PainelUnidades({
           <Entrada
             value={rascunho.sigla}
             onChange={(e) => setRascunho((r) => ({ ...r, sigla: e.target.value }))}
-            placeholder="Sigla"
+            placeholder="Sigla *"
+            required
             className="w-24"
             autoFocus
           />
           <Entrada
             value={rascunho.nome}
             onChange={(e) => setRascunho((r) => ({ ...r, nome: e.target.value }))}
-            placeholder="Nome por extenso"
+            placeholder="Nome por extenso *"
+            required
             className="max-w-64"
           />
           <Botao
             variante="salvar"
-            disabled={pendente}
+            disabled={pendente || !unidadeCompleta(rascunho)}
             onClick={() => executar(() => salvarUnidade(rascunho), () => setEditando(null))}
           >
             <Check className="size-4" />

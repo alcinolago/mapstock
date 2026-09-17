@@ -8,6 +8,7 @@ import { FiltrosHistorico } from "./filtros-historico";
 import { SeloMovimento } from "@/components/situacao";
 import { BotaoConfirmar } from "@/components/ui/confirmar";
 import { CabecalhoCartao, Cartao } from "@/components/ui/cartao";
+import { Paginacao } from "@/components/ui/paginacao";
 import {
   Cabecalho,
   Celula,
@@ -42,7 +43,9 @@ export function Historico({
   meses,
   itensDoFiltro,
   temFiltro,
-  limite,
+  pagina,
+  porPagina,
+  total,
 }: {
   movimentos: LinhaMovimento[];
   podeEditar: boolean;
@@ -51,11 +54,11 @@ export function Historico({
   itensDoFiltro: { id: string; codigo: string; descricao: string }[];
   /** Alguma coisa foi filtrada — muda so o texto da tabela vazia. */
   temFiltro: boolean;
-  /** Teto da consulta: atingi-lo significa que ha mais fora da tela. */
-  limite: number;
+  pagina: number;
+  porPagina: number;
+  total: number;
 }) {
   const router = useRouter();
-  const truncado = movimentos.length >= limite;
 
   async function estornar(id: string) {
     const r = await estornarMovimento(id);
@@ -67,11 +70,7 @@ export function Historico({
     <Cartao className="overflow-hidden">
       <CabecalhoCartao
         titulo="Histórico de movimentações"
-        descricao={
-          truncado
-            ? `As ${limite} movimentações mais recentes do filtro — estreite o período para ver o resto.`
-            : `${movimentos.length} ${movimentos.length === 1 ? "movimentação" : "movimentações"}`
-        }
+        descricao={`${total} ${total === 1 ? "movimentação" : "movimentações"}`}
         acao={<FiltrosHistorico itens={itensDoFiltro} meses={meses} />}
       />
 
@@ -156,6 +155,13 @@ export function Historico({
           </Corpo>
         </Tabela>
       </RolagemTabela>
+
+      <Paginacao
+        pagina={pagina}
+        porPagina={porPagina}
+        total={total}
+        oQue="movimentações"
+      />
     </Cartao>
   );
 }

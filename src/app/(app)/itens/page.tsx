@@ -5,6 +5,7 @@ import { FiltrosItens } from "@/components/itens/filtros-itens";
 import { SeloSituacao } from "@/components/situacao";
 import { Botao } from "@/components/ui/botao";
 import { CabecalhoPagina } from "@/components/ui/cabecalho-pagina";
+import { Paginacao } from "@/components/ui/paginacao";
 import { Cartao } from "@/components/ui/cartao";
 import {
   Cabecalho,
@@ -19,12 +20,15 @@ import {
 import { db } from "@/db";
 import {
   codigosDeItens,
+  contarItens,
   listarItensComSaldo,
   listarLocais,
+  type FiltrosItens as Filtros,
   type SituacaoItem,
 } from "@/db/consultas";
 import { classificacoes, niveis } from "@/db/schema";
 import { exigirSessao } from "@/lib/auth";
+import { lerPaginacao, paginaValida } from "@/lib/paginacao";
 import { moeda, numero } from "@/lib/utils";
 
 export const metadata = { title: "Itens" };
@@ -43,16 +47,26 @@ export default async function PaginaItens({
     ? (p.situacao as SituacaoItem)
     : undefined;
 
+  const filtros: Filtros = {
+    busca: p.busca,
+    classificacaoId: p.classificacao,
+    nivel: p.nivel ? Number(p.nivel) : undefined,
+    situacao,
+    incluirInativos: p.inativos === "1",
+    itemId: p.item?.trim() || undefined,
+    localId: p.local?.trim() || undefined,
+  };
+
+  /* A contagem vem antes para prender a pagina ao que existe: filtrar
+     encolhe a lista com a pessoa parada numa pagina alta, e a tela viria
+     vazia sem explicacao. */
+  const total = await contarItens(filtros);
+  const pedida = lerPaginacao(p.pagina, p.porPagina);
+  const pagina = paginaValida(pedida.pagina, total, pedida.porPagina);
+  const pular = (pagina - 1) * pedida.porPagina;
+
   const [lista, listaClassificacoes, listaNiveis, cadastro, listaLocais] = await Promise.all([
-    listarItensComSaldo({
-      busca: p.busca,
-      classificacaoId: p.classificacao,
-      nivel: p.nivel ? Number(p.nivel) : undefined,
-      situacao,
-      incluirInativos: p.inativos === "1",
-      itemId: p.item?.trim() || undefined,
-      localId: p.local?.trim() || undefined,
-    }),
+    listarItensComSaldo({ ...filtros, porPagina: pedida.porPagina, pular }),
     db.select().from(classificacoes).orderBy(classificacoes.ordem),
     db.select().from(niveis).orderBy(niveis.num),
     codigosDeItens(),
@@ -66,7 +80,7 @@ export default async function PaginaItens({
     <div className="mx-auto max-w-[100rem]">
       <CabecalhoPagina
         titulo="Itens"
-        descricao={`${lista.length} ${lista.length === 1 ? "item" : "itens"} — peças, componentes e consumíveis`}
+        descricao={`${total} ${total === 1 ? "item" : "itens"} — peças, componentes e consumíveis`}
         acao={
           <>
             {/* Leva os filtros da tela junto: baixa o que está sendo visto. */}
@@ -168,6 +182,13 @@ export default async function PaginaItens({
             </Corpo>
           </Tabela>
         </RolagemTabela>
+
+        <Paginacao
+          pagina={pagina}
+          porPagina={pedida.porPagina}
+          total={total}
+          oQue="itens"
+        />
       </Cartao>
     </div>
   );

@@ -106,18 +106,23 @@ export type ItemComSaldo = {
  * estocavel". Com saldo, ele e um item normal; sem saldo, continua fora da
  * conta de falta — ninguem compra um equipamento montado.
  */
-export function situacaoDoItem(
-  nivel: number,
-  disponivel: number,
-  estoqueMinimo: number,
-): SituacaoItem {
-  if (nivel === 0) return disponivel > 0 ? "ok" : "nao_estocavel";
-  if (disponivel <= 0) return "falta";
-  if (estoqueMinimo > 0 && disponivel < estoqueMinimo) return "abaixo_minimo";
-  return "ok";
-}
+const disponivelSql = sql<number>`(coalesce(${saldos.fisico}, 0) - coalesce(${saldos.reservado}, 0))`;
 
-export async function listarItensComSaldo(filtros?: {
+/*
+ * Em SQL, e nao em TypeScript, porque a tela pagina: filtrar situacao depois
+ * da consulta obrigaria a trazer o catalogo inteiro para descartar quase
+ * tudo, e o LIMIT cairia no conjunto errado. Fica uma implementacao so — a
+ * versao em JS existia e foi movida para ca inteira.
+ */
+const situacaoSql = sql<SituacaoItem>`case
+  when ${itens.nivel} = 0 then case when ${disponivelSql} > 0 then 'ok' else 'nao_estocavel' end
+  when ${disponivelSql} <= 0 then 'falta'
+  when ${itens.estoqueMinimo} > 0 and ${disponivelSql} < ${itens.estoqueMinimo}
+    then 'abaixo_minimo'
+  else 'ok'
+end`;
+
+export type FiltrosItens = {
   busca?: string;
   classificacaoId?: string;
   nivel?: number;
@@ -126,7 +131,9 @@ export async function listarItensComSaldo(filtros?: {
   /** Um item so, escolhido pelo codigo no seletor. */
   itemId?: string;
   localId?: string;
-}): Promise<ItemComSaldo[]> {
+};
+
+function condicoesDeItens(filtros?: FiltrosItens): SQL[] {
   const condicoes: SQL[] = [];
 
   /* O item escolhido no seletor aparece mesmo inativo: quem o escolheu pelo
@@ -135,22 +142,42 @@ export async function listarItensComSaldo(filtros?: {
   if (filtros?.itemId) condicoes.push(eq(itens.id, filtros.itemId));
   else if (!filtros?.incluirInativos) condicoes.push(eq(itens.ativo, true));
 
-  const custo = custoDoUltimoRecebimento();
   if (filtros?.classificacaoId) {
     condicoes.push(eq(itens.classificacaoId, filtros.classificacaoId));
   }
   if (filtros?.nivel !== undefined) condicoes.push(eq(itens.nivel, filtros.nivel));
   if (filtros?.localId) condicoes.push(eq(itens.localId, filtros.localId));
+  if (filtros?.situacao) condicoes.push(sql`${situacaoSql} = ${filtros.situacao}`);
   if (filtros?.busca) {
     const t = `%${filtros.busca}%`;
     condicoes.push(
-      or(
-        ilike(itens.codigo, t),
-        ilike(itens.descricao, t),
-        ilike(locais.nome, t),
-      ) as SQL,
+      or(ilike(itens.codigo, t), ilike(itens.descricao, t), ilike(locais.nome, t)) as SQL,
     );
   }
+  return condicoes;
+}
+
+/** Quantos itens o filtro alcanca, para o rodape de paginacao. */
+export async function contarItens(filtros?: FiltrosItens): Promise<number> {
+  const condicoes = condicoesDeItens(filtros);
+  const [l] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(itens)
+    .leftJoin(locais, eq(locais.id, itens.localId))
+    .leftJoin(saldos, eq(saldos.itemId, itens.id))
+    .where(condicoes.length ? and(...condicoes) : undefined);
+  return l?.n ?? 0;
+}
+
+export async function listarItensComSaldo(
+  filtros?: FiltrosItens & {
+    /** Sem isto a consulta traz tudo — o CSV e as outras telas dependem. */
+    porPagina?: number;
+    pular?: number;
+  },
+): Promise<ItemComSaldo[]> {
+  const condicoes = condicoesDeItens(filtros);
+  const custo = custoDoUltimoRecebimento();
 
   const consulta = db
     .select({
@@ -168,6 +195,7 @@ export async function listarItensComSaldo(filtros?: {
       ativo: itens.ativo,
       fisico: sql<number>`coalesce(${saldos.fisico}, 0)`,
       reservado: sql<number>`coalesce(${saldos.reservado}, 0)`,
+      situacao: situacaoSql,
     })
     .from(itens)
     .innerJoin(classificacoes, eq(classificacoes.id, itens.classificacaoId))
@@ -177,9 +205,13 @@ export async function listarItensComSaldo(filtros?: {
     .leftJoin(custo, eq(custo.itemId, itens.id))
     .$dynamic();
 
-  const linhas = await consulta
+  consulta
     .where(condicoes.length ? and(...condicoes) : undefined)
     .orderBy(asc(itens.nivel), asc(itens.codigo));
+
+  if (filtros?.porPagina) consulta.limit(filtros.porPagina).offset(filtros.pular ?? 0);
+
+  const linhas = await consulta;
 
   const comSaldo = linhas.map((l) => {
     const disponivel = l.fisico - l.reservado;
@@ -192,13 +224,10 @@ export async function listarItensComSaldo(filtros?: {
       custoUnitario,
       disponivel,
       valorEstoque: l.fisico * custoUnitario,
-      situacao: situacaoDoItem(l.nivel, disponivel, l.estoqueMinimo),
     };
   });
 
-  return filtros?.situacao
-    ? comSaldo.filter((i) => i.situacao === filtros.situacao)
-    : comSaldo;
+  return comSaldo;
 }
 
 export async function saldoDoItem(itemId: string) {

@@ -1,4 +1,4 @@
-import { and, desc, eq, ilike, or } from "drizzle-orm";
+import { and, desc, eq, ilike, or, sql } from "drizzle-orm";
 import { Download } from "lucide-react";
 
 import { FormularioMovimento } from "@/components/estoque/formulario-movimento";
@@ -14,13 +14,10 @@ import {
 } from "@/db/consultas";
 import { itens, movimentos, unidades, usuarios } from "@/db/schema";
 import { exigirSessao } from "@/lib/auth";
+import { lerPaginacao, paginaValida } from "@/lib/paginacao";
 import { dataValida, mesesAte } from "@/lib/periodo";
 
 export const metadata = { title: "Estoque" };
-
-/* Teto da consulta. A tela avisa quando encosta nele, senao a pessoa leria a
-   lista cortada como se fosse o total. */
-const LIMITE_HISTORICO = 300;
 
 export default async function PaginaEstoque({
   searchParams,
@@ -54,6 +51,19 @@ export default async function PaginaEstoque({
       : undefined,
   ].filter(Boolean);
 
+  const onde = condicoes.length ? and(...condicoes) : undefined;
+
+  /* A contagem vem antes para prender a pagina ao que existe: filtrar
+     encolhe a lista com a pessoa parada numa pagina alta. */
+  const [{ total }] = await db
+    .select({ total: sql<number>`count(*)::int` })
+    .from(movimentos)
+    .innerJoin(itens, eq(itens.id, movimentos.itemId))
+    .where(onde);
+
+  const pedida = lerPaginacao(p.pagina, p.porPagina);
+  const pagina = paginaValida(pedida.pagina, total, pedida.porPagina);
+
   const [comSaldo, historico, maisAntigo, itensDoFiltro] = await Promise.all([
     listarItensComSaldo(),
     db
@@ -74,9 +84,10 @@ export default async function PaginaEstoque({
       .innerJoin(itens, eq(itens.id, movimentos.itemId))
       .innerJoin(unidades, eq(unidades.id, itens.unidadeId))
       .leftJoin(usuarios, eq(usuarios.id, movimentos.usuarioId))
-      .where(condicoes.length ? and(...condicoes) : undefined)
+      .where(onde)
       .orderBy(desc(movimentos.criadoEm))
-      .limit(LIMITE_HISTORICO),
+      .limit(pedida.porPagina)
+      .offset((pagina - 1) * pedida.porPagina),
     primeiroMovimento(),
     itensComMovimento(),
   ]);
@@ -126,7 +137,9 @@ export default async function PaginaEstoque({
           meses={mesesAte(maisAntigo)}
           itensDoFiltro={itensDoFiltro}
           temFiltro={temFiltro}
-          limite={LIMITE_HISTORICO}
+          pagina={pagina}
+          porPagina={pedida.porPagina}
+          total={total}
         />
       </div>
     </div>

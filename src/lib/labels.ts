@@ -44,6 +44,7 @@ export const MOVIMENTOS: Record<TipoMovimento, string> = {
   liberacao_reserva: "Liberação reserva",
   ajuste_positivo: "Ajuste positivo",
   ajuste_negativo: "Ajuste negativo",
+  devolucao_compra: "Devolução compra",
 };
 
 /** Como cada tipo de movimento afeta o saldo. Fonte unica da verdade. */
@@ -56,6 +57,7 @@ export const EFEITO_MOVIMENTO: Record<
   ajuste_positivo: { fisico: 1, reservado: 0 },
   saida_producao: { fisico: -1, reservado: 0 },
   ajuste_negativo: { fisico: -1, reservado: 0 },
+  devolucao_compra: { fisico: -1, reservado: 0 },
   reserva: { fisico: 0, reservado: 1 },
   liberacao_reserva: { fisico: 0, reservado: -1 },
 };
@@ -71,6 +73,8 @@ export const OPOSTO_MOVIMENTO: Record<TipoMovimento, TipoMovimento> = {
   ajuste_positivo: "ajuste_negativo",
   saida_producao: "ajuste_positivo",
   ajuste_negativo: "ajuste_positivo",
+  /* Estornar uma devolucao e receber de volta: a mercadoria retorna. */
+  devolucao_compra: "entrada_compra",
   reserva: "liberacao_reserva",
   liberacao_reserva: "reserva",
 };

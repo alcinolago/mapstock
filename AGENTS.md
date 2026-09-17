@@ -48,8 +48,21 @@ listagem, é bug.
 - **`EFEITO_MOVIMENTO` (labels.ts) e o `CASE` do saldo (consultas.ts) espelham
   um ao outro.** Tipo de movimento novo exige mudar os dois.
 - **Saldo é sempre a soma do histórico de `movimentos`** — nunca um campo
-  gravado. Quantidade inicial e recebimento de pedido viram movimento.
+  gravado. Entrada inicial (lançada na tela de Estoque) e recebimento de
+  pedido viram movimento.
 - **Movimento não se apaga, se estorna** (lança o oposto).
+- **Devolver ao fornecedor não desfaz o recebimento.** `devolucao_compra` é um
+  movimento novo que tira do saldo; `pedidoItens.quantidadeDevolvida` fica ao
+  lado de `quantidadeRecebida`, nunca descontando dela — zerar o recebido
+  faria o pedido voltar a "aberto" e oferecer receber o que já voltou.
+- **Excluir só trava no que é documento.** Item bloqueia por cotação, pedido,
+  montagem ou vínculo na estrutura; fornecedor, por preço cotado ou pedido.
+  Movimentação avulsa e vínculo de preço vão junto na exclusão, com o antes
+  guardado em `logAuditoria`. Quem não pode ser excluído se desativa. A regra
+  vive em `dependenciasItem` / `dependenciasFornecedor`, e a tela mostra a
+  contagem antes de confirmar (`components/exclusao/botao-excluir.tsx`).
+- **Custo unitário do item não é digitado**: vem do recebimento do pedido
+  (`acoes/compras.ts`). O cadastro de item não tem esse campo.
 - **Nível 0 é o equipamento montado**: nunca conta falta nem entra no alerta
   de reposição, porque equipamento não se compra. Movimenta só por montagem
   (`src/lib/acoes/montagens.ts`), nunca por compra.
@@ -58,6 +71,20 @@ listagem, é bug.
   foi montada. Cada nível tem saldo próprio.
 - **Toda server action que escreve chama `exigirEdicao()`** (ou `exigirAdmin()`)
   e registra em `logAuditoria` via `registrar()`.
+
+## Confirmar antes de agir
+
+Nada de `confirm()` nem `alert()` do navegador para decisão: use
+`<BotaoConfirmar>` de `components/ui/confirmar.tsx` (ou `<BotaoExcluir>`,
+que além disso conta os vínculos). Os dois montam o mesmo `<Modal>`, então a
+janela é igual em toda a aplicação, e o erro da ação volta **para dentro** da
+janela em vez de um alerta solto.
+
+O `<Modal>` sai num portal para o `<body>`, e isso não é preferência:
+`position: fixed` deixa de valer pela janela quando um ancestral tem
+`transform`, `filter` ou `backdrop-filter`. A barra fixa de salvar do cadastro
+de item usa `backdrop-blur` — sem o portal, a modal aberta dali nasce presa
+dentro dela.
 
 ## Campos de senha
 
@@ -71,6 +98,25 @@ Nunca use cor literal nem classe `slate-*`/`sky-*` do Tailwind. Use os tokens
 de `globals.css`: `bg-superficie`, `text-texto-fraco`, `border-borda`,
 `text-marca`, `bg-ok-suave`. Todos existem no tema claro **e** no escuro — uma
 cor definida só num dos dois quebra o outro.
+
+## Banco
+
+`npm run db:push` tem que terminar em **`No changes detected`**. Se ele listar
+statements, alguma coisa divergiu — não responda "sim" sem ler, porque quando
+há dado na tabela ele oferece **truncar**.
+
+Duas convenções existem só para o push continuar limpo, e desfazer qualquer
+uma traz o ruído de volta:
+
+- **Unique composta se declara com as colunas em ordem decrescente de nome**
+  (`.on(t.itemId, t.cotacaoId)`), que é a ordem em que o drizzle-kit lê do
+  banco. Unicidade de um par não depende de ordem.
+- **Default numérico vai como `sql`'0'``** (o helper `zero` em schema.ts), e
+  não `.default(0)`: o comparador lê o default do banco como string.
+
+Constraint criada fora do drizzle também diverge — ele espera
+`<tabela>_<coluna>_unique` e `<tabela>_<coluna>_<ref>_<refcol>_fk`, não o
+`_key`/`_fkey` que o Postgres dá sozinho.
 
 ## Antes de entregar
 

@@ -21,6 +21,7 @@ const TOM_MOVIMENTO: Record<TipoMovimento, TomSelo> = {
   ajuste_positivo: "ok",
   saida_producao: "perigo",
   ajuste_negativo: "perigo",
+  devolucao_compra: "perigo",
   reserva: "alerta",
   liberacao_reserva: "info",
 };

@@ -406,6 +406,77 @@ export async function receberItemDoPedido(
 }
 
 /**
+ * Devolução ao fornecedor.
+ *
+ * Devolve tudo o que aquela linha recebeu — na prática a devolução é do
+ * produto inteiro, e um campo de quantidade ali só atrapalharia a decisão.
+ * O recebido não é desfeito: a linha foi recebida mesmo, e zerar isso faria
+ * o pedido voltar a "aberto" e oferecer receber de novo o que já voltou. O
+ * que sai do saldo é um movimento novo, de tipo próprio, para o histórico
+ * distinguir devolução de ajuste.
+ *
+ * O custo unitário do item fica onde está: foi o preço pago de verdade, e
+ * devolver não descobre um preço melhor.
+ */
+export async function devolverItemDoPedido(
+  pedidoItemId: string,
+): Promise<{ erro?: string }> {
+  const sessao = await exigirEdicao();
+
+  const [linha] = await db
+    .select({
+      id: pedidoItens.id,
+      pedidoId: pedidoItens.pedidoId,
+      itemId: pedidoItens.itemId,
+      recebida: pedidoItens.quantidadeRecebida,
+      devolvida: pedidoItens.quantidadeDevolvida,
+      numero: pedidosCompra.numero,
+      status: pedidosCompra.status,
+    })
+    .from(pedidoItens)
+    .innerJoin(pedidosCompra, eq(pedidosCompra.id, pedidoItens.pedidoId))
+    .where(eq(pedidoItens.id, pedidoItemId));
+
+  if (!linha) return { erro: "Linha do pedido não encontrada." };
+  if (linha.status === "cancelado") return { erro: "Este pedido está cancelado." };
+  if (linha.recebida <= 0) {
+    return { erro: "Nada foi recebido nesta linha — não há o que devolver." };
+  }
+  if (linha.devolvida > 0) return { erro: "Esta linha já foi devolvida." };
+
+  await db.insert(movimentos).values({
+    itemId: linha.itemId,
+    tipo: "devolucao_compra",
+    quantidade: linha.recebida,
+    referencia: linha.numero,
+    usuarioId: sessao.id,
+    observacao: `Devolução ao fornecedor do pedido ${linha.numero}`,
+    pedidoItemId: linha.id,
+  });
+
+  await db
+    .update(pedidoItens)
+    .set({ quantidadeDevolvida: linha.recebida })
+    .where(eq(pedidoItens.id, pedidoItemId));
+
+  await registrar({
+    usuarioId: sessao.id,
+    tabela: "pedido_itens",
+    registroId: linha.id,
+    acao: "atualizar",
+    antes: { quantidadeDevolvida: linha.devolvida },
+    depois: { quantidadeDevolvida: linha.recebida },
+  });
+
+  revalidatePath(`/compras/pedidos/${linha.pedidoId}`);
+  revalidatePath("/compras/pedidos");
+  revalidatePath("/estoque");
+  revalidatePath("/itens");
+  revalidatePath("/");
+  return {};
+}
+
+/**
  * Parâmetros de compra da linha: o texto livre que diz o que escolher no site
  * do fornecedor — cor, tamanho, voltagem, o kit de 50 em vez do avulso.
  *

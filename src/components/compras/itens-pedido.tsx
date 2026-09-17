@@ -1,19 +1,29 @@
 "use client";
 
-import { Ban, Check, ExternalLink, PackageCheck, SlidersHorizontal } from "lucide-react";
+import {
+  Ban,
+  Check,
+  ExternalLink,
+  PackageCheck,
+  SlidersHorizontal,
+  Undo2,
+} from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
 import { Botao } from "@/components/ui/botao";
 import { AreaTexto, Entrada } from "@/components/ui/campo";
+import { BotaoConfirmar } from "@/components/ui/confirmar";
 import { Selo } from "@/components/ui/selo";
 import {
   cancelarPedido,
+  devolverItemDoPedido,
   receberItemDoPedido,
   salvarParametrosCompra,
 } from "@/lib/acoes/compras";
 import type { LinhaPedidoCompleta } from "@/db/consultas";
+import type { StatusPedido } from "@/lib/labels";
 import { moeda, numero, paraNumero } from "@/lib/utils";
 
 /**
@@ -30,19 +40,24 @@ export function ItensPedido({
   linhas,
   frete,
   podeEditar,
-  encerrado,
+  status,
 }: {
   pedidoId: string;
   linhas: LinhaPedidoCompleta[];
   frete: number;
   podeEditar: boolean;
-  encerrado: boolean;
+  status: StatusPedido;
 }) {
   const router = useRouter();
   const [pendente, iniciar] = useTransition();
   const [quantidades, setQuantidades] = useState<Record<string, string>>({});
 
   const subtotal = linhas.reduce((s, l) => s + l.quantidade * l.precoUnitario, 0);
+
+  /* Cancelado tranca a linha inteira; recebido não — é justamente depois de
+     receber que a devolução passa a fazer sentido. */
+  const cancelado = status === "cancelado";
+  const encerrado = cancelado || status === "recebido";
 
   function receber(linha: LinhaPedidoCompleta) {
     const falta = linha.quantidade - linha.recebida;
@@ -57,13 +72,16 @@ export function ItensPedido({
     });
   }
 
-  function cancelar() {
-    if (!confirm("Cancelar este pedido?")) return;
-    iniciar(async () => {
-      const r = await cancelarPedido(pedidoId);
-      if (r.erro) alert(r.erro);
-      else router.refresh();
-    });
+  async function cancelar() {
+    const r = await cancelarPedido(pedidoId);
+    if (r.erro) return r;
+    router.refresh();
+  }
+
+  async function devolver(linha: LinhaPedidoCompleta) {
+    const r = await devolverItemDoPedido(linha.id);
+    if (r.erro) return r;
+    router.refresh();
   }
 
   return (
@@ -71,6 +89,7 @@ export function ItensPedido({
       {linhas.map((l) => {
         const falta = l.quantidade - l.recebida;
         const completo = falta <= 0;
+        const devolvido = l.devolvida > 0;
 
         return (
           <article key={l.id} className="rounded-xl border border-borda bg-superficie p-4">
@@ -85,7 +104,9 @@ export function ItensPedido({
                 <p className="text-sm text-texto">{l.descricao}</p>
               </div>
 
-              {completo ? (
+              {devolvido ? (
+                <Selo tom="neutro">Devolvido</Selo>
+              ) : completo ? (
                 <Selo tom="ok">Recebido</Selo>
               ) : l.recebida > 0 ? (
                 <Selo tom="alerta">Faltam {numero(falta)}</Selo>
@@ -129,20 +150,58 @@ export function ItensPedido({
               podeEditar={podeEditar}
             />
 
-            {podeEditar && !encerrado && !completo && (
+            {podeEditar && !cancelado && (
               <div className="mt-3 flex flex-wrap items-center justify-end gap-2 border-t border-borda pt-3">
-                <Entrada
-                  value={quantidades[l.id] ?? ""}
-                  onChange={(e) => setQuantidades((s) => ({ ...s, [l.id]: e.target.value }))}
-                  placeholder={String(falta)}
-                  inputMode="decimal"
-                  className="num h-9 w-24 text-right"
-                  aria-label={`Quantidade recebida de ${l.codigo}`}
-                />
-                <Botao variante="salvar" tamanho="sm" disabled={pendente} onClick={() => receber(l)}>
+                {!completo && !devolvido && (
+                  <Entrada
+                    value={quantidades[l.id] ?? ""}
+                    onChange={(e) => setQuantidades((s) => ({ ...s, [l.id]: e.target.value }))}
+                    placeholder={String(falta)}
+                    inputMode="decimal"
+                    className="num h-9 w-24 text-right"
+                    aria-label={`Quantidade recebida de ${l.codigo}`}
+                  />
+                )}
+
+                <Botao
+                  variante="salvar"
+                  tamanho="sm"
+                  disabled={pendente || completo || devolvido}
+                  onClick={() => receber(l)}
+                >
                   <PackageCheck />
                   Receber
                 </Botao>
+
+                {/* Só existe depois que algo entrou: não se devolve o que
+                    ainda não chegou. */}
+                {l.recebida > 0 && (
+                  <BotaoConfirmar
+                    rotulo="Devolver"
+                    Icone={Undo2}
+                    variante="contorno"
+                    tamanho="sm"
+                    tom="alerta"
+                    desabilitado={pendente || devolvido}
+                    titulo="Devolver ao fornecedor"
+                    descricao={`${l.codigo} — ${l.descricao}`}
+                    rotuloConfirmar="Devolver tudo"
+                    aoConfirmar={() => devolver(l)}
+                  >
+                    <p>
+                      Devolve as{" "}
+                      <strong className="font-semibold text-texto">
+                        {numero(l.recebida)} {l.unidade}
+                      </strong>{" "}
+                      que já entraram por esta linha. A quantidade sai do estoque como
+                      devolução, e o histórico do item passa a mostrar o que voltou.
+                    </p>
+                    <p className="text-texto-fraco">
+                      A linha não volta a ficar disponível para receber — depois disto,
+                      Receber e Devolver ficam indisponíveis nela.
+                    </p>
+                  </BotaoConfirmar>
+                )}
               </div>
             )}
           </article>
@@ -151,15 +210,20 @@ export function ItensPedido({
 
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-borda bg-superficie px-4 py-3">
         {podeEditar && !encerrado ? (
-          <Botao
-            variante="fantasma"
-            onClick={cancelar}
-            disabled={pendente}
+          <BotaoConfirmar
+            rotulo="Cancelar pedido"
+            Icone={Ban}
+            desabilitado={pendente}
             className="text-perigo hover:bg-perigo-suave hover:text-perigo"
+            titulo="Cancelar pedido"
+            rotuloConfirmar="Cancelar o pedido"
+            aoConfirmar={cancelar}
           >
-            <Ban />
-            Cancelar pedido
-          </Botao>
+            <p>
+              O pedido sai do fluxo de compras e deixa de aceitar recebimento. O que já
+              tiver sido recebido continua no estoque — cancelar não mexe em saldo.
+            </p>
+          </BotaoConfirmar>
         ) : (
           <span />
         )}

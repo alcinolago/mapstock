@@ -33,7 +33,7 @@ export const saldos = db
     itemId: movimentos.itemId,
     fisico: sql<number>`coalesce(sum(case
       when ${movimentos.tipo} in ('entrada_compra','entrada_fabricacao','ajuste_positivo') then ${movimentos.quantidade}
-      when ${movimentos.tipo} in ('saida_producao','ajuste_negativo') then -${movimentos.quantidade}
+      when ${movimentos.tipo} in ('saida_producao','ajuste_negativo','devolucao_compra') then -${movimentos.quantidade}
       else 0 end), 0)::float8`.as("fisico"),
     reservado: sql<number>`coalesce(sum(case
       when ${movimentos.tipo} = 'reserva' then ${movimentos.quantidade}
@@ -252,6 +252,7 @@ export async function pedidoCompleto(id: string) {
       id: pedidoItens.id,
       quantidade: pedidoItens.quantidade,
       recebida: pedidoItens.quantidadeRecebida,
+      devolvida: pedidoItens.quantidadeDevolvida,
       precoUnitario: pedidoItens.precoUnitario,
       parametrosCompra: pedidoItens.parametrosCompra,
 

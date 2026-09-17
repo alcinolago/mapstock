@@ -24,7 +24,6 @@ export default async function PaginaPedido({
   if (!dados) notFound();
 
   const { pedido, linhas } = dados;
-  const encerrado = pedido.status === "recebido" || pedido.status === "cancelado";
   const total = linhas.reduce((s, l) => s + l.quantidade * l.precoUnitario, 0) + pedido.frete;
 
   return (
@@ -77,7 +76,7 @@ export default async function PaginaPedido({
         linhas={linhas}
         frete={pedido.frete}
         podeEditar={sessao.papel !== "leitura"}
-        encerrado={encerrado}
+        status={pedido.status}
       />
     </div>
   );

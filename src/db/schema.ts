@@ -34,6 +34,9 @@ export const tipoMovimento = pgEnum("tipo_movimento", [
   "liberacao_reserva",
   "ajuste_positivo",
   "ajuste_negativo",
+  /* Volta para o fornecedor. Nao e ajuste_negativo porque o historico
+     precisa distinguir "sumiu do estoque" de "devolvido a quem vendeu". */
+  "devolucao_compra",
 ]);
 
 export const tipoAquisicao = pgEnum("tipo_aquisicao", [
@@ -372,6 +375,10 @@ export const pedidoItens = pgTable("pedido_itens", {
   quantidade: quantidade("quantidade"),
   precoUnitario: dinheiro("preco_unitario"),
   quantidadeRecebida: quantidade("quantidade_recebida"),
+  /* Devolvido ao fornecedor. Fica ao lado do recebido, e nao descontando
+     dele: a linha foi recebida mesmo, e desfazer isso faria o pedido voltar
+     a "aberto" e oferecer receber de novo o que ja voltou. */
+  quantidadeDevolvida: quantidade("quantidade_devolvida"),
   /* O que quem compra precisa escolher no site do fornecedor: cor, tamanho,
      voltagem, o kit com 50 em vez do avulso. Fica na linha do pedido, e nao
      no item, porque muda de compra para compra — e e o campo que sai em

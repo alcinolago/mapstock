@@ -7,6 +7,7 @@ import {
   itemFornecedores,
   itens,
   itensParametros3d,
+  locais,
   niveis,
   regrasClassificacao,
   unidades,
@@ -16,7 +17,7 @@ import { PARAMS_3D_PADRAO } from "./parametros-3d";
 
 /** Tudo que o formulario de item precisa para montar seus seletores. */
 export async function opcoesFormulario() {
-  const [listaClassificacoes, listaUnidades, listaNiveis, listaFornecedores, regras] =
+  const [listaClassificacoes, listaUnidades, listaNiveis, listaFornecedores, listaLocais, regras] =
     await Promise.all([
       db
         .select({ id: classificacoes.id, nome: classificacoes.nome, prefixoCodigo: classificacoes.prefixoCodigo })
@@ -34,6 +35,7 @@ export async function opcoesFormulario() {
         .from(fornecedores)
         .where(eq(fornecedores.ativo, true))
         .orderBy(asc(fornecedores.nome)),
+      db.select().from(locais).orderBy(asc(locais.nome)),
       db
         .select({
           classificacaoId: regrasClassificacao.classificacaoId,
@@ -48,6 +50,7 @@ export async function opcoesFormulario() {
     unidades: listaUnidades,
     niveis: listaNiveis,
     fornecedores: listaFornecedores,
+    locais: listaLocais,
     regras,
   };
 }
@@ -76,7 +79,7 @@ export async function carregarItem(id: string): Promise<DadosItem | null> {
     aquisicao: item.aquisicao,
     origemFabricacao: item.origemFabricacao,
     estoqueMinimo: item.estoqueMinimo,
-    localizacao: item.localizacao,
+    localId: item.localId,
     observacoes: item.observacoes,
     fichaTecnica: item.fichaTecnica,
     ativo: item.ativo,

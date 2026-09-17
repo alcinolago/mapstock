@@ -154,6 +154,20 @@ export const unidades = pgTable("unidades", {
   ativo: boolean("ativo").notNull().default(true),
 });
 
+/**
+ * Onde a peca fica guardada.
+ *
+ * Era texto livre no item, e texto livre vira cadastro duplicado: "Gaveta
+ * B3", "gaveta b3" e "Gaveta B-3" viram tres lugares que sao um so, e af
+ * nao da para filtrar nem conferir prateleira. Virando cadastro, o item so
+ * escolhe de uma lista.
+ */
+export const locais = pgTable("locais", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  nome: text("nome").notNull().unique(),
+  ativo: boolean("ativo").notNull().default(true),
+});
+
 /* As 10 regras de classify(): palavra na descricao -> classificacao. */
 export const regrasClassificacao = pgTable(
   "regras_classificacao",
@@ -194,7 +208,8 @@ export const itens = pgTable("itens", {
   custoUnitario: dinheiro("custo_unitario"),
   /* Nao existia no desktop. E o que permite o alerta de reposicao. */
   estoqueMinimo: quantidade("estoque_minimo"),
-  localizacao: text("localizacao"),
+  /* Opcional: peca recem-cadastrada ainda nao tem lugar definido. */
+  localId: uuid("local_id").references(() => locais.id, { onDelete: "restrict" }),
   /* No desktop os dois viviam num TEXT so, separados por marcadores
      [OBSERVACOES]...[/OBSERVACOES] e lidos de volta por regex. */
   observacoes: text("observacoes"),

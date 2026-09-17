@@ -9,6 +9,7 @@ import { db } from "@/db";
 import {
   classificacoes,
   itens,
+  locais,
   niveis,
   regrasClassificacao,
   unidades,
@@ -175,6 +176,47 @@ export async function removerUnidade(id: string): Promise<Resultado> {
     return { erro: "Existem itens com esta unidade. Desative-a em vez de remover." };
   }
   await db.delete(unidades).where(eq(unidades.id, id));
+  revalidatePath("/configuracoes");
+  return { ok: true };
+}
+
+/* --------------------------------------------------------------- Locais --- */
+
+/**
+ * Onde a peca fica guardada virou cadastro para o item so escolher de uma
+ * lista. Texto livre criava "Gaveta B3", "gaveta b3" e "Gaveta B-3" como se
+ * fossem tres lugares, e af nao dava para filtrar por prateleira.
+ */
+export async function salvarLocal(dados: {
+  id?: string;
+  nome: string;
+  ativo: boolean;
+}): Promise<Resultado> {
+  await exigirAdmin();
+  const nome = dados.nome.trim();
+  if (!nome) return { erro: "Informe o nome do local." };
+
+  try {
+    if (dados.id) {
+      await db.update(locais).set({ nome, ativo: dados.ativo }).where(eq(locais.id, dados.id));
+    } else {
+      await db.insert(locais).values({ nome, ativo: dados.ativo });
+    }
+    revalidatePath("/configuracoes");
+    revalidatePath("/itens");
+    return { ok: true };
+  } catch {
+    return { erro: "Já existe um local com esse nome." };
+  }
+}
+
+export async function removerLocal(id: string): Promise<Resultado> {
+  await exigirAdmin();
+  const emUso = await db.select({ id: itens.id }).from(itens).where(eq(itens.localId, id)).limit(1);
+  if (emUso.length > 0) {
+    return { erro: "Existem itens guardados neste local. Desative-o em vez de remover." };
+  }
+  await db.delete(locais).where(eq(locais.id, id));
   revalidatePath("/configuracoes");
   return { ok: true };
 }

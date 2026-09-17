@@ -85,7 +85,8 @@ const esquemaItem = z.object({
     .nullable()
     .optional(),
   estoqueMinimo: numeroTexto,
-  localizacao: z.string().trim().optional(),
+  /* Vazio significa "sem lugar definido", nao um lugar chamado "". */
+  localId: z.union([z.literal(""), z.uuid()]).optional(),
   observacoes: z.string().trim().optional(),
   fichaTecnica: z.string().trim().optional(),
   ativo: z.coerce.boolean(),
@@ -154,7 +155,7 @@ export async function salvarItem(
     aquisicao: d.aquisicao ?? null,
     origemFabricacao: d.origemFabricacao ?? null,
     estoqueMinimo: d.estoqueMinimo,
-    localizacao: d.localizacao || null,
+    localId: d.localId || null,
     observacoes: d.observacoes || null,
     fichaTecnica: d.fichaTecnica || null,
     ativo: d.ativo,

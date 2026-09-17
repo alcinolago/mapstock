@@ -2,6 +2,7 @@ import { asc } from "drizzle-orm";
 
 import {
   PainelClassificacoes,
+  PainelLocais,
   PainelNiveis,
   PainelUnidades,
   type Classificacao,
@@ -11,7 +12,7 @@ import { Abas } from "@/components/ui/abas";
 import { CabecalhoPagina } from "@/components/ui/cabecalho-pagina";
 import { Cartao, CorpoCartao } from "@/components/ui/cartao";
 import { db } from "@/db";
-import { classificacoes, niveis, regrasClassificacao, unidades, usuarios } from "@/db/schema";
+import { classificacoes, locais, niveis, regrasClassificacao, unidades, usuarios } from "@/db/schema";
 import { exigirAdmin } from "@/lib/auth";
 
 export const metadata = { title: "Configurações" };
@@ -19,12 +20,13 @@ export const metadata = { title: "Configurações" };
 export default async function PaginaConfiguracoes() {
   await exigirAdmin();
 
-  const [listaNiveis, listaClassificacoes, regras, listaUnidades, listaUsuarios] =
+  const [listaNiveis, listaClassificacoes, regras, listaUnidades, listaLocais, listaUsuarios] =
     await Promise.all([
       db.select().from(niveis).orderBy(asc(niveis.num)),
       db.select().from(classificacoes).orderBy(asc(classificacoes.ordem)),
       db.select().from(regrasClassificacao).orderBy(asc(regrasClassificacao.ordem)),
       db.select().from(unidades).orderBy(asc(unidades.sigla)),
+      db.select().from(locais).orderBy(asc(locais.nome)),
       db
         .select({
           id: usuarios.id,
@@ -66,6 +68,7 @@ export default async function PaginaConfiguracoes() {
               },
               { id: "niveis", rotulo: "Níveis", conteudo: <PainelNiveis niveis={listaNiveis} /> },
               { id: "unidades", rotulo: "Unidades", conteudo: <PainelUnidades lista={listaUnidades} /> },
+              { id: "locais", rotulo: "Locais", conteudo: <PainelLocais lista={listaLocais} /> },
             ]}
           />
         </CorpoCartao>

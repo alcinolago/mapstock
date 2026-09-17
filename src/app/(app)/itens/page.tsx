@@ -17,7 +17,12 @@ import {
   Vazio,
 } from "@/components/ui/tabela";
 import { db } from "@/db";
-import { codigosDeItens, listarItensComSaldo, type SituacaoItem } from "@/db/consultas";
+import {
+  codigosDeItens,
+  listarItensComSaldo,
+  listarLocais,
+  type SituacaoItem,
+} from "@/db/consultas";
 import { classificacoes, niveis } from "@/db/schema";
 import { exigirSessao } from "@/lib/auth";
 import { moeda, numero } from "@/lib/utils";
@@ -38,7 +43,7 @@ export default async function PaginaItens({
     ? (p.situacao as SituacaoItem)
     : undefined;
 
-  const [lista, listaClassificacoes, listaNiveis, cadastro] = await Promise.all([
+  const [lista, listaClassificacoes, listaNiveis, cadastro, listaLocais] = await Promise.all([
     listarItensComSaldo({
       busca: p.busca,
       classificacaoId: p.classificacao,
@@ -46,10 +51,12 @@ export default async function PaginaItens({
       situacao,
       incluirInativos: p.inativos === "1",
       itemId: p.item?.trim() || undefined,
+      localId: p.local?.trim() || undefined,
     }),
     db.select().from(classificacoes).orderBy(classificacoes.ordem),
     db.select().from(niveis).orderBy(niveis.num),
     codigosDeItens(),
+    listarLocais(),
   ]);
 
   const nomeNivel = new Map(listaNiveis.map((n) => [n.num, n.nome]));
@@ -87,6 +94,7 @@ export default async function PaginaItens({
         classificacoes={listaClassificacoes}
         niveis={listaNiveis}
         itens={cadastro}
+        locais={listaLocais}
       />
 
       <Cartao className="overflow-hidden">

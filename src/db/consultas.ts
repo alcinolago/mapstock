@@ -12,6 +12,7 @@ import {
   fornecedores,
   itemFornecedores,
   itens,
+  locais,
   itensParametros3d,
   montagens,
   movimentos,
@@ -87,6 +88,7 @@ export type ItemComSaldo = {
   custoUnitario: number;
   estoqueMinimo: number;
   localizacao: string | null;
+  localId: string | null;
   ativo: boolean;
   fisico: number;
   reservado: number;
@@ -123,6 +125,7 @@ export async function listarItensComSaldo(filtros?: {
   incluirInativos?: boolean;
   /** Um item so, escolhido pelo codigo no seletor. */
   itemId?: string;
+  localId?: string;
 }): Promise<ItemComSaldo[]> {
   const condicoes: SQL[] = [];
 
@@ -137,13 +140,14 @@ export async function listarItensComSaldo(filtros?: {
     condicoes.push(eq(itens.classificacaoId, filtros.classificacaoId));
   }
   if (filtros?.nivel !== undefined) condicoes.push(eq(itens.nivel, filtros.nivel));
+  if (filtros?.localId) condicoes.push(eq(itens.localId, filtros.localId));
   if (filtros?.busca) {
     const t = `%${filtros.busca}%`;
     condicoes.push(
       or(
         ilike(itens.codigo, t),
         ilike(itens.descricao, t),
-        ilike(itens.localizacao, t),
+        ilike(locais.nome, t),
       ) as SQL,
     );
   }
@@ -159,7 +163,8 @@ export async function listarItensComSaldo(filtros?: {
       custoUnitario: itens.custoUnitario,
       custoRecebido: sql<number | null>`${custo.preco}`,
       estoqueMinimo: itens.estoqueMinimo,
-      localizacao: itens.localizacao,
+      localizacao: locais.nome,
+      localId: itens.localId,
       ativo: itens.ativo,
       fisico: sql<number>`coalesce(${saldos.fisico}, 0)`,
       reservado: sql<number>`coalesce(${saldos.reservado}, 0)`,
@@ -167,6 +172,7 @@ export async function listarItensComSaldo(filtros?: {
     .from(itens)
     .innerJoin(classificacoes, eq(classificacoes.id, itens.classificacaoId))
     .innerJoin(unidades, eq(unidades.id, itens.unidadeId))
+    .leftJoin(locais, eq(locais.id, itens.localId))
     .leftJoin(saldos, eq(saldos.itemId, itens.id))
     .leftJoin(custo, eq(custo.itemId, itens.id))
     .$dynamic();
@@ -314,7 +320,7 @@ export async function pedidoCompleto(id: string) {
       aquisicao: itens.aquisicao,
       origemFabricacao: itens.origemFabricacao,
       linkCompra: itens.linkCompra,
-      localizacao: itens.localizacao,
+      localizacao: locais.nome,
       estoqueMinimo: itens.estoqueMinimo,
       observacoesItem: itens.observacoes,
       fichaTecnica: itens.fichaTecnica,
@@ -342,6 +348,7 @@ export async function pedidoCompleto(id: string) {
     })
     .from(pedidoItens)
     .innerJoin(itens, eq(itens.id, pedidoItens.itemId))
+    .leftJoin(locais, eq(locais.id, itens.localId))
     .innerJoin(classificacoes, eq(classificacoes.id, itens.classificacaoId))
     .innerJoin(unidades, eq(unidades.id, itens.unidadeId))
     .leftJoin(
@@ -589,6 +596,11 @@ export function recorteEntre(
   if (de) partes.push(sql`${coluna} >= (${de}::timestamp AT TIME ZONE ${FUSO})`);
   if (ate) partes.push(sql`${coluna} < (${diaSeguinte(ate)}::timestamp AT TIME ZONE ${FUSO})`);
   return partes.length ? and(...partes) : undefined;
+}
+
+/** Os locais cadastrados, para os seletores e o filtro. */
+export async function listarLocais() {
+  return db.select().from(locais).orderBy(asc(locais.nome));
 }
 
 /**

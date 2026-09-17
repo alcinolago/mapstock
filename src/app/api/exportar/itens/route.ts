@@ -34,6 +34,7 @@ export async function GET(request: NextRequest) {
       situacao,
       incluirInativos: p.get("inativos") === "1",
       itemId: p.get("item") ?? undefined,
+      localId: p.get("local") ?? undefined,
     }),
     db.select().from(niveis).orderBy(desc(niveis.num)),
   ]);

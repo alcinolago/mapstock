@@ -11,11 +11,13 @@ import {
   adicionarNivel,
   adicionarRegra,
   removerClassificacao,
+  removerLocal,
   removerNivel,
   removerRegra,
   removerUnidade,
   renomearNivel,
   salvarClassificacao,
+  salvarLocal,
   salvarUnidade,
 } from "@/lib/acoes/configuracoes";
 
@@ -462,6 +464,138 @@ export function PainelUnidades({
         >
           <Plus className="size-4" />
           Nova unidade
+        </Botao>
+      )}
+    </div>
+  );
+}
+
+/* --------------------------------------------------------------- Locais --- */
+
+/**
+ * Onde a peca fica guardada. Virou cadastro para o item so escolher de uma
+ * lista: texto livre fazia "Gaveta B3" e "gaveta b3" virarem dois lugares, e
+ * af filtrar por prateleira nao fechava.
+ */
+export function PainelLocais({
+  lista,
+}: {
+  lista: { id: string; nome: string; ativo: boolean }[];
+}) {
+  const { pendente, erro, executar } = useAcao();
+  const [editando, setEditando] = useState<string | "novo" | null>(null);
+  const [rascunho, setRascunho] = useState({ nome: "", ativo: true });
+
+  return (
+    <div className="space-y-3">
+      <p className="text-sm text-texto-fraco">
+        Prateleira, gaveta, armário, sala. O cadastro de item escolhe daqui — não dá para
+        digitar um lugar novo por lá, e é isso que evita o mesmo lugar com dois nomes.
+      </p>
+
+      <Erro texto={erro} />
+
+      <ul className="divide-y divide-borda overflow-hidden rounded-xl border border-borda">
+        {lista.length === 0 && (
+          <li className="px-4 py-6 text-center text-sm text-texto-fraco">
+            Nenhum local cadastrado ainda.
+          </li>
+        )}
+        {lista.map((l) => (
+          <li key={l.id} className="flex items-center gap-3 px-4 py-2.5">
+            {editando === l.id ? (
+              <>
+                <Entrada
+                  value={rascunho.nome}
+                  onChange={(e) => setRascunho((r) => ({ ...r, nome: e.target.value }))}
+                  placeholder="Nome do local *"
+                  required
+                  className="h-8 flex-1 text-sm"
+                  autoFocus
+                />
+                <label className="flex items-center gap-2 text-xs text-texto-suave">
+                  <input
+                    type="checkbox"
+                    checked={rascunho.ativo}
+                    onChange={(e) => setRascunho((r) => ({ ...r, ativo: e.target.checked }))}
+                    className="size-4 accent-[var(--marca)]"
+                  />
+                  Ativo
+                </label>
+                <Botao
+                  variante="salvar"
+                  tamanho="sm"
+                  disabled={pendente || !rascunho.nome.trim()}
+                  onClick={() =>
+                    executar(() => salvarLocal({ id: l.id, ...rascunho }), () => setEditando(null))
+                  }
+                >
+                  <Check className="size-3.5" />
+                </Botao>
+                <Botao variante="suave" tamanho="sm" onClick={() => setEditando(null)}>
+                  <X className="size-3.5" />
+                </Botao>
+              </>
+            ) : (
+              <>
+                <span className="flex-1 text-sm font-medium text-texto">{l.nome}</span>
+                {!l.ativo && <Selo tom="neutro">inativo</Selo>}
+                <Botao
+                  variante="fantasma"
+                  tamanho="sm"
+                  onClick={() => {
+                    setRascunho({ nome: l.nome, ativo: l.ativo });
+                    setEditando(l.id);
+                  }}
+                >
+                  <Pencil className="size-3.5" />
+                </Botao>
+                <Botao
+                  variante="fantasma"
+                  tamanho="sm"
+                  disabled={pendente}
+                  onClick={() => executar(() => removerLocal(l.id))}
+                >
+                  <Trash2 className="size-3.5 text-perigo" />
+                </Botao>
+              </>
+            )}
+          </li>
+        ))}
+      </ul>
+
+      {editando === "novo" ? (
+        <div className="flex gap-2 rounded-xl border border-marca/40 bg-marca-suave/20 p-3">
+          <Entrada
+            value={rascunho.nome}
+            onChange={(e) => setRascunho((r) => ({ ...r, nome: e.target.value }))}
+            placeholder="Ex.: Prateleira A1 *"
+            required
+            className="max-w-72"
+            autoFocus
+          />
+          <Botao
+            variante="salvar"
+            disabled={pendente || !rascunho.nome.trim()}
+            onClick={() => executar(() => salvarLocal(rascunho), () => setEditando(null))}
+          >
+            <Check className="size-4" />
+            Criar
+          </Botao>
+          <Botao variante="suave" onClick={() => setEditando(null)}>
+            <X className="size-4" />
+          </Botao>
+        </div>
+      ) : (
+        <Botao
+          variante="contorno"
+          onClick={() => {
+            setRascunho({ nome: "", ativo: true });
+            setEditando("novo");
+          }}
+        >
+          <Plus className="size-4" />
+          Novo local
         </Botao>
       )}
     </div>

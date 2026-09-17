@@ -11,11 +11,13 @@ export function FiltrosItens({
   classificacoes,
   niveis,
   itens,
+  locais,
 }: {
   classificacoes: { id: string; nome: string }[];
   niveis: { num: number; nome: string }[];
   /** Todo o cadastro, para escolher pelo codigo sem digitar. */
   itens: { id: string; codigo: string; ativo: boolean }[];
+  locais: { id: string; nome: string }[];
 }) {
   const router = useRouter();
   const caminho = usePathname();
@@ -40,7 +42,7 @@ export function FiltrosItens({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [busca]);
 
-  const temFiltro = ["busca", "classificacao", "nivel", "situacao", "item"].some((c) =>
+  const temFiltro = ["busca", "classificacao", "nivel", "situacao", "item", "local"].some((c) =>
     params.get(c),
   );
 
@@ -96,6 +98,20 @@ export function FiltrosItens({
         {niveis.map((n) => (
           <option key={n.num} value={n.num}>
             {n.num} — {n.nome}
+          </option>
+        ))}
+      </Selecao>
+
+      <Selecao
+        aria-label="Local"
+        value={params.get("local") ?? ""}
+        onChange={(e) => aplicar("local", e.target.value)}
+        className="w-auto min-w-40"
+      >
+        <option value="">Todos os locais</option>
+        {locais.map((l) => (
+          <option key={l.id} value={l.id}>
+            {l.nome}
           </option>
         ))}
       </Selecao>

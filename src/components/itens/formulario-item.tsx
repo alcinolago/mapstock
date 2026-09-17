@@ -1,6 +1,7 @@
 "use client";
 
 import { AlertCircle, LoaderCircle, Save, Sparkles } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useActionState, useEffect, useRef, useState } from "react";
 
@@ -39,7 +40,7 @@ export type DadosItem = {
   aquisicao: string | null;
   origemFabricacao: string | null;
   estoqueMinimo: number;
-  localizacao: string | null;
+  localId: string | null;
   observacoes: string | null;
   fichaTecnica: string | null;
   ativo: boolean;
@@ -52,6 +53,7 @@ type Props = {
   unidades: { id: string; sigla: string; nome: string }[];
   niveis: { num: number; nome: string }[];
   fornecedores: { id: string; nome: string }[];
+  locais: { id: string; nome: string; ativo: boolean }[];
   regras: { classificacaoId: string; palavraChave: string }[];
   item?: DadosItem;
   podeExcluir: boolean;
@@ -62,6 +64,7 @@ export function FormularioItem({
   unidades,
   niveis,
   fornecedores,
+  locais,
   regras,
   item,
   podeExcluir,
@@ -281,13 +284,35 @@ export function FormularioItem({
             />
           </Grupo>
 
-          <Grupo rotulo="Localização no estoque" htmlFor="localizacao">
-            <Entrada
-              id="localizacao"
-              name="localizacao"
-              defaultValue={item?.localizacao ?? ""}
-              placeholder="Ex.: Prateleira A3, gaveta 2"
-            />
+          {/* Escolher, nunca digitar: lugar em texto livre virava o mesmo
+              lugar com dois nomes, e af nao fechava filtro nem conferência.
+              Lugar novo se cadastra em Configurações. */}
+          <Grupo
+            rotulo="Localização no estoque"
+            htmlFor="localId"
+            ajuda={
+              locais.length === 0 ? (
+                <>
+                  Nenhum local cadastrado.{" "}
+                  <Link href="/configuracoes" className="font-semibold text-marca hover:underline">
+                    Cadastre em Configurações
+                  </Link>
+                  .
+                </>
+              ) : undefined
+            }
+          >
+            <Selecao id="localId" name="localId" defaultValue={item?.localId ?? ""}>
+              <option value="">Não definido</option>
+              {locais
+                .filter((l) => l.ativo || l.id === item?.localId)
+                .map((l) => (
+                  <option key={l.id} value={l.id}>
+                    {l.nome}
+                    {l.ativo ? "" : " (inativo)"}
+                  </option>
+                ))}
+            </Selecao>
           </Grupo>
 
           <label className="flex items-center gap-2 self-end pb-2.5 text-sm text-texto-suave">

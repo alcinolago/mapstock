@@ -5,6 +5,7 @@ import Link from "next/link";
 import { AbasCompras } from "@/components/compras/abas-compras";
 import { SeloCotacao } from "@/components/situacao";
 import { Botao } from "@/components/ui/botao";
+import { FiltroMes } from "@/components/ui/filtro-mes";
 import { CabecalhoPagina } from "@/components/ui/cabecalho-pagina";
 import { Cartao } from "@/components/ui/cartao";
 import {
@@ -18,17 +19,26 @@ import {
   Vazio,
 } from "@/components/ui/tabela";
 import { db } from "@/db";
+import { abertosForaDoMes, primeiraCotacao, recorteDoMes } from "@/db/consultas";
 import { cotacaoItens, cotacoes, usuarios } from "@/db/schema";
 import { exigirSessao } from "@/lib/auth";
+import { mesesAte, mesValido, rotuloMes } from "@/lib/periodo";
 import { data } from "@/lib/utils";
 
 export const metadata = { title: "Cotações" };
 
-export default async function PaginaCotacoes() {
+export default async function PaginaCotacoes({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | undefined>>;
+}) {
   const sessao = await exigirSessao();
   const podeEditar = sessao.papel !== "leitura";
 
-  const lista = await db
+  const mes = mesValido((await searchParams).mes);
+
+  const [lista, maisAntiga, escondidas] = await Promise.all([
+    db
     .select({
       id: cotacoes.id,
       numero: cotacoes.numero,
@@ -41,8 +51,12 @@ export default async function PaginaCotacoes() {
     .from(cotacoes)
     .leftJoin(cotacaoItens, eq(cotacaoItens.cotacaoId, cotacoes.id))
     .leftJoin(usuarios, eq(usuarios.id, cotacoes.criadoPor))
+    .where(recorteDoMes(cotacoes.criadoEm, mes))
     .groupBy(cotacoes.id, usuarios.nome)
-    .orderBy(desc(cotacoes.criadoEm));
+    .orderBy(desc(cotacoes.criadoEm)),
+    primeiraCotacao(),
+    abertosForaDoMes("cotacoes", mes),
+  ]);
 
   return (
     <div className="mx-auto max-w-7xl">
@@ -50,18 +64,31 @@ export default async function PaginaCotacoes() {
         titulo="Compras"
         descricao="Cote o mesmo item com vários fornecedores, escolha o melhor e gere o pedido."
         acao={
-          podeEditar && (
-            <Link href="/compras/cotacoes/nova">
-              <Botao>
-                <Plus className="size-4" />
-                Nova cotação
-              </Botao>
-            </Link>
-          )
+          <>
+            <FiltroMes meses={mesesAte(maisAntiga)} />
+            {podeEditar && (
+              <Link href="/compras/cotacoes/nova">
+                <Botao>
+                  <Plus className="size-4" />
+                  Nova cotação
+                </Botao>
+              </Link>
+            )}
+          </>
         }
       />
 
       <AbasCompras />
+
+      {escondidas > 0 && (
+        <p className="mb-4 rounded-xl border-l-4 border-alerta bg-alerta-suave px-4 py-3 text-sm text-texto-suave">
+          <strong className="font-semibold text-alerta">
+            {escondidas} {escondidas === 1 ? "cotação em aberto" : "cotações em aberto"} fora de{" "}
+            {rotuloMes(mes!)}.
+          </strong>{" "}
+          O recorte é só da tela — nada foi fechado. Volte para “Todo o período” para ver.
+        </p>
+      )}
 
       <Cartao className="overflow-hidden">
         <RolagemTabela>
@@ -79,8 +106,9 @@ export default async function PaginaCotacoes() {
             <Corpo>
               {lista.length === 0 ? (
                 <Vazio colSpan={6}>
-                  Nenhuma cotação ainda. Crie uma a partir dos itens em falta e compare os preços
-                  dos fornecedores.
+                  {mes
+                    ? `Nenhuma cotação criada em ${rotuloMes(mes)}.`
+                    : "Nenhuma cotação ainda. Crie uma a partir dos itens em falta e compare os preços dos fornecedores."}
                 </Vazio>
               ) : (
                 lista.map((c) => (

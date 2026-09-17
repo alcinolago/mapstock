@@ -2,13 +2,14 @@
 
 import { Undo2 } from "lucide-react";
 import Link from "next/link";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useMemo, useState, useTransition } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useMemo, useState } from "react";
 
 import { SeloMovimento } from "@/components/situacao";
 import { BotaoConfirmar } from "@/components/ui/confirmar";
 import { Entrada, Selecao } from "@/components/ui/campo";
 import { CabecalhoCartao, Cartao } from "@/components/ui/cartao";
+import { FiltroMes } from "@/components/ui/filtro-mes";
 import {
   Cabecalho,
   Celula,
@@ -49,22 +50,13 @@ export function Historico({
   meses: string[];
 }) {
   const router = useRouter();
-  const caminho = usePathname();
   const params = useSearchParams();
-  const [recortando, iniciar] = useTransition();
   const [tipo, setTipo] = useState("");
   const [busca, setBusca] = useState("");
 
   /* Tipo e busca peneiram o que ja veio; o mes muda a consulta, porque o
      historico chega limitado e um mes antigo nao caberia no corte. */
   const mes = params.get("mes") ?? "";
-
-  function escolherMes(valor: string) {
-    const novos = new URLSearchParams(params);
-    if (valor) novos.set("mes", valor);
-    else novos.delete("mes");
-    iniciar(() => router.replace(`${caminho}?${novos}`, { scroll: false }));
-  }
 
   const filtrados = useMemo(() => {
     const t = busca.trim().toUpperCase();
@@ -88,26 +80,10 @@ export function Historico({
     <Cartao className="overflow-hidden">
       <CabecalhoCartao
         titulo="Histórico de movimentações"
-        descricao={
-          recortando
-            ? "Filtrando..."
-            : `${filtrados.length} de ${movimentos.length}${mes ? ` em ${rotuloMes(mes)}` : ""}`
-        }
+        descricao={`${filtrados.length} de ${movimentos.length}${mes ? ` em ${rotuloMes(mes)}` : ""}`}
         acao={
-          <div className="flex flex-wrap gap-2">
-            <Selecao
-              value={mes}
-              onChange={(e) => escolherMes(e.target.value)}
-              className="h-9 w-auto min-w-40 text-xs"
-              aria-label="Filtrar por mês"
-            >
-              <option value="">Todo o período</option>
-              {meses.map((m) => (
-                <option key={m} value={m}>
-                  {rotuloMes(m)}
-                </option>
-              ))}
-            </Selecao>
+          <div className="flex flex-wrap items-center gap-2">
+            <FiltroMes meses={meses} />
             <Entrada
               value={busca}
               onChange={(e) => setBusca(e.target.value)}

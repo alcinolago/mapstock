@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, ilike, inArray, isNull, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, inArray, isNull, not, or, sql, type SQL } from "drizzle-orm";
 import { alias, type PgColumn } from "drizzle-orm/pg-core";
 
 import { diaSeguinte, FUSO, limitesDoMes } from "@/lib/periodo";
@@ -557,10 +557,56 @@ export function recorteAte(coluna: PgColumn, data: string | undefined): SQL | un
   return sql`${coluna} < (${diaSeguinte(data)}::timestamp AT TIME ZONE ${FUSO})`;
 }
 
-/** O movimento mais antigo, para a lista de meses nao oferecer mes vazio. */
+/**
+ * O registro mais antigo de cada lista, para o seletor de mes nao oferecer
+ * mes vazio. Uma consulta por tela, porque cada uma tem a sua coluna de data.
+ */
 export async function primeiroMovimento(): Promise<Date | null> {
-  const [linha] = await db
+  const [l] = await db
     .select({ quando: sql<Date | null>`min(${movimentos.criadoEm})` })
     .from(movimentos);
-  return linha?.quando ? new Date(linha.quando) : null;
+  return l?.quando ? new Date(l.quando) : null;
+}
+
+export async function primeiraCotacao(): Promise<Date | null> {
+  const [l] = await db
+    .select({ quando: sql<Date | null>`min(${cotacoes.criadoEm})` })
+    .from(cotacoes);
+  return l?.quando ? new Date(l.quando) : null;
+}
+
+export async function primeiroPedido(): Promise<Date | null> {
+  const [l] = await db
+    .select({ quando: sql<Date | null>`min(${pedidosCompra.criadoEm})` })
+    .from(pedidosCompra);
+  return l?.quando ? new Date(l.quando) : null;
+}
+
+/**
+ * Quantos registros em aberto o recorte esta escondendo.
+ *
+ * Pedido e cotacao em aberto sao fila de trabalho: limitar o mes e legitimo,
+ * sumir com servico pendente sem avisar nao e. A tela diz o numero em vez de
+ * deixar a pessoa concluir que nao ha nada a fazer.
+ */
+export async function abertosForaDoMes(
+  qual: "cotacoes" | "pedidos",
+  mes: string | undefined,
+): Promise<number> {
+  if (!mes) return 0;
+  const dentro = recorteDoMes(
+    qual === "cotacoes" ? cotacoes.criadoEm : pedidosCompra.criadoEm,
+    mes,
+  );
+  const [l] =
+    qual === "cotacoes"
+      ? await db
+          .select({ n: sql<number>`count(*)::int` })
+          .from(cotacoes)
+          .where(and(inArray(cotacoes.status, ["rascunho", "enviada", "respondida"]), not(dentro!)))
+      : await db
+          .select({ n: sql<number>`count(*)::int` })
+          .from(pedidosCompra)
+          .where(and(inArray(pedidosCompra.status, ["aberto", "parcial"]), not(dentro!)));
+  return l?.n ?? 0;
 }

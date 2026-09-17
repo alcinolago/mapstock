@@ -4,6 +4,7 @@ import Link from "next/link";
 import { AbasCompras } from "@/components/compras/abas-compras";
 import { SeloPedido } from "@/components/situacao";
 import { CabecalhoPagina } from "@/components/ui/cabecalho-pagina";
+import { FiltroMes } from "@/components/ui/filtro-mes";
 import { Cartao } from "@/components/ui/cartao";
 import {
   Cabecalho,
@@ -16,16 +17,25 @@ import {
   Vazio,
 } from "@/components/ui/tabela";
 import { db } from "@/db";
+import { abertosForaDoMes, primeiroPedido, recorteDoMes } from "@/db/consultas";
 import { fornecedores, pedidoItens, pedidosCompra } from "@/db/schema";
 import { exigirSessao } from "@/lib/auth";
+import { mesesAte, mesValido, rotuloMes } from "@/lib/periodo";
 import { data, moeda } from "@/lib/utils";
 
 export const metadata = { title: "Pedidos de compra" };
 
-export default async function PaginaPedidos() {
+export default async function PaginaPedidos({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | undefined>>;
+}) {
   await exigirSessao();
 
-  const lista = await db
+  const mes = mesValido((await searchParams).mes);
+
+  const [lista, maisAntigo, escondidos] = await Promise.all([
+    db
     .select({
       id: pedidosCompra.id,
       numero: pedidosCompra.numero,
@@ -40,17 +50,32 @@ export default async function PaginaPedidos() {
     .from(pedidosCompra)
     .innerJoin(fornecedores, eq(fornecedores.id, pedidosCompra.fornecedorId))
     .leftJoin(pedidoItens, eq(pedidoItens.pedidoId, pedidosCompra.id))
+    .where(recorteDoMes(pedidosCompra.criadoEm, mes))
     .groupBy(pedidosCompra.id, fornecedores.nome)
-    .orderBy(desc(pedidosCompra.criadoEm));
+    .orderBy(desc(pedidosCompra.criadoEm)),
+    primeiroPedido(),
+    abertosForaDoMes("pedidos", mes),
+  ]);
 
   return (
     <div className="mx-auto max-w-7xl">
       <CabecalhoPagina
         titulo="Compras"
         descricao="Pedidos gerados a partir das cotações. Receber dá entrada no estoque."
+        acao={<FiltroMes meses={mesesAte(maisAntigo)} />}
       />
 
       <AbasCompras />
+
+      {escondidos > 0 && (
+        <p className="mb-4 rounded-xl border-l-4 border-alerta bg-alerta-suave px-4 py-3 text-sm text-texto-suave">
+          <strong className="font-semibold text-alerta">
+            {escondidos} {escondidos === 1 ? "pedido ainda a receber" : "pedidos ainda a receber"}{" "}
+            fora de {rotuloMes(mes!)}.
+          </strong>{" "}
+          O recorte é só da tela — nada foi encerrado. Volte para “Todo o período” para ver.
+        </p>
+      )}
 
       <Cartao className="overflow-hidden">
         <RolagemTabela>
@@ -68,7 +93,9 @@ export default async function PaginaPedidos() {
             <Corpo>
               {lista.length === 0 ? (
                 <Vazio colSpan={6}>
-                  Nenhum pedido ainda. Eles nascem ao fechar uma cotação com fornecedor escolhido.
+                  {mes
+                    ? `Nenhum pedido criado em ${rotuloMes(mes)}.`
+                    : "Nenhum pedido ainda. Eles nascem ao fechar uma cotação com fornecedor escolhido."}
                 </Vazio>
               ) : (
                 lista.map((p) => (

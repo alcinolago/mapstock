@@ -49,7 +49,6 @@ export function ItensPedido({
   status: StatusPedido;
 }) {
   const router = useRouter();
-  const [pendente, iniciar] = useTransition();
   const [quantidades, setQuantidades] = useState<Record<string, string>>({});
 
   const subtotal = linhas.reduce((s, l) => s + l.quantidade * l.precoUnitario, 0);
@@ -59,17 +58,11 @@ export function ItensPedido({
   const cancelado = status === "cancelado";
   const encerrado = cancelado || status === "recebido";
 
-  function receber(linha: LinhaPedidoCompleta) {
-    const falta = linha.quantidade - linha.recebida;
-    const q = paraNumero(quantidades[linha.id] ?? String(falta), falta);
-    iniciar(async () => {
-      const r = await receberItemDoPedido(linha.id, q);
-      if (r.erro) alert(r.erro);
-      else {
-        setQuantidades((s) => ({ ...s, [linha.id]: "" }));
-        router.refresh();
-      }
-    });
+  async function receber(linha: LinhaPedidoCompleta, quantidade: number) {
+    const r = await receberItemDoPedido(linha.id, quantidade);
+    if (r.erro) return r;
+    setQuantidades((s) => ({ ...s, [linha.id]: "" }));
+    router.refresh();
   }
 
   async function cancelar() {
@@ -90,6 +83,10 @@ export function ItensPedido({
         const falta = l.quantidade - l.recebida;
         const completo = falta <= 0;
         const devolvido = l.devolvida > 0;
+        /* Lido aqui, e nao dentro do clique, para a janela prometer o mesmo
+           numero que a acao vai gravar: campo vazio ou texto invalido cai no
+           que falta. */
+        const aReceber = paraNumero(quantidades[l.id] ?? String(falta), falta);
 
         return (
           <article key={l.id} className="rounded-xl border border-borda bg-superficie p-4">
@@ -163,15 +160,31 @@ export function ItensPedido({
                   />
                 )}
 
-                <Botao
+                <BotaoConfirmar
+                  rotulo="Receber"
+                  Icone={PackageCheck}
                   variante="salvar"
                   tamanho="sm"
-                  disabled={pendente || completo || devolvido}
-                  onClick={() => receber(l)}
+                  tom="marca"
+                  desabilitado={completo || devolvido}
+                  titulo="Receber no estoque"
+                  descricao={`${l.codigo} — ${l.descricao}`}
+                  rotuloConfirmar="Receber no estoque"
+                  aoConfirmar={() => receber(l, aReceber)}
                 >
-                  <PackageCheck />
-                  Receber
-                </Botao>
+                  <p>
+                    Entra{" "}
+                    <strong className="font-semibold text-texto">
+                      {numero(aReceber)} {l.unidade}
+                    </strong>{" "}
+                    no saldo do item, e o custo unitário do cadastro passa a ser o preço
+                    desta linha ({moeda(l.precoUnitario)}).
+                  </p>
+                  <p className="text-texto-fraco">
+                    Recebimento vira movimento no histórico e não se apaga: para tirar do
+                    saldo depois, só devolvendo ao fornecedor.
+                  </p>
+                </BotaoConfirmar>
 
                 {/* Só existe depois que algo entrou: não se devolve o que
                     ainda não chegou. */}
@@ -181,8 +194,9 @@ export function ItensPedido({
                     Icone={Undo2}
                     variante="contorno"
                     tamanho="sm"
-                    tom="alerta"
-                    desabilitado={pendente || devolvido}
+                    tom="perigo"
+                    className="border-perigo text-perigo hover:bg-perigo-suave"
+                    desabilitado={devolvido}
                     titulo="Devolver ao fornecedor"
                     descricao={`${l.codigo} — ${l.descricao}`}
                     rotuloConfirmar="Devolver tudo"
@@ -213,7 +227,6 @@ export function ItensPedido({
           <BotaoConfirmar
             rotulo="Cancelar pedido"
             Icone={Ban}
-            desabilitado={pendente}
             className="text-perigo hover:bg-perigo-suave hover:text-perigo"
             titulo="Cancelar pedido"
             rotuloConfirmar="Cancelar o pedido"

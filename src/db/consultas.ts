@@ -57,6 +57,34 @@ export function saldosAte(data?: string) {
 
 export const saldos = saldosAte();
 
+/**
+ * O custo que o item tinha numa data, reconstruido dos recebimentos.
+ *
+ * `itens.custoUnitario` nao serve para isso: ele e sobrescrito a cada
+ * recebimento, entao guarda sempre o preco da ultima compra. Numa posicao
+ * retroativa isso valorizava a quantidade de agosto pelo preco de hoje.
+ *
+ * `pedidoItens.precoUnitario` nao e sobrescrito, e o movimento de
+ * recebimento aponta para a linha do pedido — da para achar qual foi o
+ * ultimo recebimento ate a data e usar o preco daquele.
+ *
+ * So `entrada_compra`: devolucao tambem carrega `pedidoItemId`, e devolver
+ * nao redefine custo nenhum (o proprio recebimento nao mexe no custo ao ser
+ * estornado, e aqui e o mesmo criterio).
+ */
+function custoAte(data: string) {
+  return db
+    .selectDistinctOn([movimentos.itemId], {
+      itemId: movimentos.itemId,
+      preco: pedidoItens.precoUnitario,
+    })
+    .from(movimentos)
+    .innerJoin(pedidoItens, eq(pedidoItens.id, movimentos.pedidoItemId))
+    .where(and(eq(movimentos.tipo, "entrada_compra"), recorteAte(movimentos.criadoEm, data)))
+    .orderBy(movimentos.itemId, desc(movimentos.criadoEm))
+    .as("custo_ate");
+}
+
 export type SituacaoItem = "ok" | "falta" | "abaixo_minimo" | "nao_estocavel";
 
 export type ItemComSaldo = {
@@ -67,6 +95,8 @@ export type ItemComSaldo = {
   unidade: string;
   nivel: number;
   custoUnitario: number;
+  /** Nao houve recebimento ate a data: o custo veio do cadastro de hoje. */
+  custoDoCadastro: boolean;
   estoqueMinimo: number;
   localizacao: string | null;
   ativo: boolean;
@@ -116,6 +146,7 @@ export async function listarItensComSaldo(filtros?: {
   if (recorte) condicoes.push(recorte);
 
   const saldoNaData = filtros?.em ? saldosAte(filtros.em) : saldos;
+  const custoNaData = filtros?.em ? custoAte(filtros.em) : null;
   if (filtros?.classificacaoId) {
     condicoes.push(eq(itens.classificacaoId, filtros.classificacaoId));
   }
@@ -131,7 +162,7 @@ export async function listarItensComSaldo(filtros?: {
     );
   }
 
-  const linhas = await db
+  const consulta = db
     .select({
       id: itens.id,
       codigo: itens.codigo,
@@ -140,6 +171,9 @@ export async function listarItensComSaldo(filtros?: {
       unidade: unidades.sigla,
       nivel: itens.nivel,
       custoUnitario: itens.custoUnitario,
+      custoRecebido: custoNaData
+        ? sql<number | null>`${custoNaData.preco}`
+        : sql<number | null>`null::numeric`,
       estoqueMinimo: itens.estoqueMinimo,
       localizacao: itens.localizacao,
       ativo: itens.ativo,
@@ -150,15 +184,26 @@ export async function listarItensComSaldo(filtros?: {
     .innerJoin(classificacoes, eq(classificacoes.id, itens.classificacaoId))
     .innerJoin(unidades, eq(unidades.id, itens.unidadeId))
     .leftJoin(saldoNaData, eq(saldoNaData.itemId, itens.id))
+    .$dynamic();
+
+  if (custoNaData) consulta.leftJoin(custoNaData, eq(custoNaData.itemId, itens.id));
+
+  const linhas = await consulta
     .where(condicoes.length ? and(...condicoes) : undefined)
     .orderBy(asc(itens.nivel), asc(itens.codigo));
 
   const comSaldo = linhas.map((l) => {
     const disponivel = l.fisico - l.reservado;
+    /* Sem recebimento ate a data o custo daquela epoca e desconhecido. Cai
+       no cadastro em vez de zerar — zero faria o total da posicao despencar
+       sem explicacao — e a tela avisa quantos vieram por esse caminho. */
+    const custoUnitario = l.custoRecebido !== null ? Number(l.custoRecebido) : l.custoUnitario;
     return {
       ...l,
+      custoUnitario,
+      custoDoCadastro: Boolean(filtros?.em) && l.custoRecebido === null,
       disponivel,
-      valorEstoque: l.fisico * l.custoUnitario,
+      valorEstoque: l.fisico * custoUnitario,
       situacao: situacaoDoItem(l.nivel, disponivel, l.estoqueMinimo),
     };
   });

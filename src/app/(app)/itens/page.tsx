@@ -57,6 +57,9 @@ export default async function PaginaItens({
   ]);
 
   const nomeNivel = new Map(listaNiveis.map((n) => [n.num, n.nome]));
+  /* Quantos itens a reconstrucao nao alcancou — o aviso diz o numero em vez
+     de deixar o total parecer exato. */
+  const semRecebimento = lista.filter((i) => i.custoDoCadastro).length;
   const podeEditar = sessao.papel !== "leitura";
 
   return (
@@ -95,9 +98,23 @@ export default async function PaginaItens({
             Posição de {rotuloData(em)}, não a de hoje.
           </span>
           <span className="text-texto-suave">
-            Físico, reservado e disponível são a soma do histórico até aquele dia. Custo
-            unitário, estoque mínimo e situação são os do cadastro de hoje — o sistema não
-            guarda o custo que o item tinha na época.
+            Quantidade e custo são os daquele dia: o custo vem do último recebimento até
+            {" "}
+            {rotuloData(em)}, e não do cadastro de hoje.
+            {semRecebimento > 0 && (
+              <>
+                {" "}
+                <strong className="font-semibold text-texto">
+                  {semRecebimento}{" "}
+                  {semRecebimento === 1
+                    ? "item não tinha recebimento até essa data e está"
+                    : "itens não tinham recebimento até essa data e estão"}{" "}
+                  com o custo do cadastro
+                </strong>{" "}
+                (marcado com ~ na coluna de custo).
+              </>
+            )}{" "}
+            Estoque mínimo e situação continuam sendo os de hoje.
           </span>
         </p>
       )}
@@ -158,6 +175,14 @@ export default async function PaginaItens({
                     </Celula>
                     <Celula className="num text-right font-semibold">{numero(i.disponivel)}</Celula>
                     <Celula className="num text-right whitespace-nowrap text-texto-suave">
+                      {i.custoDoCadastro && (
+                        <span
+                          className="text-alerta"
+                          title="Sem recebimento até essa data: custo do cadastro de hoje"
+                        >
+                          ~
+                        </span>
+                      )}
                       {moeda(i.custoUnitario)}
                     </Celula>
                     <Celula className="num text-right font-semibold whitespace-nowrap">

@@ -1,22 +1,27 @@
 "use server";
 
-import { eq, inArray } from "drizzle-orm";
+import { count, eq, inArray, or } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { db } from "@/db";
 import {
+  bom,
   classificacoes,
+  cotacaoItens,
   itemFornecedores,
   itens,
   itensParametros3d,
+  montagens,
   movimentos,
+  pedidoItens,
   regrasClassificacao,
 } from "@/db/schema";
 import { exigirEdicao } from "@/lib/auth";
 import { registrar } from "@/lib/auditoria";
-import { ehDuplicado } from "@/lib/erros";
+import { ehDuplicado, ehVinculado } from "@/lib/erros";
 import { codigoBase, codigoDisponivel } from "@/lib/codigo";
+import { contagens, emTexto, type Dependencias } from "@/lib/exclusao";
 import { ORIGENS_3D } from "@/lib/labels";
 
 /* ------------------------------------------------------------------------ */
@@ -79,10 +84,6 @@ const esquemaItem = z.object({
     ])
     .nullable()
     .optional(),
-  linkCompra: z.string().trim().optional(),
-  prazoValor: numeroTexto,
-  prazoUnidade: z.enum(["horas", "dias"]),
-  custoUnitario: numeroTexto,
   estoqueMinimo: numeroTexto,
   localizacao: z.string().trim().optional(),
   observacoes: z.string().trim().optional(),
@@ -90,11 +91,6 @@ const esquemaItem = z.object({
   ativo: z.coerce.boolean(),
   fornecedores: z.array(fornecedorVinculado).default([]),
   parametros3d: parametros3d.nullable().default(null),
-  /* So vale na criacao, espelhando o "Tipo da quantidade inicial" do desktop. */
-  quantidadeInicial: numeroTexto.optional(),
-  tipoQuantidadeInicial: z
-    .enum(["nenhum", "entrada_compra", "entrada_fabricacao", "ajuste_positivo"])
-    .default("nenhum"),
 });
 
 export type EstadoItem = { erro?: string; campo?: string; ok?: boolean; id?: string };
@@ -157,10 +153,6 @@ export async function salvarItem(
     nivel: d.nivel,
     aquisicao: d.aquisicao ?? null,
     origemFabricacao: d.origemFabricacao ?? null,
-    linkCompra: d.linkCompra || null,
-    prazoValor: d.prazoValor,
-    prazoUnidade: d.prazoUnidade,
-    custoUnitario: d.custoUnitario,
     estoqueMinimo: d.estoqueMinimo,
     localizacao: d.localizacao || null,
     observacoes: d.observacoes || null,
@@ -204,19 +196,6 @@ export async function salvarItem(
         acao: "criar",
         depois: criado,
       });
-
-      /* Quantidade inicial vira um movimento de verdade, para o saldo
-         continuar sendo sempre a soma do historico. */
-      if (d.tipoQuantidadeInicial !== "nenhum" && (d.quantidadeInicial ?? 0) > 0) {
-        await db.insert(movimentos).values({
-          itemId,
-          tipo: d.tipoQuantidadeInicial,
-          quantidade: d.quantidadeInicial!,
-          referencia: "Cadastro inicial",
-          usuarioId: sessao.id,
-          observacao: "Quantidade informada no cadastro do item",
-        });
-      }
     }
 
     /* Vinculos e parametros: apaga e regrava. Sao poucas linhas por item e
@@ -274,39 +253,94 @@ export async function alternarAtivoItem(id: string, ativo: boolean) {
 }
 
 /**
- * Exclusao definitiva. O desktop bloqueava excluir itens de Nivel 0; aqui a
- * regra e mais util: bloqueia qualquer item que tenha historico de estoque,
- * porque apagar movimento e apagar contabilidade. Nesse caso, desative.
+ * O que segura a exclusao de um item, e o que vai junto se ela acontecer.
+ *
+ * Bloqueia so o que e documento — cotacao, pedido, montagem e estrutura —,
+ * porque ai o item aparece num papel que ja circulou. Movimentacao avulsa
+ * (entrada, ajuste) nao bloqueia: sem item nao ha saldo a somar, e o que
+ * aconteceu fica no log de auditoria.
+ *
+ * A trava antiga era "tem qualquer movimento"; na pratica nenhum item era
+ * excluivel, porque o proprio cadastro ja criava um.
  */
+export async function dependenciasItem(id: string): Promise<Dependencias> {
+  await exigirEdicao();
+
+  const [emCotacoes, emPedidos, emMontagens, naEstrutura, comMovimentos, comFornecedores] =
+    await Promise.all([
+      db.select({ n: count() }).from(cotacaoItens).where(eq(cotacaoItens.itemId, id)),
+      db.select({ n: count() }).from(pedidoItens).where(eq(pedidoItens.itemId, id)),
+      db.select({ n: count() }).from(montagens).where(eq(montagens.itemId, id)),
+      db.select({ n: count() }).from(bom).where(or(eq(bom.paiId, id), eq(bom.filhoId, id))),
+      db.select({ n: count() }).from(movimentos).where(eq(movimentos.itemId, id)),
+      db.select({ n: count() }).from(itemFornecedores).where(eq(itemFornecedores.itemId, id)),
+    ]);
+
+  return {
+    bloqueios: contagens([
+      { quantidade: emCotacoes[0].n, singular: "cotação", plural: "cotações" },
+      { quantidade: emPedidos[0].n, singular: "pedido de compra", plural: "pedidos de compra" },
+      { quantidade: emMontagens[0].n, singular: "montagem", plural: "montagens" },
+      {
+        quantidade: naEstrutura[0].n,
+        singular: "vínculo na estrutura",
+        plural: "vínculos na estrutura",
+      },
+    ]),
+    junto: contagens([
+      {
+        quantidade: comMovimentos[0].n,
+        singular: "movimentação de estoque",
+        plural: "movimentações de estoque",
+      },
+      {
+        quantidade: comFornecedores[0].n,
+        singular: "fornecedor vinculado",
+        plural: "fornecedores vinculados",
+      },
+    ]),
+  };
+}
+
+/** Exclusao definitiva, depois de conferir o que a tela ja mostrou. */
 export async function excluirItem(id: string): Promise<{ erro?: string }> {
   const sessao = await exigirEdicao();
 
   const [antes] = await db.select().from(itens).where(eq(itens.id, id));
   if (!antes) return { erro: "Item não encontrado." };
 
-  const historico = await db
-    .select({ id: movimentos.id })
-    .from(movimentos)
-    .where(eq(movimentos.itemId, id))
-    .limit(1);
-
-  if (historico.length > 0) {
+  const { bloqueios, junto } = await dependenciasItem(id);
+  if (bloqueios.length > 0) {
     return {
       erro:
-        "Este item já tem movimentações de estoque e não pode ser excluído. " +
+        `Este item aparece em ${emTexto(bloqueios)} e não pode ser excluído. ` +
         "Desative-o para tirá-lo das listas sem perder o histórico.",
     };
   }
 
-  await db.delete(itens).where(eq(itens.id, id));
+  try {
+    await db.delete(itens).where(eq(itens.id, id));
+  } catch (e) {
+    if (ehVinculado(e)) {
+      return {
+        erro: "Este item passou a ser usado em outro registro agora há pouco. Recarregue a tela.",
+      };
+    }
+    console.error(e);
+    return { erro: "Não foi possível excluir o item. Tente de novo." };
+  }
+
+  /* Guarda tambem o que foi junto: e a unica forma de reconstruir depois
+     que as linhas em cascata sumiram. */
   await registrar({
     usuarioId: sessao.id,
     tabela: "itens",
     registroId: id,
     acao: "excluir",
-    antes,
+    antes: { ...antes, apagadoJunto: junto },
   });
   revalidatePath("/itens");
+  revalidatePath("/");
   return {};
 }
 

@@ -1,16 +1,24 @@
 "use client";
 
-import { AlertCircle, ExternalLink, LoaderCircle, Save, Sparkles, Trash2 } from "lucide-react";
+import { AlertCircle, LoaderCircle, Save, Sparkles } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useActionState, useEffect, useRef, useState } from "react";
 
 import { FornecedoresItem, type VinculoFornecedor } from "./fornecedores-item";
 import { PARAMS_3D_PADRAO, Parametros3D, type Params3D } from "./parametros-3d";
+import { BotaoExcluir } from "@/components/exclusao/botao-excluir";
 import { Abas } from "@/components/ui/abas";
 import { Botao } from "@/components/ui/botao";
 import { AreaTexto, Entrada, Grupo, Selecao } from "@/components/ui/campo";
 import { CabecalhoCartao, Cartao, CorpoCartao } from "@/components/ui/cartao";
-import { excluirItem, salvarItem, sugerirCodigo, type EstadoItem } from "@/lib/acoes/itens";
+import {
+  alternarAtivoItem,
+  dependenciasItem,
+  excluirItem,
+  salvarItem,
+  sugerirCodigo,
+  type EstadoItem,
+} from "@/lib/acoes/itens";
 import { classificarPorRegras } from "@/lib/codigo";
 import {
   AQUISICOES,
@@ -29,10 +37,6 @@ export type DadosItem = {
   nivel: number;
   aquisicao: string | null;
   origemFabricacao: string | null;
-  linkCompra: string | null;
-  prazoValor: number;
-  prazoUnidade: "horas" | "dias";
-  custoUnitario: number;
   estoqueMinimo: number;
   localizacao: string | null;
   observacoes: string | null;
@@ -71,7 +75,6 @@ export function FormularioItem({
   const [vinculos, setVinculos] = useState<VinculoFornecedor[]>(item?.vinculos ?? []);
   const [params3d, setParams3d] = useState<Params3D>(item?.parametros3d ?? PARAMS_3D_PADRAO);
   const [dica, setDica] = useState<string | null>(null);
-  const [erroExcluir, setErroExcluir] = useState<string | null>(null);
 
   /* Espelha os flags code_auto / class_auto do desktop: a sugestao continua
      acontecendo ate a pessoa digitar o proprio valor, e a partir dai para. */
@@ -115,14 +118,6 @@ export function FormularioItem({
       setCodigo(novo);
       setDica(`Código sugerido: ${novo}. Você pode editar.`);
     }
-  }
-
-  async function aoExcluir() {
-    if (!item) return;
-    if (!confirm(`Excluir o item ${item.codigo} definitivamente?`)) return;
-    const r = await excluirItem(item.id);
-    if (r.erro) setErroExcluir(r.erro);
-    else router.push("/itens");
   }
 
   const erroNoCampo = (campo: string) => (estado.campo === campo ? estado.erro : undefined);
@@ -246,31 +241,6 @@ export function FormularioItem({
             </Selecao>
           </Grupo>
 
-          <Grupo rotulo="Localização no estoque" htmlFor="localizacao">
-            <Entrada
-              id="localizacao"
-              name="localizacao"
-              defaultValue={item?.localizacao ?? ""}
-              placeholder="Ex.: Prateleira A3, gaveta 2"
-            />
-          </Grupo>
-
-          <label className="flex items-center gap-2 self-end pb-2.5 text-sm text-texto-suave">
-            <input
-              type="checkbox"
-              name="ativo"
-              defaultChecked={item?.ativo ?? true}
-              className="size-4 accent-[var(--marca)]"
-            />
-            Item ativo
-          </label>
-        </CorpoCartao>
-      </Cartao>
-
-      {/* ------------------------------------------------ Origem e custo */}
-      <Cartao>
-        <CabecalhoCartao titulo="Origem, custo e reposição" />
-        <CorpoCartao className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <Grupo rotulo="Aquisição" htmlFor="aquisicao">
             <Selecao id="aquisicao" name="aquisicao" defaultValue={item?.aquisicao ?? ""}>
               <option value="">Não informado</option>
@@ -298,37 +268,6 @@ export function FormularioItem({
             </Selecao>
           </Grupo>
 
-          <Grupo rotulo="Custo unitário (R$)" htmlFor="custoUnitario">
-            <Entrada
-              id="custoUnitario"
-              name="custoUnitario"
-              inputMode="decimal"
-              defaultValue={item ? String(item.custoUnitario) : "0"}
-              className="num"
-            />
-          </Grupo>
-
-          <Grupo rotulo="Prazo geral de reposição">
-            <div className="flex gap-2">
-              <Entrada
-                name="prazoValor"
-                inputMode="decimal"
-                defaultValue={item ? String(item.prazoValor) : "0"}
-                className="num"
-                aria-label="Prazo"
-              />
-              <Selecao
-                name="prazoUnidade"
-                defaultValue={item?.prazoUnidade ?? "dias"}
-                className="w-28"
-                aria-label="Unidade do prazo"
-              >
-                <option value="dias">dias</option>
-                <option value="horas">horas</option>
-              </Selecao>
-            </div>
-          </Grupo>
-
           <Grupo
             rotulo="Estoque mínimo"
             htmlFor="estoqueMinimo"
@@ -343,24 +282,24 @@ export function FormularioItem({
             />
           </Grupo>
 
-          <Grupo rotulo="Link geral de compra ou arquivo" htmlFor="linkCompra">
-            <div className="flex gap-2">
-              <Entrada
-                id="linkCompra"
-                name="linkCompra"
-                type="url"
-                defaultValue={item?.linkCompra ?? ""}
-                placeholder="https://"
-              />
-              {item?.linkCompra && (
-                <a href={item.linkCompra} target="_blank" rel="noopener noreferrer">
-                  <Botao type="button" variante="contorno" tamanho="icone" title="Abrir link">
-                    <ExternalLink className="size-4" />
-                  </Botao>
-                </a>
-              )}
-            </div>
+          <Grupo rotulo="Localização no estoque" htmlFor="localizacao">
+            <Entrada
+              id="localizacao"
+              name="localizacao"
+              defaultValue={item?.localizacao ?? ""}
+              placeholder="Ex.: Prateleira A3, gaveta 2"
+            />
           </Grupo>
+
+          <label className="flex items-center gap-2 self-end pb-2.5 text-sm text-texto-suave">
+            <input
+              type="checkbox"
+              name="ativo"
+              defaultChecked={item?.ativo ?? true}
+              className="size-4 accent-[var(--marca)]"
+            />
+            Item ativo
+          </label>
         </CorpoCartao>
       </Cartao>
 
@@ -427,41 +366,13 @@ export function FormularioItem({
         </CorpoCartao>
       </Cartao>
 
-      {/* ------------------------------------------------ Estoque inicial */}
-      {!editando && (
-        <Cartao>
-          <CabecalhoCartao
-            titulo="Quantidade inicial"
-            descricao="Opcional. Entra como movimentação, para o saldo continuar sendo a soma do histórico."
-          />
-          <CorpoCartao className="grid gap-4 sm:grid-cols-2">
-            <Grupo rotulo="Quantidade">
-              <Entrada
-                name="quantidadeInicial"
-                inputMode="decimal"
-                defaultValue="0"
-                className="num"
-              />
-            </Grupo>
-            <Grupo rotulo="Lançar como">
-              <Selecao name="tipoQuantidadeInicial" defaultValue="nenhum">
-                <option value="nenhum">Não adicionar ao estoque</option>
-                <option value="entrada_compra">Entrada compra</option>
-                <option value="entrada_fabricacao">Entrada fabricação</option>
-                <option value="ajuste_positivo">Ajuste positivo</option>
-              </Selecao>
-            </Grupo>
-          </CorpoCartao>
-        </Cartao>
-      )}
-
-      {(estado.erro || erroExcluir) && (
+      {estado.erro && (
         <p
           role="alert"
           className="flex items-start gap-2 rounded-lg bg-perigo-suave px-4 py-3 text-sm font-medium text-perigo"
         >
           <AlertCircle className="mt-0.5 size-4 shrink-0" />
-          {erroExcluir ?? estado.erro}
+          {estado.erro}
         </p>
       )}
 
@@ -472,16 +383,16 @@ export function FormularioItem({
             <Botao type="button" variante="suave" onClick={() => router.push("/itens")}>
               Cancelar
             </Botao>
-            {editando && podeExcluir && (
-              <Botao
-                type="button"
-                variante="fantasma"
-                onClick={aoExcluir}
-                className="text-perigo hover:bg-perigo-suave hover:text-perigo"
-              >
-                <Trash2 className="size-4" />
-                Excluir
-              </Botao>
+            {item && podeExcluir && (
+              <BotaoExcluir
+                oQue="item"
+                nome={`${item.codigo} — ${item.descricao}`}
+                ativo={item.ativo}
+                dependencias={() => dependenciasItem(item.id)}
+                excluir={() => excluirItem(item.id)}
+                desativar={() => alternarAtivoItem(item.id, false)}
+                aoConcluir={() => router.push("/itens")}
+              />
             )}
           </div>
 

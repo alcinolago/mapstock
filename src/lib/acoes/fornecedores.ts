@@ -1,14 +1,21 @@
 "use server";
 
-import { eq } from "drizzle-orm";
+import { count, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { db } from "@/db";
-import { fornecedores, itemFornecedores } from "@/db/schema";
+import {
+  cotacaoItens,
+  cotacaoPrecos,
+  fornecedores,
+  itemFornecedores,
+  pedidosCompra,
+} from "@/db/schema";
 import { exigirEdicao } from "@/lib/auth";
 import { registrar } from "@/lib/auditoria";
-import { ehDuplicado } from "@/lib/erros";
+import { ehDuplicado, ehVinculado } from "@/lib/erros";
+import { contagens, emTexto, type Dependencias } from "@/lib/exclusao";
 
 const esquema = z.object({
   id: z.uuid().optional(),
@@ -93,38 +100,93 @@ export async function salvarFornecedor(
 }
 
 /**
- * So exclui fornecedor que nao esta vinculado a nenhum item — senao os
- * precos de referencia dos itens sumiriam junto. Para tirar de circulacao
- * sem perder historico, existe o campo "ativo".
+ * O que segura a exclusao de um fornecedor, e o que vai junto.
+ *
+ * Bloqueia so cotacao e pedido, que sao documento. Estar vinculado a itens
+ * nao bloqueia mais: aquilo e preco de referencia, some com o fornecedor e
+ * o item continua inteiro — antes essa trava impedia excluir praticamente
+ * qualquer fornecedor cadastrado.
  */
+export async function dependenciasFornecedor(id: string): Promise<Dependencias> {
+  await exigirEdicao();
+
+  const [emCotacoes, emPedidos, comItens] = await Promise.all([
+    db
+      .select({ n: count() })
+      .from(cotacaoPrecos)
+      .innerJoin(cotacaoItens, eq(cotacaoItens.id, cotacaoPrecos.cotacaoItemId))
+      .where(eq(cotacaoPrecos.fornecedorId, id)),
+    db.select({ n: count() }).from(pedidosCompra).where(eq(pedidosCompra.fornecedorId, id)),
+    db.select({ n: count() }).from(itemFornecedores).where(eq(itemFornecedores.fornecedorId, id)),
+  ]);
+
+  return {
+    bloqueios: contagens([
+      { quantidade: emCotacoes[0].n, singular: "preço cotado", plural: "preços cotados" },
+      { quantidade: emPedidos[0].n, singular: "pedido de compra", plural: "pedidos de compra" },
+    ]),
+    junto: contagens([
+      {
+        quantidade: comItens[0].n,
+        singular: "item com preço deste fornecedor",
+        plural: "itens com preço deste fornecedor",
+      },
+    ]),
+  };
+}
+
+/** Exclusao definitiva, depois de conferir o que a tela ja mostrou. */
 export async function excluirFornecedor(id: string): Promise<{ erro?: string }> {
   const sessao = await exigirEdicao();
 
   const [antes] = await db.select().from(fornecedores).where(eq(fornecedores.id, id));
   if (!antes) return { erro: "Fornecedor não encontrado." };
 
-  const vinculos = await db
-    .select({ id: itemFornecedores.id })
-    .from(itemFornecedores)
-    .where(eq(itemFornecedores.fornecedorId, id))
-    .limit(1);
-
-  if (vinculos.length > 0) {
+  const { bloqueios, junto } = await dependenciasFornecedor(id);
+  if (bloqueios.length > 0) {
     return {
       erro:
-        "Este fornecedor está vinculado a itens e não pode ser excluído. " +
-        "Desative-o para tirá-lo das listas sem perder os preços já registrados.",
+        `Este fornecedor aparece em ${emTexto(bloqueios)} e não pode ser excluído. ` +
+        "Desative-o para tirá-lo das listas sem perder o histórico de compra.",
     };
   }
 
-  await db.delete(fornecedores).where(eq(fornecedores.id, id));
+  try {
+    await db.delete(fornecedores).where(eq(fornecedores.id, id));
+  } catch (e) {
+    if (ehVinculado(e)) {
+      return {
+        erro:
+          "Este fornecedor passou a ser usado em outro registro agora há pouco. " +
+          "Recarregue a tela.",
+      };
+    }
+    console.error(e);
+    return { erro: "Não foi possível excluir o fornecedor. Tente de novo." };
+  }
+
   await registrar({
     usuarioId: sessao.id,
     tabela: "fornecedores",
     registroId: id,
     acao: "excluir",
-    antes,
+    antes: { ...antes, apagadoJunto: junto },
   });
   revalidatePath("/fornecedores");
+  revalidatePath("/itens");
   return {};
+}
+
+/** Saida de quem nao pode ser excluido: some das listas, historico fica. */
+export async function alternarAtivoFornecedor(id: string, ativo: boolean) {
+  const sessao = await exigirEdicao();
+  await db.update(fornecedores).set({ ativo }).where(eq(fornecedores.id, id));
+  await registrar({
+    usuarioId: sessao.id,
+    tabela: "fornecedores",
+    registroId: id,
+    acao: "atualizar",
+    depois: { ativo },
+  });
+  revalidatePath("/fornecedores");
 }

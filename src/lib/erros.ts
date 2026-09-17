@@ -23,3 +23,14 @@ function mensagens(erro: unknown, profundidade = 0): string {
 export function ehDuplicado(erro: unknown): boolean {
   return /duplicate key|already exists|23505/i.test(mensagens(erro));
 }
+
+/**
+ * Violação de chave estrangeira — código 23503 do Postgres.
+ *
+ * As actions de exclusão checam os vínculos antes, mas duas pessoas na mesma
+ * base podem cotar um item entre a checagem e o delete. Sem isto a action
+ * estourava e a pessoa via erro genérico de servidor.
+ */
+export function ehVinculado(erro: unknown): boolean {
+  return /foreign key constraint|23503/i.test(mensagens(erro));
+}

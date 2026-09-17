@@ -1,13 +1,16 @@
 "use client";
 
-import { AlertCircle, LoaderCircle, MessageCircle, Save, Trash2 } from "lucide-react";
+import { AlertCircle, LoaderCircle, MessageCircle, Save } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useActionState, useEffect, useState } from "react";
 
+import { BotaoExcluir } from "@/components/exclusao/botao-excluir";
 import { Botao } from "@/components/ui/botao";
 import { AreaTexto, Entrada, Grupo, Selecao } from "@/components/ui/campo";
 import { CabecalhoCartao, Cartao, CorpoCartao } from "@/components/ui/cartao";
 import {
+  alternarAtivoFornecedor,
+  dependenciasFornecedor,
   excluirFornecedor,
   salvarFornecedor,
   type EstadoFornecedor,
@@ -49,7 +52,6 @@ export function FormularioFornecedor({
     {},
   );
   const [telefone, setTelefone] = useState(fornecedor?.telefone ?? "");
-  const [erroExcluir, setErroExcluir] = useState<string | null>(null);
 
   useEffect(() => {
     if (estado.ok) router.push("/fornecedores");
@@ -57,14 +59,6 @@ export function FormularioFornecedor({
 
   const whatsapp = linkWhatsapp(telefone);
   const erroNoCampo = (campo: string) => (estado.campo === campo ? estado.erro : undefined);
-
-  async function aoExcluir() {
-    if (!fornecedor) return;
-    if (!confirm(`Excluir o fornecedor ${fornecedor.nome}?`)) return;
-    const r = await excluirFornecedor(fornecedor.id);
-    if (r.erro) setErroExcluir(r.erro);
-    else router.push("/fornecedores");
-  }
 
   return (
     <form action={acao} className="space-y-5">
@@ -164,13 +158,13 @@ export function FormularioFornecedor({
         </CorpoCartao>
       </Cartao>
 
-      {(estado.erro || erroExcluir) && (
+      {estado.erro && (
         <p
           role="alert"
           className="flex items-start gap-2 rounded-lg bg-perigo-suave px-4 py-3 text-sm font-medium text-perigo"
         >
           <AlertCircle className="mt-0.5 size-4 shrink-0" />
-          {erroExcluir ?? estado.erro}
+          {estado.erro}
         </p>
       )}
 
@@ -180,15 +174,15 @@ export function FormularioFornecedor({
             Cancelar
           </Botao>
           {fornecedor && podeExcluir && (
-            <Botao
-              type="button"
-              variante="fantasma"
-              onClick={aoExcluir}
-              className="text-perigo hover:bg-perigo-suave hover:text-perigo"
-            >
-              <Trash2 className="size-4" />
-              Excluir
-            </Botao>
+            <BotaoExcluir
+              oQue="fornecedor"
+              nome={fornecedor.nome}
+              ativo={fornecedor.ativo}
+              dependencias={() => dependenciasFornecedor(fornecedor.id)}
+              excluir={() => excluirFornecedor(fornecedor.id)}
+              desativar={() => alternarAtivoFornecedor(fornecedor.id, false)}
+              aoConcluir={() => router.push("/fornecedores")}
+            />
           )}
         </div>
 

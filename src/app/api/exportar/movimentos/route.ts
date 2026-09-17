@@ -1,25 +1,42 @@
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq, ilike, or } from "drizzle-orm";
 
 import { db } from "@/db";
-import { recorteDoMes } from "@/db/consultas";
+import { recorteEntre } from "@/db/consultas";
 import { itens, movimentos, unidades, usuarios } from "@/db/schema";
 import { exigirSessao } from "@/lib/auth";
 import { paraCsv, respostaCsv } from "@/lib/csv";
 import { MOVIMENTOS } from "@/lib/labels";
-import { mesValido } from "@/lib/periodo";
+import { dataValida } from "@/lib/periodo";
 
 /**
  * Histórico de movimentação, para conferência e contabilidade.
  *
- * Aceita o mesmo `mes` da tela para o arquivo bater com o que estava na
- * frente de quem clicou — planilha de fechamento nasce de um mês só.
+ * Aceita os mesmos filtros da tela para o arquivo bater com o que estava na
+ * frente de quem clicou — planilha de fechamento nasce de um recorte, não do
+ * histórico inteiro. Sem limite aqui de propósito: a tela corta em 300 para
+ * não pesar, mas exportação truncada calada estragaria a conferência.
  */
 export async function GET(requisicao: Request) {
   await exigirSessao();
 
-  const mes = mesValido(
-    new URL(requisicao.url).searchParams.get("mes") ?? undefined,
-  );
+  const p = new URL(requisicao.url).searchParams;
+  const de = dataValida(p.get("de") ?? undefined);
+  const ate = dataValida(p.get("ate") ?? undefined);
+  const item = p.get("item")?.trim() || undefined;
+  const busca = p.get("busca")?.trim() || undefined;
+
+  const condicoes = [
+    recorteEntre(movimentos.criadoEm, de, ate),
+    item ? eq(movimentos.itemId, item) : undefined,
+    busca
+      ? or(
+          ilike(movimentos.referencia, `%${busca}%`),
+          ilike(movimentos.observacao, `%${busca}%`),
+          ilike(itens.codigo, `%${busca}%`),
+          ilike(itens.descricao, `%${busca}%`),
+        )
+      : undefined,
+  ].filter(Boolean);
 
   const linhas = await db
     .select({
@@ -37,7 +54,7 @@ export async function GET(requisicao: Request) {
     .innerJoin(itens, eq(itens.id, movimentos.itemId))
     .innerJoin(unidades, eq(unidades.id, itens.unidadeId))
     .leftJoin(usuarios, eq(usuarios.id, movimentos.usuarioId))
-    .where(recorteDoMes(movimentos.criadoEm, mes))
+    .where(condicoes.length ? and(...condicoes) : undefined)
     .orderBy(desc(movimentos.criadoEm));
 
   const csv = paraCsv(
@@ -48,5 +65,9 @@ export async function GET(requisicao: Request) {
     ]),
   );
 
-  return respostaCsv(csv, mes ? `mapstock_movimentacoes_${mes}` : "mapstock_movimentacoes");
+  /* O nome ja leva data e hora de quem baixou; aqui entra so o recorte, e
+     sem repetir o dia quando o periodo e de um dia so. */
+  const periodo =
+    de && ate ? (de === ate ? de : `${de}_a_${ate}`) : de ? `desde_${de}` : ate ? `ate_${ate}` : "";
+  return respostaCsv(csv, periodo ? `mapstock_movimentacoes_${periodo}` : "mapstock_movimentacoes");
 }

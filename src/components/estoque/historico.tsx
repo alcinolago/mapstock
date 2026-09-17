@@ -2,14 +2,12 @@
 
 import { Undo2 } from "lucide-react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 
+import { FiltrosHistorico } from "./filtros-historico";
 import { SeloMovimento } from "@/components/situacao";
 import { BotaoConfirmar } from "@/components/ui/confirmar";
-import { Entrada, Selecao } from "@/components/ui/campo";
 import { CabecalhoCartao, Cartao } from "@/components/ui/cartao";
-import { FiltroMes } from "@/components/ui/filtro-mes";
 import {
   Cabecalho,
   Celula,
@@ -21,8 +19,7 @@ import {
   Vazio,
 } from "@/components/ui/tabela";
 import { estornarMovimento } from "@/lib/acoes/estoque";
-import { MOVIMENTOS, opcoes, type TipoMovimento } from "@/lib/labels";
-import { rotuloMes } from "@/lib/periodo";
+import { MOVIMENTOS, type TipoMovimento } from "@/lib/labels";
 import { dataHora, numero } from "@/lib/utils";
 
 export type LinhaMovimento = {
@@ -43,32 +40,22 @@ export function Historico({
   movimentos,
   podeEditar,
   meses,
+  itensDoFiltro,
+  temFiltro,
+  limite,
 }: {
   movimentos: LinhaMovimento[];
   podeEditar: boolean;
   /** Do mais novo para o mais velho, so os que existem na base. */
   meses: string[];
+  itensDoFiltro: { id: string; codigo: string; descricao: string }[];
+  /** Alguma coisa foi filtrada — muda so o texto da tabela vazia. */
+  temFiltro: boolean;
+  /** Teto da consulta: atingi-lo significa que ha mais fora da tela. */
+  limite: number;
 }) {
   const router = useRouter();
-  const params = useSearchParams();
-  const [tipo, setTipo] = useState("");
-  const [busca, setBusca] = useState("");
-
-  /* Tipo e busca peneiram o que ja veio; o mes muda a consulta, porque o
-     historico chega limitado e um mes antigo nao caberia no corte. */
-  const mes = params.get("mes") ?? "";
-
-  const filtrados = useMemo(() => {
-    const t = busca.trim().toUpperCase();
-    return movimentos.filter(
-      (m) =>
-        (!tipo || m.tipo === tipo) &&
-        (!t ||
-          m.codigo.toUpperCase().includes(t) ||
-          m.descricao.toUpperCase().includes(t) ||
-          (m.referencia ?? "").toUpperCase().includes(t)),
-    );
-  }, [movimentos, tipo, busca]);
+  const truncado = movimentos.length >= limite;
 
   async function estornar(id: string) {
     const r = await estornarMovimento(id);
@@ -80,32 +67,12 @@ export function Historico({
     <Cartao className="overflow-hidden">
       <CabecalhoCartao
         titulo="Histórico de movimentações"
-        descricao={`${filtrados.length} de ${movimentos.length}${mes ? ` em ${rotuloMes(mes)}` : ""}`}
-        acao={
-          <div className="flex flex-wrap items-center gap-2">
-            <FiltroMes meses={meses} />
-            <Entrada
-              value={busca}
-              onChange={(e) => setBusca(e.target.value)}
-              placeholder="Buscar item ou referência"
-              className="h-9 w-52 text-xs"
-              aria-label="Buscar movimentações"
-            />
-            <Selecao
-              value={tipo}
-              onChange={(e) => setTipo(e.target.value)}
-              className="h-9 w-auto min-w-40 text-xs"
-              aria-label="Filtrar por tipo"
-            >
-              <option value="">Todos os tipos</option>
-              {opcoes(MOVIMENTOS).map((o) => (
-                <option key={o.valor} value={o.valor}>
-                  {o.rotulo}
-                </option>
-              ))}
-            </Selecao>
-          </div>
+        descricao={
+          truncado
+            ? `As ${limite} movimentações mais recentes do filtro — estreite o período para ver o resto.`
+            : `${movimentos.length} ${movimentos.length === 1 ? "movimentação" : "movimentações"}`
         }
+        acao={<FiltrosHistorico itens={itensDoFiltro} meses={meses} />}
       />
 
       <RolagemTabela>
@@ -122,16 +89,14 @@ export function Historico({
             </tr>
           </Cabecalho>
           <Corpo>
-            {filtrados.length === 0 ? (
+            {movimentos.length === 0 ? (
               <Vazio colSpan={podeEditar ? 7 : 6}>
-                {movimentos.length > 0
+                {temFiltro
                   ? "Nada encontrado com esses filtros."
-                  : mes
-                    ? `Nenhuma movimentação em ${rotuloMes(mes)}.`
-                    : "Nenhuma movimentação lançada ainda."}
+                  : "Nenhuma movimentação lançada ainda."}
               </Vazio>
             ) : (
-              filtrados.map((m) => (
+              movimentos.map((m) => (
                 <Linha key={m.id}>
                   <Celula className="text-xs whitespace-nowrap text-texto-fraco">
                     {dataHora(m.criadoEm)}

@@ -606,6 +606,36 @@ export function recorteAte(coluna: PgColumn, data: string | undefined): SQL | un
 }
 
 /**
+ * Intervalo fechado de datas, com as duas pontas opcionais.
+ *
+ * O fim e `< o dia seguinte` pelo mesmo motivo de `recorteAte`: a comparacao
+ * carrega a hora, e `<= o dia` deixaria de fora tudo que foi lancado depois
+ * da meia-noite do ultimo dia escolhido.
+ */
+export function recorteEntre(
+  coluna: PgColumn,
+  de: string | undefined,
+  ate: string | undefined,
+): SQL | undefined {
+  const partes: SQL[] = [];
+  if (de) partes.push(sql`${coluna} >= (${de}::timestamp AT TIME ZONE ${FUSO})`);
+  if (ate) partes.push(sql`${coluna} < (${diaSeguinte(ate)}::timestamp AT TIME ZONE ${FUSO})`);
+  return partes.length ? and(...partes) : undefined;
+}
+
+/**
+ * So os itens que ja tem movimento, para o seletor da tela de estoque nao
+ * oferecer produto que nunca vai devolver linha nenhuma.
+ */
+export async function itensComMovimento() {
+  return db
+    .selectDistinct({ id: itens.id, codigo: itens.codigo, descricao: itens.descricao })
+    .from(movimentos)
+    .innerJoin(itens, eq(itens.id, movimentos.itemId))
+    .orderBy(asc(itens.codigo));
+}
+
+/**
  * O registro mais antigo de cada lista, para o seletor de mes nao oferecer
  * mes vazio. Uma consulta por tela, porque cada uma tem a sua coluna de data.
  */

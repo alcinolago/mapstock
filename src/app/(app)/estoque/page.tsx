@@ -1,4 +1,4 @@
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq, ilike, or } from "drizzle-orm";
 import { Download } from "lucide-react";
 
 import { FormularioMovimento } from "@/components/estoque/formulario-movimento";
@@ -6,12 +6,21 @@ import { Historico } from "@/components/estoque/historico";
 import { Botao } from "@/components/ui/botao";
 import { CabecalhoPagina } from "@/components/ui/cabecalho-pagina";
 import { db } from "@/db";
-import { listarItensComSaldo, primeiroMovimento, recorteDoMes } from "@/db/consultas";
+import {
+  itensComMovimento,
+  listarItensComSaldo,
+  primeiroMovimento,
+  recorteEntre,
+} from "@/db/consultas";
 import { itens, movimentos, unidades, usuarios } from "@/db/schema";
 import { exigirSessao } from "@/lib/auth";
-import { mesesAte, mesValido } from "@/lib/periodo";
+import { dataValida, mesesAte } from "@/lib/periodo";
 
 export const metadata = { title: "Estoque" };
+
+/* Teto da consulta. A tela avisa quando encosta nele, senao a pessoa leria a
+   lista cortada como se fosse o total. */
+const LIMITE_HISTORICO = 300;
 
 export default async function PaginaEstoque({
   searchParams,
@@ -22,12 +31,30 @@ export default async function PaginaEstoque({
   const podeEditar = sessao.papel !== "leitura";
 
   const p = await searchParams;
-  /* O recorte vai para a consulta, nao para o cliente: o historico chega
-     limitado, e filtrar mes depois mostraria so o que coubesse no limite —
-     um mes antigo viria vazio mesmo tendo lancamento. */
-  const mes = mesValido(p.mes);
 
-  const [comSaldo, historico, maisAntigo] = await Promise.all([
+  /* Todos os filtros correm na consulta, nunca no cliente: o historico chega
+     limitado, e peneirar depois so olharia as ultimas linhas — escolher um
+     produto antigo devolveria vazio mesmo tendo movimento. */
+  const de = dataValida(p.de);
+  const ate = dataValida(p.ate);
+  const item = p.item?.trim() || undefined;
+  const busca = p.busca?.trim() || undefined;
+  const temFiltro = Boolean(de || ate || item || busca);
+
+  const condicoes = [
+    recorteEntre(movimentos.criadoEm, de, ate),
+    item ? eq(movimentos.itemId, item) : undefined,
+    busca
+      ? or(
+          ilike(movimentos.referencia, `%${busca}%`),
+          ilike(movimentos.observacao, `%${busca}%`),
+          ilike(itens.codigo, `%${busca}%`),
+          ilike(itens.descricao, `%${busca}%`),
+        )
+      : undefined,
+  ].filter(Boolean);
+
+  const [comSaldo, historico, maisAntigo, itensDoFiltro] = await Promise.all([
     listarItensComSaldo(),
     db
       .select({
@@ -47,10 +74,11 @@ export default async function PaginaEstoque({
       .innerJoin(itens, eq(itens.id, movimentos.itemId))
       .innerJoin(unidades, eq(unidades.id, itens.unidadeId))
       .leftJoin(usuarios, eq(usuarios.id, movimentos.usuarioId))
-      .where(recorteDoMes(movimentos.criadoEm, mes))
+      .where(condicoes.length ? and(...condicoes) : undefined)
       .orderBy(desc(movimentos.criadoEm))
-      .limit(300),
+      .limit(LIMITE_HISTORICO),
     primeiroMovimento(),
+    itensComMovimento(),
   ]);
 
   /* Nivel 0 e o equipamento montado — nao se movimenta em estoque. */
@@ -71,7 +99,9 @@ export default async function PaginaEstoque({
         descricao="Entradas, saídas, reservas e ajustes. O saldo é sempre a soma do histórico."
         acao={
           /* Leva o recorte junto: baixa o que esta sendo visto. */
-          <a href={`/api/exportar/movimentos${mes ? `?mes=${mes}` : ""}`}>
+          <a href={`/api/exportar/movimentos?${new URLSearchParams(
+            Object.entries({ de, ate, item, busca }).filter(([, v]) => v) as [string, string][],
+          )}`}>
             <Botao variante="contorno">
               <Download className="size-4" />
               Exportar CSV
@@ -94,6 +124,9 @@ export default async function PaginaEstoque({
           movimentos={historico}
           podeEditar={podeEditar}
           meses={mesesAte(maisAntigo)}
+          itensDoFiltro={itensDoFiltro}
+          temFiltro={temFiltro}
+          limite={LIMITE_HISTORICO}
         />
       </div>
     </div>

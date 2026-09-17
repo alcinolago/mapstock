@@ -127,3 +127,32 @@ export function diaSeguinte(dia: string): string {
   d.setUTCDate(d.getUTCDate() + 1);
   return d.toISOString().slice(0, 10);
 }
+
+/* ---------------------------------------------------------- Intervalo --- */
+
+/**
+ * O mes que um intervalo cobre por inteiro, se cobrir algum.
+ *
+ * E o que deixa o seletor de mes e os campos de data conviverem sem disputa:
+ * escolher um mes preenche as duas datas, e o seletor so volta a se
+ * reconhecer quando elas continuam batendo com aquele mes. Fora disso ele
+ * mostra "personalizado", em vez de mentir que o filtro e mensal.
+ */
+export function mesDoIntervalo(de?: string, ate?: string): string | undefined {
+  if (!de || !ate) return undefined;
+  const mes = de.slice(0, 7);
+  const { inicio, fim } = limitesDoMes(mes);
+  return de === inicio && ate === ultimoDiaDoMes(mes) && fim ? mes : undefined;
+}
+
+/** As duas datas que um mes representa, para o atalho preencher os campos. */
+export function intervaloDoMes(mes: string): { de: string; ate: string } {
+  return { de: `${mes}-01`, ate: ultimoDiaDoMes(mes) };
+}
+
+function ultimoDiaDoMes(mes: string): string {
+  const { fim } = limitesDoMes(mes);
+  const d = new Date(`${fim}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().slice(0, 10);
+}

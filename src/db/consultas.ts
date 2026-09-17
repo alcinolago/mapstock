@@ -592,14 +592,14 @@ export function recorteEntre(
 }
 
 /**
- * Codigo e descricao de todo item cadastrado, para o seletor da tela de
- * itens. Vem completa e nao filtrada: e ela que deixa escolher o item sem
- * digitar, entao encolher conforme os outros filtros tiraria justamente a
- * opcao que a pessoa esta procurando.
+ * O codigo de todo item cadastrado, para o seletor da tela de itens. Vem
+ * completa e nao filtrada: e ela que deixa escolher o item sem digitar,
+ * entao encolher conforme os outros filtros tiraria justamente a opcao que a
+ * pessoa esta procurando.
  */
 export async function codigosDeItens() {
   return db
-    .select({ id: itens.id, codigo: itens.codigo, descricao: itens.descricao, ativo: itens.ativo })
+    .select({ id: itens.id, codigo: itens.codigo, ativo: itens.ativo })
     .from(itens)
     .orderBy(asc(itens.codigo));
 }

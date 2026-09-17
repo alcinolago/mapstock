@@ -15,7 +15,7 @@ export function FiltrosItens({
   classificacoes: { id: string; nome: string }[];
   niveis: { num: number; nome: string }[];
   /** Todo o cadastro, para escolher pelo codigo sem digitar. */
-  itens: { id: string; codigo: string; descricao: string; ativo: boolean }[];
+  itens: { id: string; codigo: string; ativo: boolean }[];
 }) {
   const router = useRouter();
   const caminho = usePathname();
@@ -61,12 +61,12 @@ export function FiltrosItens({
         aria-label="Código do item"
         value={params.get("item") ?? ""}
         onChange={(e) => aplicar("item", e.target.value)}
-        className="w-auto min-w-52 max-w-72"
+        className="codigo w-auto min-w-36"
       >
         <option value="">Todos os códigos</option>
         {itens.map((i) => (
           <option key={i.id} value={i.id}>
-            {i.codigo} — {i.descricao}
+            {i.codigo}
             {i.ativo ? "" : " (inativo)"}
           </option>
         ))}

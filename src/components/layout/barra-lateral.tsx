@@ -1,9 +1,8 @@
 "use client";
 
-import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { PanelLeftClose, PanelLeftOpen, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect } from "react";
 
 import { NAVEGACAO } from "./navegacao";
 import { Marca, MarcaCompleta } from "./marca";
@@ -18,7 +17,7 @@ export function BarraLateral({
   aoDefinirRecolhida,
 }: {
   papel: PapelUsuario;
-  /** Só no celular: a barra entra por cima da tela. */
+  /** Só no celular e no tablet: a barra entra por cima da tela. */
   aberta: boolean;
   aoFechar: () => void;
   /** Só no desktop: a barra encolhe para a faixa de ícones. */
@@ -27,17 +26,11 @@ export function BarraLateral({
 }) {
   const caminho = usePathname();
 
-  /* No desktop a barra fica como a pessoa deixou: navegar não recolhe nada.
-     Ela recolhia sozinha ao escolher uma tela: ajudava num notebook de 13
-     polegadas e atrapalhava em todo monitor grande. Quem quiser a faixa de
-     ícones clica no botão de recolher, e o cookie lembra da escolha.
-
-     No celular e no tablet é outra história: lá a barra entra por cima do
-     conteúdo, então escolher um destino tem que fechar ela. */
-  useEffect(() => {
-    aoFechar();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [caminho]);
+  /* A barra fica como a pessoa deixou, em qualquer largura: navegar não
+     fecha nem recolhe nada. Antes ela se fechava sozinha ao escolher uma
+     tela — e como o menu é o lugar de onde se anda pelo sistema, isso
+     obrigava a reabrir a cada passo. Quem quiser fechar usa o X (no celular
+     e no tablet) ou o botão de recolher (no desktop), e o cookie lembra. */
 
   const itens = NAVEGACAO.filter(
     (i) => !("somenteAdmin" in i && i.somenteAdmin) || papel === "admin",
@@ -45,14 +38,9 @@ export function BarraLateral({
 
   return (
     <>
-      {aberta && (
-        <button
-          type="button"
-          aria-label="Fechar menu"
-          onClick={aoFechar}
-          className="fixed inset-0 z-30 bg-black/40 lg:hidden"
-        />
-      )}
+      {/* Só escurece o que está atrás. Fechar no clique de fora derrubava a
+          barra sem querer, que é o oposto do que se pediu dela. */}
+      {aberta && <div aria-hidden className="fixed inset-0 z-30 bg-veu lg:hidden" />}
 
       <aside
         className={cn(
@@ -65,12 +53,22 @@ export function BarraLateral({
       >
         <div
           className={cn(
-            "flex h-16 shrink-0 items-center border-b border-borda",
+            "flex h-16 shrink-0 items-center gap-2 border-b border-borda",
             recolhida ? "px-5 lg:justify-center lg:px-0" : "px-5",
           )}
         >
           <MarcaCompleta className={recolhida ? "lg:hidden" : ""} />
           <Marca className={cn("size-7 text-marca", recolhida ? "hidden lg:block" : "hidden")} />
+
+          {/* No desktop a barra é fixa e não tem o que fechar. */}
+          <button
+            type="button"
+            onClick={aoFechar}
+            aria-label="Fechar menu"
+            className="ml-auto shrink-0 rounded-lg p-2 text-texto-suave transition-colors hover:bg-superficie-2 hover:text-texto lg:hidden"
+          >
+            <X className="size-5" />
+          </button>
         </div>
 
         <nav className="rolagem-fina flex-1 space-y-0.5 overflow-y-auto overflow-x-hidden p-3">
@@ -85,7 +83,6 @@ export function BarraLateral({
                 /* Recolhida, o rótulo vira tooltip do navegador — é a única
                    pista que sobra de para onde o ícone leva. */
                 title={recolhida ? rotulo : undefined}
-                onClick={aoFechar}
                 className={cn(
                   "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
                   recolhida && "lg:justify-center lg:px-0",

@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import {
   boolean,
   date,
@@ -89,11 +90,21 @@ export const statusMontagem = pgEnum("status_montagem", [
 
 export const acaoAuditoria = pgEnum("acao_auditoria", ["criar", "atualizar", "excluir"]);
 
-/* Dinheiro e quantidade em numeric (exato no banco) lido como number no TS. */
+/*
+ * Dinheiro e quantidade em numeric (exato no banco) lido como number no TS.
+ *
+ * O zero vai como SQL literal, e nao como `.default(0)`, por causa do
+ * comparador do drizzle-kit: ele le o default de uma coluna numeric do banco
+ * como a string '0' e comparava contra o numero 0, achando diferenca em 17
+ * colunas a cada `db:push`. Statement nenhum resolvia — aplicar nao mudava o
+ * banco, que ja guardava 0 —, e essa enxurrada de ruido escondia divergencia
+ * de verdade no meio dela.
+ */
+const zero = sql`'0'`;
 const dinheiro = (nome: string) =>
-  numeric(nome, { precision: 14, scale: 4, mode: "number" }).notNull().default(0);
+  numeric(nome, { precision: 14, scale: 4, mode: "number" }).notNull().default(zero);
 const quantidade = (nome: string) =>
-  numeric(nome, { precision: 14, scale: 4, mode: "number" }).notNull().default(0);
+  numeric(nome, { precision: 14, scale: 4, mode: "number" }).notNull().default(zero);
 
 const criadoEm = timestamp("criado_em", { withTimezone: true }).notNull().defaultNow();
 
@@ -306,7 +317,11 @@ export const cotacaoItens = pgTable(
       .references(() => itens.id, { onDelete: "restrict" }),
     quantidade: quantidade("quantidade"),
   },
-  (t) => [unique("cotacao_item_unico").on(t.cotacaoId, t.itemId)],
+  /* Colunas em ordem decrescente de nome, e nao na ordem "natural": e assim
+     que o drizzle-kit le uma unique composta do banco, e declarar diferente
+     fazia todo `db:push` querer recriar a constraint (oferecendo truncar a
+     tabela). Unicidade de um par nao depende de ordem. */
+  (t) => [unique("cotacao_item_unico").on(t.itemId, t.cotacaoId)],
 );
 
 /* Um preco por fornecedor por item cotado. E a matriz do comparativo. */
@@ -327,7 +342,8 @@ export const cotacaoPrecos = pgTable(
     observacao: text("observacao"),
     escolhido: boolean("escolhido").notNull().default(false),
   },
-  (t) => [unique("cotacao_preco_unico").on(t.cotacaoItemId, t.fornecedorId)],
+  /* Ordem decrescente de nome — ver a nota em cotacaoItens. */
+  (t) => [unique("cotacao_preco_unico").on(t.fornecedorId, t.cotacaoItemId)],
 );
 
 export const pedidosCompra = pgTable("pedidos_compra", {

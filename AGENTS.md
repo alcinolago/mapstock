@@ -63,6 +63,15 @@ listagem, é bug.
   contagem antes de confirmar (`components/exclusao/botao-excluir.tsx`).
 - **Custo unitário do item não é digitado**: vem do recebimento do pedido
   (`acoes/compras.ts`). O cadastro de item não tem esse campo.
+- **O custo exibido é derivado, não lido de `itens.custoUnitario`.** Quem
+  manda é o preço do último `entrada_compra` até a data (`custoAte`, em
+  `consultas.ts`), seguindo `movimentos.pedidoItemId` até
+  `pedidoItens.precoUnitario` — que, ao contrário do campo, não é
+  sobrescrito. Com o campo sozinho, qualquer caminho que criasse movimento
+  sem passar por `receberItemDoPedido` o deixava parado no tempo, e a posição
+  retroativa ainda valorizava a quantidade de agosto pelo preço de hoje.
+  `itens.custoUnitario` continua sendo gravado e vale de reserva para o item
+  que nunca foi comprado (fabricado, impresso, equipamento montado).
 - **Nível 0 é o equipamento montado**: nunca conta falta nem entra no alerta
   de reposição, porque equipamento não se compra. Movimenta só por montagem
   (`src/lib/acoes/montagens.ts`), nunca por compra.

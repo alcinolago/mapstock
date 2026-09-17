@@ -58,21 +58,24 @@ export function saldosAte(data?: string) {
 export const saldos = saldosAte();
 
 /**
- * O custo que o item tinha numa data, reconstruido dos recebimentos.
+ * O custo do item vindo do recebimento — sem data, o da ultima compra.
  *
- * `itens.custoUnitario` nao serve para isso: ele e sobrescrito a cada
- * recebimento, entao guarda sempre o preco da ultima compra. Numa posicao
- * retroativa isso valorizava a quantidade de agosto pelo preco de hoje.
+ * Isto e a fonte do custo, e nao `itens.custoUnitario`. Aquele campo e
+ * gravado pelo recebimento e ficava sozinho com a verdade, entao bastava um
+ * caminho que criasse movimento sem passar por `receberItemDoPedido` para
+ * ele parar no tempo — foi o que aconteceu com dado semeado, que mostrava
+ * custo zero num item comprado a 465. Derivar apaga essa classe de erro em
+ * vez de corrigir caso a caso.
  *
  * `pedidoItens.precoUnitario` nao e sobrescrito, e o movimento de
- * recebimento aponta para a linha do pedido — da para achar qual foi o
- * ultimo recebimento ate a data e usar o preco daquele.
+ * recebimento aponta para a linha do pedido. Com data, para no ultimo
+ * recebimento ate ali; e assim que a posicao retroativa deixa de valorizar a
+ * quantidade de agosto pelo preco de hoje.
  *
  * So `entrada_compra`: devolucao tambem carrega `pedidoItemId`, e devolver
- * nao redefine custo nenhum (o proprio recebimento nao mexe no custo ao ser
- * estornado, e aqui e o mesmo criterio).
+ * nao redefine custo nenhum.
  */
-function custoAte(data: string) {
+function custoAte(data?: string) {
   return db
     .selectDistinctOn([movimentos.itemId], {
       itemId: movimentos.itemId,
@@ -146,7 +149,9 @@ export async function listarItensComSaldo(filtros?: {
   if (recorte) condicoes.push(recorte);
 
   const saldoNaData = filtros?.em ? saldosAte(filtros.em) : saldos;
-  const custoNaData = filtros?.em ? custoAte(filtros.em) : null;
+  /* Sempre derivado, com ou sem data: e o que mantem a posicao de hoje e a
+     listagem normal dando o mesmo numero. */
+  const custoNaData = custoAte(filtros?.em);
   if (filtros?.classificacaoId) {
     condicoes.push(eq(itens.classificacaoId, filtros.classificacaoId));
   }
@@ -171,9 +176,7 @@ export async function listarItensComSaldo(filtros?: {
       unidade: unidades.sigla,
       nivel: itens.nivel,
       custoUnitario: itens.custoUnitario,
-      custoRecebido: custoNaData
-        ? sql<number | null>`${custoNaData.preco}`
-        : sql<number | null>`null::numeric`,
+      custoRecebido: sql<number | null>`${custoNaData.preco}`,
       estoqueMinimo: itens.estoqueMinimo,
       localizacao: itens.localizacao,
       ativo: itens.ativo,
@@ -184,9 +187,8 @@ export async function listarItensComSaldo(filtros?: {
     .innerJoin(classificacoes, eq(classificacoes.id, itens.classificacaoId))
     .innerJoin(unidades, eq(unidades.id, itens.unidadeId))
     .leftJoin(saldoNaData, eq(saldoNaData.itemId, itens.id))
+    .leftJoin(custoNaData, eq(custoNaData.itemId, itens.id))
     .$dynamic();
-
-  if (custoNaData) consulta.leftJoin(custoNaData, eq(custoNaData.itemId, itens.id));
 
   const linhas = await consulta
     .where(condicoes.length ? and(...condicoes) : undefined)
@@ -194,9 +196,10 @@ export async function listarItensComSaldo(filtros?: {
 
   const comSaldo = linhas.map((l) => {
     const disponivel = l.fisico - l.reservado;
-    /* Sem recebimento ate a data o custo daquela epoca e desconhecido. Cai
-       no cadastro em vez de zerar — zero faria o total da posicao despencar
-       sem explicacao — e a tela avisa quantos vieram por esse caminho. */
+    /* Item que nunca foi comprado — fabricado, impresso, equipamento
+       montado — nao tem recebimento de onde tirar custo, e ai vale o do
+       cadastro. Nao e erro; so vira aviso na posicao retroativa, onde
+       significa que a reconstrucao nao alcancou aquela data. */
     const custoUnitario = l.custoRecebido !== null ? Number(l.custoRecebido) : l.custoUnitario;
     return {
       ...l,

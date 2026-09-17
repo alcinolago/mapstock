@@ -38,6 +38,11 @@
 
   --anel: #0284c7;
   --sombra: 0 1px 2px 0 rgb(15 23 42 / 0.05), 0 1px 3px 0 rgb(15 23 42 / 0.06);
+
+  /* Fundo esmaecido atras da modal, e a sombra que a descola da pagina. */
+  --veu: rgb(15 23 42 / 0.45);
+  --sombra-alta:
+    0 20px 25px -5px rgb(15 23 42 / 0.14), 0 8px 10px -6px rgb(15 23 42 / 0.1);
 }
 
 .dark {
@@ -67,6 +72,11 @@
 
   --anel: #38bdf8;
   --sombra: 0 1px 2px 0 rgb(0 0 0 / 0.4), 0 1px 3px 0 rgb(0 0 0 / 0.3);
+
+  /* No escuro o veu precisa ser mais fechado: o fundo ja e escuro e um veu
+     claro demais deixava a pagina de tras competindo com a janela. */
+  --veu: rgb(2 6 16 / 0.72);
+  --sombra-alta: 0 20px 25px -5px rgb(0 0 0 / 0.6), 0 8px 10px -6px rgb(0 0 0 / 0.5);
 }
 
 @theme inline {
@@ -92,6 +102,7 @@
   --color-perigo-suave: var(--perigo-suave);
   --color-info: var(--info);
   --color-info-suave: var(--info-suave);
+  --color-veu: var(--veu);
 
   --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, monospace;
@@ -134,6 +145,45 @@
   /* Numero em tabela: alinhado pela casa decimal. */
   .num {
     font-variant-numeric: tabular-nums;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * Entrada da modal
+ *
+ * Sem biblioteca de animacao: sao dois keyframes. A janela nasce um pouco
+ * menor e sobe, o que da a leitura de "isto abriu por cima" — aparecer
+ * pronta no meio da tela passava por falha de renderizacao.
+ * ------------------------------------------------------------------------ */
+
+@keyframes veu-entra {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes janela-entra {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.97);
+  }
+}
+
+@layer utilities {
+  .anima-veu {
+    animation: veu-entra 160ms ease-out;
+  }
+
+  .anima-janela {
+    animation: janela-entra 200ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  /* Quem pediu menos movimento no sistema recebe a janela sem transicao. */
+  @media (prefers-reduced-motion: reduce) {
+    .anima-veu,
+    .anima-janela {
+      animation: none;
+    }
   }
 }
 

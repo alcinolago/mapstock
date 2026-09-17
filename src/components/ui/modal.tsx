@@ -2,34 +2,51 @@
 
 import { X } from "lucide-react";
 import { useEffect, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 
 import { cn } from "@/lib/utils";
 
 /**
  * Janela sobre a tela, para a decisão que precisa de contexto antes do
- * clique — hoje é a montagem, que mostra o que vai sair do estoque antes de
- * confirmar.
+ * clique — a montagem, que mostra o que vai sair do estoque, e a exclusão,
+ * que mostra o que vai junto.
  *
  * Sem <dialog> nativo de propósito: ele não anima, não aceita rolagem longa
  * no celular sem brigar com o teclado, e o pouco que ele dá de graça (Esc e
  * foco) cabe nas linhas abaixo.
+ *
+ * Vai para o <body> num portal, e isso não é preferência: `position: fixed`
+ * deixa de valer pela janela quando algum ancestral tem transform, filter ou
+ * backdrop-filter — vira bloco de contenção. A barra fixa de salvar do
+ * cadastro de item usa backdrop-blur, e a janela aberta dali nasceu presa
+ * dentro dela, ancorada no rodapé e com o véu escurecendo só aquela faixa.
  */
 export function Modal({
   titulo,
   descricao,
+  icone,
   aberto,
   aoFechar,
   children,
   rodape,
   className,
+  centralizado = false,
 }: {
   titulo: string;
   descricao?: string;
+  /** Selo à esquerda do título — dá o tom da decisão antes de ler a frase. */
+  icone?: ReactNode;
   aberto: boolean;
   aoFechar: () => void;
   children: ReactNode;
   rodape?: ReactNode;
   className?: string;
+  /**
+   * Centraliza também no celular, em vez de nascer colada embaixo. Vale para
+   * janela curta, de confirmação: a de montagem é longa e continua sendo
+   * folha de baixo, onde o polegar alcança a rolagem.
+   */
+  centralizado?: boolean;
 }) {
   useEffect(() => {
     if (!aberto) return;
@@ -50,37 +67,50 @@ export function Modal({
     };
   }, [aberto, aoFechar]);
 
-  if (!aberto) return null;
+  /* No servidor não há document para receber o portal. Nenhuma janela nasce
+     aberta, então isto nunca some com conteúdo que já estava na tela. */
+  if (!aberto || typeof document === "undefined") return null;
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center p-0 sm:items-center sm:p-4">
+  return createPortal(
+    <div
+      className={cn(
+        "fixed inset-0 z-50 flex justify-center",
+        centralizado ? "items-center p-4" : "items-end p-0 sm:items-center sm:p-4",
+      )}
+    >
       <button
         type="button"
         aria-label="Fechar"
         onClick={aoFechar}
-        className="absolute inset-0 bg-black/50"
+        className="anima-veu absolute inset-0 bg-veu backdrop-blur-[2px]"
       />
 
-      {/* No celular a janela nasce colada embaixo, onde o polegar alcança. */}
+      {/* Sem `centralizado`, no celular a janela nasce colada embaixo. */}
       <div
         role="dialog"
         aria-modal="true"
         aria-label={titulo}
         className={cn(
-          "relative flex max-h-[90dvh] w-full flex-col overflow-hidden rounded-t-2xl border border-borda bg-superficie shadow-lg sm:max-w-2xl sm:rounded-2xl",
+          "anima-janela relative flex max-h-[90dvh] w-full flex-col overflow-hidden border border-borda bg-superficie shadow-[var(--sombra-alta)] sm:max-w-2xl sm:rounded-2xl",
+          centralizado ? "rounded-2xl" : "rounded-t-2xl",
           className,
         )}
       >
-        <div className="flex items-start justify-between gap-3 border-b border-borda px-5 py-4">
-          <div className="min-w-0">
-            <h2 className="text-sm font-semibold text-texto">{titulo}</h2>
-            {descricao && <p className="mt-0.5 text-xs text-texto-fraco">{descricao}</p>}
+        <div className="flex items-start justify-between gap-3 border-b border-borda bg-superficie-2 px-5 py-4">
+          <div className="flex min-w-0 items-center gap-3">
+            {icone}
+            <div className="min-w-0">
+              <h2 className="text-sm font-semibold text-texto">{titulo}</h2>
+              {descricao && (
+                <p className="mt-0.5 truncate text-xs text-texto-fraco">{descricao}</p>
+              )}
+            </div>
           </div>
           <button
             type="button"
             onClick={aoFechar}
             aria-label="Fechar"
-            className="shrink-0 rounded-lg p-1 text-texto-fraco transition-colors hover:bg-superficie-2 hover:text-texto"
+            className="shrink-0 rounded-lg p-1 text-texto-fraco transition-colors hover:bg-superficie hover:text-texto"
           >
             <X className="size-4" />
           </button>
@@ -89,11 +119,12 @@ export function Modal({
         <div className="rolagem-fina flex-1 overflow-y-auto px-5 py-4">{children}</div>
 
         {rodape && (
-          <div className="flex flex-wrap items-center justify-end gap-2 border-t border-borda px-5 py-3">
+          <div className="flex flex-wrap items-center justify-end gap-2 border-t border-borda bg-superficie-2 px-5 py-3">
             {rodape}
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

@@ -257,17 +257,20 @@ export function FornecedoresItem({
         );
       })}
 
-      <Botao
-        type="button"
-        variante="contorno"
-        onClick={() =>
-          aoMudar([...vinculos, { ...VINCULO_VAZIO, principal: vinculos.length === 0 }])
-        }
-        disabled={vinculos.length >= lista.length}
-      >
-        <Plus className="size-4" />
-        Adicionar fornecedor
-      </Botao>
+      {/* Só com o primeiro vínculo já feito. Antes disso quem convida é o
+          bloco de cima, e dois botões dizendo a mesma coisa na mesma tela
+          era escolha demais para uma decisão que não tem escolha nenhuma. */}
+      {vinculos.length > 0 && (
+        <Botao
+          type="button"
+          variante="contorno"
+          onClick={() => aoMudar([...vinculos, { ...VINCULO_VAZIO, principal: false }])}
+          disabled={vinculos.length >= lista.length}
+        >
+          <Plus className="size-4" />
+          Adicionar fornecedor
+        </Botao>
+      )}
     </div>
   );
 }

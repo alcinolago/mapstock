@@ -1,10 +1,12 @@
 "use client";
 
-import { PanelLeftClose, PanelLeftOpen, X } from "lucide-react";
+import { ChevronRight, PanelLeftClose, PanelLeftOpen, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useState } from "react";
+import type { LucideIcon } from "lucide-react";
 
-import { NAVEGACAO } from "./navegacao";
+import { folhas, NAVEGACAO } from "./navegacao";
 import { Marca, MarcaCompleta } from "./marca";
 import type { PapelUsuario } from "@/lib/labels";
 import { cn } from "@/lib/utils";
@@ -72,29 +74,23 @@ export function BarraLateral({
         </div>
 
         <nav className="rolagem-fina flex-1 space-y-0.5 overflow-y-auto overflow-x-hidden p-3">
-          {itens.map(({ href, rotulo, Icone, ...resto }) => {
-            const exato = "exato" in resto && resto.exato;
-            const ativo = exato ? caminho === href : caminho.startsWith(href);
-            return (
-              <Link
-                key={href}
-                href={href}
-                aria-current={ativo ? "page" : undefined}
-                /* Recolhida, o rótulo vira tooltip do navegador — é a única
-                   pista que sobra de para onde o ícone leva. */
-                title={recolhida ? rotulo : undefined}
-                className={cn(
-                  "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
-                  recolhida && "lg:justify-center lg:px-0",
-                  ativo
-                    ? "bg-marca-suave text-marca"
-                    : "text-texto-suave hover:bg-superficie-2 hover:text-texto",
-                )}
-              >
-                <Icone className="size-4 shrink-0" />
-                <span className={cn("truncate", recolhida && "lg:hidden")}>{rotulo}</span>
-              </Link>
-            );
+          {itens.map((item) => {
+            /* Recolhida, o grupo se desfaz: nao ha largura para o rotulo do
+               pai nem para o recuo do filho, e esconder os filhos atras de um
+               icone deixaria telas inteiras sem caminho. */
+            if ("filhos" in item && !recolhida) {
+              return <Grupo key={item.href} item={item} caminho={caminho} />;
+            }
+            return folhas(item).map((f) => (
+              <Atalho
+                key={f.href}
+                href={f.href}
+                rotulo={f.rotulo}
+                Icone={f.Icone}
+                ativo={ehAtivo(f, caminho)}
+                recolhida={recolhida}
+              />
+            ));
           })}
         </nav>
 
@@ -128,5 +124,114 @@ export function BarraLateral({
         </div>
       </aside>
     </>
+  );
+}
+
+type Folha = {
+  readonly href: string;
+  readonly rotulo: string;
+  readonly Icone: LucideIcon;
+  readonly exato?: boolean;
+};
+
+/* "/" combina com o começo de tudo, então só ele compara por igualdade. */
+function ehAtivo(item: Folha, caminho: string) {
+  return item.exato ? caminho === item.href : caminho.startsWith(item.href);
+}
+
+function Atalho({
+  href,
+  rotulo,
+  Icone,
+  ativo,
+  recolhida,
+  dentroDeGrupo = false,
+}: {
+  href: string;
+  rotulo: string;
+  Icone: LucideIcon;
+  ativo: boolean;
+  recolhida: boolean;
+  dentroDeGrupo?: boolean;
+}) {
+  return (
+    <Link
+      href={href}
+      aria-current={ativo ? "page" : undefined}
+      /* Recolhida, o rótulo vira tooltip do navegador — é a única pista que
+         sobra de para onde o ícone leva. */
+      title={recolhida ? rotulo : undefined}
+      className={cn(
+        "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+        recolhida && "lg:justify-center lg:px-0",
+        dentroDeGrupo && "ml-3 border-l border-borda pl-4",
+        ativo
+          ? "bg-marca-suave text-marca"
+          : "text-texto-suave hover:bg-superficie-2 hover:text-texto",
+      )}
+    >
+      <Icone className="size-4 shrink-0" />
+      <span className={cn("truncate", recolhida && "lg:hidden")}>{rotulo}</span>
+    </Link>
+  );
+}
+
+function Grupo({
+  item,
+  caminho,
+}: {
+  item: { readonly rotulo: string; readonly Icone: LucideIcon; readonly filhos: readonly Folha[] };
+  caminho: string;
+}) {
+  const temAtivo = item.filhos.some((f) => ehAtivo(f, caminho));
+
+  const [aberto, setAberto] = useState(temAtivo);
+  const [ultimoAtivo, setUltimoAtivo] = useState(temAtivo);
+
+  /* Entrar numa tela do grupo abre o grupo, inclusive quando a pessoa chegou
+     por um link de outra tela. Sair não fecha: fechar sozinho tiraria da
+     frente justamente o caminho de volta. */
+  if (temAtivo !== ultimoAtivo) {
+    setUltimoAtivo(temAtivo);
+    if (temAtivo) setAberto(true);
+  }
+
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={() => setAberto((a) => !a)}
+        aria-expanded={aberto}
+        className={cn(
+          "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+          temAtivo ? "text-texto" : "text-texto-suave hover:bg-superficie-2 hover:text-texto",
+        )}
+      >
+        <item.Icone className="size-4 shrink-0" />
+        <span className="flex-1 truncate text-left">{item.rotulo}</span>
+        <ChevronRight
+          className={cn(
+            "size-3.5 shrink-0 text-texto-fraco transition-transform",
+            aberto && "rotate-90",
+          )}
+        />
+      </button>
+
+      {aberto && (
+        <div className="mt-0.5 space-y-0.5">
+          {item.filhos.map((f) => (
+            <Atalho
+              key={f.href}
+              href={f.href}
+              rotulo={f.rotulo}
+              Icone={f.Icone}
+              ativo={ehAtivo(f, caminho)}
+              recolhida={false}
+              dentroDeGrupo
+            />
+          ))}
+        </div>
+      )}
+    </div>
   );
 }

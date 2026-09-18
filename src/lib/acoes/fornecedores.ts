@@ -31,7 +31,7 @@ const esquema = z.object({
   ativo: z.coerce.boolean(),
 });
 
-export type EstadoFornecedor = { erro?: string; campo?: string; ok?: boolean };
+export type EstadoFornecedor = { erro?: string; campo?: string; ok?: boolean; id?: string };
 
 export async function salvarFornecedor(
   _estado: EstadoFornecedor,
@@ -61,6 +61,10 @@ export async function salvarFornecedor(
     observacoes: campos.observacoes || null,
   };
 
+  /* Devolve o id: quem cria pela janela do cadastro de item precisa dele
+     para ja deixar o fornecedor escolhido na linha, sem recarregar a tela. */
+  let salvoId = id;
+
   try {
     if (id) {
       const [antes] = await db.select().from(fornecedores).where(eq(fornecedores.id, id));
@@ -79,6 +83,7 @@ export async function salvarFornecedor(
       });
     } else {
       const [criado] = await db.insert(fornecedores).values(valores).returning();
+      salvoId = criado.id;
       await registrar({
         usuarioId: sessao.id,
         tabela: "fornecedores",
@@ -89,7 +94,7 @@ export async function salvarFornecedor(
     }
 
     revalidatePath("/fornecedores");
-    return { ok: true };
+    return { ok: true, id: salvoId };
   } catch (e) {
     if (ehDuplicado(e)) {
       return { erro: "Já existe um fornecedor com esse nome.", campo: "nome" };

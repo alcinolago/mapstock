@@ -1,8 +1,9 @@
 "use client";
 
 import { Plus, Star, Trash2 } from "lucide-react";
-import Link from "next/link";
+import { useState } from "react";
 
+import { NovoFornecedor } from "./novo-fornecedor";
 import { Botao } from "@/components/ui/botao";
 import { Entrada, Grupo, Selecao } from "@/components/ui/campo";
 import { CampoMoeda, CampoNumero } from "@/components/ui/campo-mascarado";
@@ -50,6 +51,24 @@ export function FornecedoresItem({
   vinculos: VinculoFornecedor[];
   aoMudar: (v: VinculoFornecedor[]) => void;
 }) {
+  /* Os criados pela janela entram aqui, e nao por recarga da pagina: quem
+     esta no meio do cadastro de um item nao pode perder o que digitou so
+     porque cadastrou um fornecedor. */
+  const [novos, setNovos] = useState<{ id: string; nome: string }[]>([]);
+  const lista = [...fornecedores, ...novos];
+
+  function acolher(f: { id: string; nome: string }, indice?: number) {
+    setNovos((atuais) => [...atuais, f]);
+    if (indice === undefined) {
+      aoMudar([
+        ...vinculos,
+        { ...VINCULO_VAZIO, fornecedorId: f.id, principal: vinculos.length === 0 },
+      ]);
+    } else {
+      atualizar(indice, { fornecedorId: f.id });
+    }
+  }
+
   function atualizar(indice: number, mudanca: Partial<VinculoFornecedor>) {
     aoMudar(vinculos.map((v, i) => (i === indice ? { ...v, ...mudanca } : v)));
   }
@@ -58,15 +77,15 @@ export function FornecedoresItem({
     aoMudar(vinculos.map((v, i) => ({ ...v, principal: i === indice })));
   }
 
-  if (fornecedores.length === 0) {
+  if (lista.length === 0) {
     return (
-      <p className="rounded-lg bg-superficie-2 px-4 py-6 text-center text-sm text-texto-fraco">
-        Nenhum fornecedor cadastrado ainda. Cadastre em{" "}
-        <Link href="/fornecedores" className="font-semibold text-marca hover:underline">
-          Fornecedores
-        </Link>{" "}
-        para poder vincular aqui.
-      </p>
+      <div className="flex flex-col items-center gap-3 rounded-lg bg-superficie-2 px-4 py-6 text-center">
+        <p className="text-sm text-texto-fraco">
+          Nenhum fornecedor cadastrado ainda. Cadastre o primeiro aqui mesmo — o item
+          continua como está.
+        </p>
+        <NovoFornecedor aoCriar={(f) => acolher(f)} />
+      </div>
     );
   }
 
@@ -111,14 +130,21 @@ export function FornecedoresItem({
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              <Grupo rotulo="Fornecedor" obrigatorio className="lg:col-span-2">
+              <Grupo
+                rotulo="Fornecedor"
+                obrigatorio
+                className="lg:col-span-2"
+                ajuda={
+                  <NovoFornecedor aoCriar={(f) => acolher(f, i)} compacto />
+                }
+              >
                 <Selecao
                   value={v.fornecedorId}
                   onChange={(e) => atualizar(i, { fornecedorId: e.target.value })}
                   required
                 >
                   <option value="">Selecione...</option>
-                  {fornecedores.map((f) => (
+                  {lista.map((f) => (
                     <option key={f.id} value={f.id} disabled={jaUsados.includes(f.id)}>
                       {f.nome}
                       {jaUsados.includes(f.id) ? " (já vinculado)" : ""}
@@ -197,7 +223,7 @@ export function FornecedoresItem({
         onClick={() =>
           aoMudar([...vinculos, { ...VINCULO_VAZIO, principal: vinculos.length === 0 }])
         }
-        disabled={vinculos.length >= fornecedores.length}
+        disabled={vinculos.length >= lista.length}
       >
         <Plus className="size-4" />
         Adicionar fornecedor

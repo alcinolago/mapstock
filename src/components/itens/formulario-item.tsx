@@ -277,10 +277,17 @@ export function FormularioItem({
               locais.length === 0 ? (
                 <>
                   Nenhum local cadastrado.{" "}
-                  <Link href="/configuracoes" className="font-semibold text-marca hover:underline">
+                  {/* Em outra aba de propósito: daqui, sair da página levaria
+                      junto tudo que já foi digitado no item. */}
+                  <Link
+                    href="/configuracoes"
+                    target="_blank"
+                    rel="noopener"
+                    className="font-semibold text-marca hover:underline"
+                  >
                     Cadastre em Configurações
                   </Link>
-                  .
+                  , numa aba nova.
                 </>
               ) : undefined
             }

@@ -44,7 +44,3 @@ export const NAVEGACAO = [
 
 export type ItemNavegacao = (typeof NAVEGACAO)[number];
 
-/** Os filhos de um grupo, ou o proprio item quando ele nao e grupo. */
-export function folhas(item: ItemNavegacao) {
-  return "filhos" in item ? item.filhos : [item];
-}

@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 import type { LucideIcon } from "lucide-react";
 
-import { folhas, NAVEGACAO } from "./navegacao";
+import { NAVEGACAO } from "./navegacao";
 import { Marca, MarcaCompleta } from "./marca";
 import type { PapelUsuario } from "@/lib/labels";
 import { cn } from "@/lib/utils";
@@ -75,22 +75,49 @@ export function BarraLateral({
 
         <nav className="rolagem-fina flex-1 space-y-0.5 overflow-y-auto overflow-x-hidden p-3">
           {itens.map((item) => {
-            /* Recolhida, o grupo se desfaz: nao ha largura para o rotulo do
-               pai nem para o recuo do filho, e esconder os filhos atras de um
-               icone deixaria telas inteiras sem caminho. */
-            if ("filhos" in item && !recolhida) {
-              return <Grupo key={item.href} item={item} caminho={caminho} />;
+            if (!("filhos" in item)) {
+              return (
+                <Atalho
+                  key={item.href}
+                  href={item.href}
+                  rotulo={item.rotulo}
+                  Icone={item.Icone}
+                  ativo={ehAtivo(item, caminho)}
+                  recolhida={recolhida}
+                />
+              );
             }
-            return folhas(item).map((f) => (
-              <Atalho
-                key={f.href}
-                href={f.href}
-                rotulo={f.rotulo}
-                Icone={f.Icone}
-                ativo={ehAtivo(f, caminho)}
-                recolhida={recolhida}
-              />
-            ));
+
+            /* Quem decide entre grupo e lista solta é o CSS, no mesmo ponto
+               de quebra da largura — e não o `recolhida` sozinho. A barra só
+               encolhe a partir do lg: abaixo disso ela continua larga mesmo
+               com o menu marcado como recolhido, e desfazer o grupo no JS
+               deixava os rótulos à mostra sem nenhum agrupamento. */
+            return (
+              <div key={item.href}>
+                <div className={recolhida ? "lg:hidden" : undefined}>
+                  <Grupo item={item} caminho={caminho} />
+                </div>
+
+                {/* Encolhida de verdade, o grupo se desfaz: não há largura
+                    para o rótulo do pai nem para o recuo, e esconder os
+                    filhos atrás de um ícone deixaria telas sem caminho. */}
+                {recolhida && (
+                  <div className="hidden space-y-0.5 lg:block">
+                    {item.filhos.map((f) => (
+                      <Atalho
+                        key={f.href}
+                        href={f.href}
+                        rotulo={f.rotulo}
+                        Icone={f.Icone}
+                        ativo={ehAtivo(f, caminho)}
+                        recolhida
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
           })}
         </nav>
 

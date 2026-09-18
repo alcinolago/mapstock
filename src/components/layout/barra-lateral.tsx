@@ -7,7 +7,7 @@ import { useState } from "react";
 import type { LucideIcon } from "lucide-react";
 
 import { NAVEGACAO } from "./navegacao";
-import { Marca, MarcaCompleta } from "./marca";
+import { MarcaCompleta } from "./marca";
 import type { PapelUsuario } from "@/lib/labels";
 import { cn } from "@/lib/utils";
 
@@ -59,10 +59,11 @@ export function BarraLateral({
             recolhida ? "px-5 lg:justify-center lg:px-0" : "px-5",
           )}
         >
+          {/* Recolhida, os 64px nao comportam marca e botao lado a lado, e
+              entre os dois quem precisa estar a mao e o botao — sem ele nao
+              ha como voltar a abrir. */}
           <MarcaCompleta className={recolhida ? "lg:hidden" : ""} />
-          <Marca className={cn("size-7 text-marca", recolhida ? "hidden lg:block" : "hidden")} />
 
-          {/* No desktop a barra é fixa e não tem o que fechar. */}
           <button
             type="button"
             onClick={aoFechar}
@@ -70,6 +71,25 @@ export function BarraLateral({
             className="ml-auto shrink-0 rounded-lg p-2 text-texto-suave transition-colors hover:bg-superficie-2 hover:text-texto lg:hidden"
           >
             <X className="size-5" />
+          </button>
+
+          {/* No topo, e nao no rodape: la embaixo, colado na legenda, ele
+              parecia parte do rodape e ninguem achava. */}
+          <button
+            type="button"
+            onClick={() => aoDefinirRecolhida(!recolhida)}
+            title={recolhida ? "Expandir menu" : "Recolher menu"}
+            aria-label={recolhida ? "Expandir menu" : "Recolher menu"}
+            className={cn(
+              "hidden shrink-0 rounded-lg p-2 text-texto-suave transition-colors hover:bg-superficie-2 hover:text-texto lg:block",
+              recolhida ? "lg:mx-auto" : "ml-auto",
+            )}
+          >
+            {recolhida ? (
+              <PanelLeftOpen className="size-5" />
+            ) : (
+              <PanelLeftClose className="size-5" />
+            )}
           </button>
         </div>
 
@@ -122,24 +142,6 @@ export function BarraLateral({
         </nav>
 
         <div className="shrink-0 border-t border-borda p-3">
-          <button
-            type="button"
-            onClick={() => aoDefinirRecolhida(!recolhida)}
-            title={recolhida ? "Expandir menu" : "Recolher menu"}
-            aria-label={recolhida ? "Expandir menu" : "Recolher menu"}
-            className={cn(
-              "hidden w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-texto-fraco transition-colors hover:bg-superficie-2 hover:text-texto lg:flex",
-              recolhida && "lg:justify-center lg:px-0",
-            )}
-          >
-            {recolhida ? (
-              <PanelLeftOpen className="size-4 shrink-0" />
-            ) : (
-              <PanelLeftClose className="size-4 shrink-0" />
-            )}
-            <span className={cn(recolhida && "lg:hidden")}>Recolher menu</span>
-          </button>
-
           <p
             className={cn(
               "px-2 pt-1 text-[11px] text-texto-fraco",
@@ -212,7 +214,9 @@ function Grupo({
 }) {
   const temAtivo = item.filhos.some((f) => ehAtivo(f, caminho));
 
-  const [aberto, setAberto] = useState(temAtivo);
+  /* Nasce aberto. Fechado por padrao, o grupo escondia tres telas atras de
+     uma palavra, e quem nunca clicou nele nem sabia que existiam. */
+  const [aberto, setAberto] = useState(true);
   const [ultimoAtivo, setUltimoAtivo] = useState(temAtivo);
 
   /* Entrar numa tela do grupo abre o grupo, inclusive quando a pessoa chegou

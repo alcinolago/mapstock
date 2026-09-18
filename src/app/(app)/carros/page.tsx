@@ -80,12 +80,7 @@ export default async function PaginaCarros() {
                     <Celula className="text-xs text-texto-fraco">{c.pc ?? "—"}</Celula>
                     <Celula className="text-xs">
                       {c.montagemId ? (
-                        <Link
-                          href={`/itens/${c.equipamentoId}`}
-                          className="font-semibold text-marca hover:underline"
-                        >
-                          {c.equipamentoCodigo}
-                        </Link>
+                        <span className="font-semibold text-texto">{c.equipamento}</span>
                       ) : (
                         <span className="text-texto-fraco">sem equipamento</span>
                       )}

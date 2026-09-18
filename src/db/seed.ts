@@ -1,6 +1,6 @@
 /**
  * Popula o banco com a configuracao que no desktop vivia fixa no codigo:
- * niveis, classificacoes com seus prefixos de codigo, unidades e as regras
+ * papeis, classificacoes com seus prefixos de codigo, unidades e as regras
  * de classificacao automatica. Tambem cria o usuario administrador.
  *
  * E idempotente — pode rodar quantas vezes precisar.
@@ -11,15 +11,7 @@ import bcrypt from "bcryptjs";
 import { eq } from "drizzle-orm";
 
 import { db } from "./index";
-import { classificacoes, niveis, regrasClassificacao, unidades, usuarios } from "./schema";
-
-/* Os nomes de nivel sao editaveis pela tela de configuracoes. */
-const NIVEIS = [
-  { num: 0, nome: "Principal" },
-  { num: 1, nome: "Componente" },
-  { num: 2, nome: "Sub-componente" },
-  { num: 3, nome: "Detalhe" },
-];
+import { classificacoes, regrasClassificacao, unidades, usuarios } from "./schema";
 
 /* Nome, prefixo do codigo e as palavras que disparam a classificacao
    automatica. Vem da lista CLASSIFICATIONS e das funcoes classify() e
@@ -53,8 +45,6 @@ const UNIDADES = [
 async function main() {
   console.log("Populando o banco...\n");
 
-  await db.insert(niveis).values(NIVEIS).onConflictDoNothing();
-  console.log(`  níveis: ${NIVEIS.length}`);
 
   await db
     .insert(classificacoes)

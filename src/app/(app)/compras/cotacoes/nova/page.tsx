@@ -1,11 +1,8 @@
-import { and, eq } from "drizzle-orm";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 
 import { FormularioCotacao } from "@/components/compras/formulario-cotacao";
-import { db } from "@/db";
-import { listarItensComSaldo } from "@/db/consultas";
-import { itens } from "@/db/schema";
+import { listarItensComSaldo, listarMoldes } from "@/db/consultas";
 import { exigirEdicao } from "@/lib/auth";
 
 export const metadata = { title: "Nova cotação" };
@@ -13,14 +10,13 @@ export const metadata = { title: "Nova cotação" };
 export default async function NovaCotacao() {
   await exigirEdicao();
 
-  const [lista, equipamentos] = await Promise.all([
-    listarItensComSaldo(),
-    db
-      .select({ id: itens.id, codigo: itens.codigo, descricao: itens.descricao })
-      .from(itens)
-      .where(and(eq(itens.nivel, 0), eq(itens.ativo, true)))
-      .orderBy(itens.codigo),
-  ]);
+  const [lista, moldes] = await Promise.all([listarItensComSaldo(), listarMoldes()]);
+
+  /* Cotar "tudo que entra num equipamento" agora parte do molde: e nele que
+     mora a receita desde que equipamento deixou de ser item de estoque. */
+  const equipamentos = moldes
+    .filter((m) => m.ativo && m.nos > 0)
+    .map((m) => ({ id: m.id, codigo: m.nome, descricao: m.descricao ?? "" }));
 
   const qtdEmFalta = lista.filter(
     (i) => i.situacao === "falta" || i.situacao === "abaixo_minimo",

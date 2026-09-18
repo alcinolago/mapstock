@@ -127,7 +127,8 @@ export const STATUS_PEDIDO: Record<StatusPedido, string> = {
 };
 
 export const STATUS_MONTAGEM: Record<StatusMontagem, string> = {
-  montada: "Montada, em estoque",
+  em_montagem: "Em montagem",
+  montada: "Montada, pronta",
   instalada: "Instalada em carro",
   desmontada: "Desmontada",
 };

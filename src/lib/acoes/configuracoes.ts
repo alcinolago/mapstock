@@ -10,7 +10,6 @@ import {
   classificacoes,
   itens,
   locais,
-  niveis,
   regrasClassificacao,
   unidades,
   usuarios,
@@ -19,42 +18,6 @@ import { exigirAdmin, sessaoAtual } from "@/lib/auth";
 import { registrar } from "@/lib/auditoria";
 
 type Resultado = { erro?: string; ok?: boolean };
-
-/* --------------------------------------------------------------- Níveis --- */
-
-export async function renomearNivel(num: number, nome: string): Promise<Resultado> {
-  await exigirAdmin();
-  if (!nome.trim()) return { erro: "O nível precisa de um nome." };
-  await db.update(niveis).set({ nome: nome.trim() }).where(eq(niveis.num, num));
-  revalidatePath("/configuracoes");
-  return { ok: true };
-}
-
-export async function adicionarNivel(nome: string): Promise<Resultado> {
-  await exigirAdmin();
-  if (!nome.trim()) return { erro: "O nível precisa de um nome." };
-  const [{ proximo }] = await db
-    .select({ proximo: sql<number>`coalesce(max(${niveis.num}), -1) + 1` })
-    .from(niveis);
-  await db.insert(niveis).values({ num: proximo, nome: nome.trim() });
-  revalidatePath("/configuracoes");
-  return { ok: true };
-}
-
-export async function removerNivel(num: number): Promise<Resultado> {
-  await exigirAdmin();
-  const emUso = await db
-    .select({ id: itens.id })
-    .from(itens)
-    .where(eq(itens.nivel, num))
-    .limit(1);
-  if (emUso.length > 0) {
-    return { erro: "Existem itens neste nível. Mude o nível deles antes de remover." };
-  }
-  await db.delete(niveis).where(eq(niveis.num, num));
-  revalidatePath("/configuracoes");
-  return { ok: true };
-}
 
 /* ------------------------------------------------------- Classificações --- */
 

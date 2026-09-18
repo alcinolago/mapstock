@@ -80,7 +80,7 @@ export function CampoNumero({
   aoMudar?: (valor: string) => void;
   /** Valor inicial quando o campo e lido pelo `name`, no envio do form. */
   padrao?: string;
-  /** Sem casa decimal — nivel, contagem de peca inteira. */
+  /** Sem casa decimal — contagem de peca inteira. */
   inteiro?: boolean;
 }) {
   const modo = inteiro ? ("numeric" as const) : ("decimal" as const);

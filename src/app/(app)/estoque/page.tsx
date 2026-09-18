@@ -90,16 +90,13 @@ export default async function PaginaEstoque({
     itensComMovimento(),
   ]);
 
-  /* Nivel 0 e o equipamento montado — nao se movimenta em estoque. */
-  const selecionaveis = comSaldo
-    .filter((i) => i.nivel > 0)
-    .map((i) => ({
-      id: i.id,
-      codigo: i.codigo,
-      descricao: i.descricao,
-      unidade: i.unidade,
-      disponivel: i.disponivel,
-    }));
+  const selecionaveis = comSaldo.map((i) => ({
+    id: i.id,
+    codigo: i.codigo,
+    descricao: i.descricao,
+    unidade: i.unidade,
+    disponivel: i.disponivel,
+  }));
 
   return (
     <div className="mx-auto max-w-[100rem]">

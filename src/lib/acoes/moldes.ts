@@ -1,0 +1,348 @@
+"use server";
+
+import { and, asc, eq, isNull, sql } from "drizzle-orm";
+import { revalidatePath } from "next/cache";
+import { z } from "zod";
+
+import { db } from "@/db";
+import { moldeNos, moldes, montagens } from "@/db/schema";
+import { exigirEdicao } from "@/lib/auth";
+import { registrar } from "@/lib/auditoria";
+
+/**
+ * O molde e a receita do equipamento: divisoes e pecas com quantidade.
+ *
+ * Nada aqui encosta no estoque. Criar molde, acrescentar divisao, mudar
+ * quantidade — tudo isso e planejamento, e vale mesmo sem ter uma peca
+ * sequer na prateleira. Quem confere saldo e a montagem.
+ */
+export type EstadoMolde = { erro?: string; ok?: boolean; id?: string };
+
+export async function salvarMolde(
+  _estado: EstadoMolde,
+  formulario: FormData,
+): Promise<EstadoMolde> {
+  const sessao = await exigirEdicao();
+
+  const id = (formulario.get("id") as string) || null;
+  const nome = ((formulario.get("nome") as string) ?? "").trim();
+  const descricao = ((formulario.get("descricao") as string) ?? "").trim() || null;
+  if (!nome) return { erro: "Informe o nome do equipamento." };
+
+  const [repetido] = await db
+    .select({ id: moldes.id })
+    .from(moldes)
+    .where(sql`lower(${moldes.nome}) = lower(${nome})`);
+  if (repetido && repetido.id !== id) {
+    return { erro: `Já existe um molde chamado "${nome}".` };
+  }
+
+  if (id) {
+    const [antes] = await db.select().from(moldes).where(eq(moldes.id, id));
+    if (!antes) return { erro: "Molde não encontrado." };
+    const [depois] = await db
+      .update(moldes)
+      .set({ nome, descricao, atualizadoEm: new Date(), atualizadoPor: sessao.id })
+      .where(eq(moldes.id, id))
+      .returning();
+    await registrar({
+      usuarioId: sessao.id,
+      tabela: "moldes",
+      registroId: id,
+      acao: "atualizar",
+      antes,
+      depois,
+    });
+    revalidatePath("/estrutura");
+    return { ok: true, id };
+  }
+
+  const [criado] = await db
+    .insert(moldes)
+    .values({ nome, descricao, criadoPor: sessao.id, atualizadoPor: sessao.id })
+    .returning();
+  await registrar({
+    usuarioId: sessao.id,
+    tabela: "moldes",
+    registroId: criado.id,
+    acao: "criar",
+    depois: criado,
+  });
+  revalidatePath("/estrutura");
+  return { ok: true, id: criado.id };
+}
+
+export async function excluirMolde(id: string): Promise<{ erro?: string }> {
+  const sessao = await exigirEdicao();
+
+  const [antes] = await db.select().from(moldes).where(eq(moldes.id, id));
+  if (!antes) return { erro: "Molde não encontrado." };
+
+  /* Montagem ja aberta segura o molde. Ela guarda a propria copia da arvore,
+     entao nao quebraria — mas perder de onde ela veio apaga o rastro. */
+  const [{ n }] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(montagens)
+    .where(eq(montagens.moldeId, id));
+  if (n > 0) {
+    return {
+      erro: `Este molde já gerou ${n} ${n === 1 ? "montagem" : "montagens"}. Desative em vez de excluir, para não perder de onde elas vieram.`,
+    };
+  }
+
+  await db.delete(moldes).where(eq(moldes.id, id));
+  await registrar({
+    usuarioId: sessao.id,
+    tabela: "moldes",
+    registroId: id,
+    acao: "excluir",
+    antes,
+  });
+  revalidatePath("/estrutura");
+  return {};
+}
+
+export async function alternarMolde(id: string): Promise<{ erro?: string }> {
+  const sessao = await exigirEdicao();
+  const [antes] = await db.select().from(moldes).where(eq(moldes.id, id));
+  if (!antes) return { erro: "Molde não encontrado." };
+
+  const [depois] = await db
+    .update(moldes)
+    .set({ ativo: !antes.ativo, atualizadoEm: new Date(), atualizadoPor: sessao.id })
+    .where(eq(moldes.id, id))
+    .returning();
+  await registrar({
+    usuarioId: sessao.id,
+    tabela: "moldes",
+    registroId: id,
+    acao: "atualizar",
+    antes,
+    depois,
+  });
+  revalidatePath("/estrutura");
+  return {};
+}
+
+/* ----------------------------------------------------------- Nós do molde */
+
+const esquemaNo = z.object({
+  moldeId: z.uuid(),
+  paiId: z.union([z.literal(""), z.uuid()]).optional(),
+  divisaoId: z.union([z.literal(""), z.uuid()]).optional(),
+  itemId: z.union([z.literal(""), z.uuid()]).optional(),
+  quantidade: z
+    .string()
+    .trim()
+    .transform((v) => Number(v.replace(",", ".")))
+    .refine((v) => Number.isFinite(v) && v > 0, "Informe uma quantidade maior que zero"),
+  obrigatorio: z.coerce.boolean().default(true),
+  localMontagem: z.string().trim().optional(),
+});
+
+export type EstadoNo = { erro?: string; ok?: boolean };
+
+export async function adicionarNo(_estado: EstadoNo, formulario: FormData): Promise<EstadoNo> {
+  const sessao = await exigirEdicao();
+
+  const dados = esquemaNo.safeParse({
+    ...Object.fromEntries(formulario),
+    obrigatorio: formulario.get("obrigatorio") !== "false",
+  });
+  if (!dados.success) {
+    return { erro: dados.error.issues[0]?.message ?? "Dados inválidos" };
+  }
+  const d = dados.data;
+  const divisaoId = d.divisaoId || null;
+  const itemId = d.itemId || null;
+  const paiId = d.paiId || null;
+
+  /* Um no e divisao ou peca, nunca os dois e nunca nenhum. E a invariante
+     que faz a arvore ter sentido: agrupador agrupa, peca sai do estoque. */
+  if (!divisaoId === !itemId) {
+    return { erro: "Escolha uma divisão ou uma peça do estoque." };
+  }
+
+  if (paiId) {
+    const [pai] = await db.select().from(moldeNos).where(eq(moldeNos.id, paiId));
+    if (!pai) return { erro: "Nó pai não encontrado." };
+    if (pai.itemId) {
+      return { erro: "Peça do estoque não contém nada. Pendure dentro de uma divisão." };
+    }
+  }
+
+  /* Divisao repetida no mesmo pai vira duas linhas iguais na arvore, sem
+     jeito de saber qual e qual. Peca repetida idem: some a quantidade. */
+  const irmaos = await db
+    .select()
+    .from(moldeNos)
+    .where(
+      and(
+        eq(moldeNos.moldeId, d.moldeId),
+        paiId ? eq(moldeNos.paiId, paiId) : isNull(moldeNos.paiId),
+      ),
+    );
+  if (irmaos.some((i) => (divisaoId && i.divisaoId === divisaoId) || (itemId && i.itemId === itemId))) {
+    return { erro: "Isso já está nesta parte da estrutura." };
+  }
+
+  const [criado] = await db
+    .insert(moldeNos)
+    .values({
+      moldeId: d.moldeId,
+      paiId,
+      divisaoId,
+      itemId,
+      quantidade: d.quantidade,
+      obrigatorio: d.obrigatorio,
+      localMontagem: d.localMontagem || null,
+      ordem: irmaos.length + 1,
+    })
+    .returning();
+
+  await registrar({
+    usuarioId: sessao.id,
+    tabela: "molde_nos",
+    registroId: criado.id,
+    acao: "criar",
+    depois: criado,
+  });
+  revalidatePath("/estrutura");
+  return { ok: true };
+}
+
+export async function removerNo(id: string): Promise<{ erro?: string }> {
+  const sessao = await exigirEdicao();
+  const [antes] = await db.select().from(moldeNos).where(eq(moldeNos.id, id));
+  if (!antes) return { erro: "Nó não encontrado." };
+
+  /* O cascade do banco leva os filhos junto; o log guarda quantos eram para
+     a exclusao nao virar um buraco silencioso na auditoria. */
+  const [{ filhos }] = await db
+    .select({ filhos: sql<number>`count(*)::int` })
+    .from(moldeNos)
+    .where(eq(moldeNos.paiId, id));
+
+  await db.delete(moldeNos).where(eq(moldeNos.id, id));
+  await registrar({
+    usuarioId: sessao.id,
+    tabela: "molde_nos",
+    registroId: id,
+    acao: "excluir",
+    antes: { ...antes, filhosLevadosJunto: filhos },
+  });
+  revalidatePath("/estrutura");
+  return {};
+}
+
+export async function atualizarQuantidadeNo(
+  id: string,
+  quantidade: number,
+): Promise<{ erro?: string }> {
+  const sessao = await exigirEdicao();
+  if (!Number.isFinite(quantidade) || quantidade <= 0) {
+    return { erro: "Informe uma quantidade maior que zero." };
+  }
+  await db.update(moldeNos).set({ quantidade }).where(eq(moldeNos.id, id));
+  await registrar({
+    usuarioId: sessao.id,
+    tabela: "molde_nos",
+    registroId: id,
+    acao: "atualizar",
+    depois: { quantidade },
+  });
+  revalidatePath("/estrutura");
+  return {};
+}
+
+/**
+ * Sobe ou desce um no entre os irmaos. A ordem e sequencia de montagem, nao
+ * enfeite: quem monta segue a lista de cima para baixo.
+ */
+export async function moverNo(id: string, direcao: "cima" | "baixo"): Promise<{ erro?: string }> {
+  const sessao = await exigirEdicao();
+
+  const [alvo] = await db.select().from(moldeNos).where(eq(moldeNos.id, id));
+  if (!alvo) return { erro: "Nó não encontrado." };
+
+  const irmaos = await db
+    .select()
+    .from(moldeNos)
+    .where(
+      and(
+        eq(moldeNos.moldeId, alvo.moldeId),
+        alvo.paiId ? eq(moldeNos.paiId, alvo.paiId) : isNull(moldeNos.paiId),
+      ),
+    )
+    .orderBy(asc(moldeNos.ordem), asc(moldeNos.id));
+
+  const posicao = irmaos.findIndex((v) => v.id === id);
+  const destino = direcao === "cima" ? posicao - 1 : posicao + 1;
+  if (destino < 0 || destino >= irmaos.length) return {};
+
+  /* Renumera a lista inteira em vez de trocar duas: empate de ordem vindo de
+     insercao concorrente faria a troca simples nao surtir efeito nenhum. */
+  const nova = [...irmaos];
+  [nova[posicao], nova[destino]] = [nova[destino], nova[posicao]];
+  for (const [i, v] of nova.entries()) {
+    await db.update(moldeNos).set({ ordem: i + 1 }).where(eq(moldeNos.id, v.id));
+  }
+
+  await registrar({
+    usuarioId: sessao.id,
+    tabela: "molde_nos",
+    registroId: id,
+    acao: "atualizar",
+    antes: { ordem: posicao + 1 },
+    depois: { ordem: destino + 1 },
+  });
+  revalidatePath("/estrutura");
+  return {};
+}
+
+/**
+ * Achata um molde nas pecas de estoque que ele consome, com a quantidade
+ * total ja multiplicada nivel a nivel. E o que alimenta a cotacao a partir
+ * de um equipamento — e, mais adiante, a partir de uma divisao.
+ *
+ * `de` limita a um ramo: passando o id de uma divisao, sai so o que entra
+ * nela. Nulo explode o molde inteiro.
+ */
+export async function explodirMolde(
+  moldeId: string,
+  multiplicador = 1,
+  de: string | null = null,
+): Promise<{ itemId: string; quantidade: number }[]> {
+  const nos = await db
+    .select()
+    .from(moldeNos)
+    .where(eq(moldeNos.moldeId, moldeId))
+    .orderBy(asc(moldeNos.ordem));
+
+  const filhosDe = new Map<string | null, typeof nos>();
+  for (const n of nos) {
+    filhosDe.set(n.paiId, [...(filhosDe.get(n.paiId) ?? []), n]);
+  }
+
+  const total = new Map<string, number>();
+
+  function descer(paiId: string | null, fator: number, caminho: Set<string>) {
+    /* Trava de seguranca: o molde nao deveria ter ciclo, mas um laco vindo de
+       dado antigo nao pode travar a aplicacao. */
+    if (paiId && caminho.has(paiId)) return;
+    const novoCaminho = paiId ? new Set(caminho).add(paiId) : caminho;
+
+    for (const no of filhosDe.get(paiId) ?? []) {
+      const q = no.quantidade * fator;
+      if (no.itemId) {
+        total.set(no.itemId, (total.get(no.itemId) ?? 0) + q);
+      } else {
+        descer(no.id, q, novoCaminho);
+      }
+    }
+  }
+
+  descer(de, multiplicador, new Set());
+
+  return [...total.entries()].map(([itemId, quantidade]) => ({ itemId, quantidade }));
+}

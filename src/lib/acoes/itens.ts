@@ -1,18 +1,18 @@
 "use server";
 
-import { count, eq, inArray, or } from "drizzle-orm";
+import { count, eq, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { db } from "@/db";
 import {
-  bom,
+  moldeNos,
   classificacoes,
   cotacaoItens,
   itemFornecedores,
   itens,
   itensParametros3d,
-  montagens,
+  montagemNos,
   movimentos,
   pedidoItens,
   regrasClassificacao,
@@ -66,7 +66,6 @@ const esquemaItem = z.object({
   descricao: z.string().trim().min(1, "Informe a descrição"),
   classificacaoId: z.uuid("Escolha a classificação"),
   unidadeId: z.uuid("Escolha a unidade"),
-  nivel: z.coerce.number().int().min(0),
   aquisicao: z
     .enum(["compra_nacional", "compra_importada", "fabricacao_interna", "sob_encomenda"])
     .nullable()
@@ -151,7 +150,6 @@ export async function salvarItem(
     descricao: d.descricao,
     classificacaoId: d.classificacaoId,
     unidadeId: d.unidadeId,
-    nivel: d.nivel,
     aquisicao: d.aquisicao ?? null,
     origemFabricacao: d.origemFabricacao ?? null,
     estoqueMinimo: d.estoqueMinimo,
@@ -256,7 +254,7 @@ export async function alternarAtivoItem(id: string, ativo: boolean) {
 /**
  * O que segura a exclusao de um item, e o que vai junto se ela acontecer.
  *
- * Bloqueia so o que e documento — cotacao, pedido, montagem e estrutura —,
+ * Bloqueia so o que e documento — cotacao, pedido, montagem e molde —,
  * porque ai o item aparece num papel que ja circulou. Movimentacao avulsa
  * (entrada, ajuste) nao bloqueia: sem item nao ha saldo a somar, e o que
  * aconteceu fica no log de auditoria.
@@ -271,8 +269,8 @@ export async function dependenciasItem(id: string): Promise<Dependencias> {
     await Promise.all([
       db.select({ n: count() }).from(cotacaoItens).where(eq(cotacaoItens.itemId, id)),
       db.select({ n: count() }).from(pedidoItens).where(eq(pedidoItens.itemId, id)),
-      db.select({ n: count() }).from(montagens).where(eq(montagens.itemId, id)),
-      db.select({ n: count() }).from(bom).where(or(eq(bom.paiId, id), eq(bom.filhoId, id))),
+      db.select({ n: count() }).from(montagemNos).where(eq(montagemNos.itemId, id)),
+      db.select({ n: count() }).from(moldeNos).where(eq(moldeNos.itemId, id)),
       db.select({ n: count() }).from(movimentos).where(eq(movimentos.itemId, id)),
       db.select({ n: count() }).from(itemFornecedores).where(eq(itemFornecedores.itemId, id)),
     ]);
@@ -284,8 +282,8 @@ export async function dependenciasItem(id: string): Promise<Dependencias> {
       { quantidade: emMontagens[0].n, singular: "montagem", plural: "montagens" },
       {
         quantidade: naEstrutura[0].n,
-        singular: "vínculo na estrutura",
-        plural: "vínculos na estrutura",
+        singular: "lugar em algum molde",
+        plural: "lugares em moldes",
       },
     ]),
     junto: contagens([

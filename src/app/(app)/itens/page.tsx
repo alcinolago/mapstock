@@ -26,14 +26,14 @@ import {
   type FiltrosItens as Filtros,
   type SituacaoItem,
 } from "@/db/consultas";
-import { classificacoes, niveis } from "@/db/schema";
+import { classificacoes } from "@/db/schema";
 import { exigirSessao } from "@/lib/auth";
 import { lerPaginacao, paginaValida } from "@/lib/paginacao";
 import { moeda, numero } from "@/lib/utils";
 
 export const metadata = { title: "Itens" };
 
-const SITUACOES: SituacaoItem[] = ["ok", "falta", "abaixo_minimo", "nao_estocavel"];
+const SITUACOES: SituacaoItem[] = ["ok", "falta", "abaixo_minimo"];
 
 export default async function PaginaItens({
   searchParams,
@@ -50,7 +50,6 @@ export default async function PaginaItens({
   const filtros: Filtros = {
     busca: p.busca,
     classificacaoId: p.classificacao,
-    nivel: p.nivel ? Number(p.nivel) : undefined,
     situacao,
     incluirInativos: p.inativos === "1",
     itemId: p.item?.trim() || undefined,
@@ -65,15 +64,13 @@ export default async function PaginaItens({
   const pagina = paginaValida(pedida.pagina, total, pedida.porPagina);
   const pular = (pagina - 1) * pedida.porPagina;
 
-  const [lista, listaClassificacoes, listaNiveis, cadastro, listaLocais] = await Promise.all([
+  const [lista, listaClassificacoes, cadastro, listaLocais] = await Promise.all([
     listarItensComSaldo({ ...filtros, porPagina: pedida.porPagina, pular }),
     db.select().from(classificacoes).orderBy(classificacoes.ordem),
-    db.select().from(niveis).orderBy(niveis.num),
     codigosDeItens(),
     listarLocais(),
   ]);
 
-  const nomeNivel = new Map(listaNiveis.map((n) => [n.num, n.nome]));
   const podeEditar = sessao.papel !== "leitura";
 
   return (
@@ -95,7 +92,6 @@ export default async function PaginaItens({
 
       <FiltrosItens
         classificacoes={listaClassificacoes}
-        niveis={listaNiveis}
         itens={cadastro}
         locais={listaLocais}
       />
@@ -108,7 +104,6 @@ export default async function PaginaItens({
                 <Coluna>Código</Coluna>
                 <Coluna>Descrição</Coluna>
                 <Coluna>Classificação</Coluna>
-                <Coluna>Nível</Coluna>
                 <Coluna className="text-right">Físico</Coluna>
                 <Coluna className="text-right">Reserv.</Coluna>
                 <Coluna className="text-right">Dispon.</Coluna>
@@ -120,7 +115,7 @@ export default async function PaginaItens({
             </Cabecalho>
             <Corpo>
               {lista.length === 0 ? (
-                <Vazio colSpan={11}>
+                <Vazio colSpan={10}>
                   Nenhum item encontrado. Ajuste os filtros ou cadastre o primeiro.
                 </Vazio>
               ) : (
@@ -144,9 +139,6 @@ export default async function PaginaItens({
                     </Celula>
                     <Celula className="text-xs whitespace-nowrap text-texto-suave">
                       {i.classificacao}
-                    </Celula>
-                    <Celula className="text-xs whitespace-nowrap text-texto-fraco">
-                      {i.nivel} — {nomeNivel.get(i.nivel) ?? "—"}
                     </Celula>
                     <Celula className="num text-right whitespace-nowrap">
                       {numero(i.fisico)} <span className="text-texto-fraco">{i.unidade}</span>

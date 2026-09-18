@@ -18,7 +18,7 @@ import {
 } from "@/db/schema";
 import { exigirEdicao } from "@/lib/auth";
 import { registrar } from "@/lib/auditoria";
-import { explodirEstrutura } from "./estrutura";
+import { explodirMolde } from "./moldes";
 
 /** Numero sequencial por ano: COT-2026-0001, PC-2026-0007. */
 async function proximoNumero(prefixo: "COT" | "PC"): Promise<string> {
@@ -88,7 +88,7 @@ export async function criarCotacao(
       }));
   } else if (origem === "estrutura" && raizId) {
     const fator = Number((multiplicador ?? "1").replace(",", ".")) || 1;
-    aCotar = await explodirEstrutura(raizId, fator);
+    aCotar = await explodirMolde(raizId, fator);
   }
 
   if (aCotar.length > 0) {

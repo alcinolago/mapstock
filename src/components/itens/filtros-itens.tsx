@@ -9,12 +9,10 @@ import { Entrada, Selecao } from "@/components/ui/campo";
 
 export function FiltrosItens({
   classificacoes,
-  niveis,
   itens,
   locais,
 }: {
   classificacoes: { id: string; nome: string }[];
-  niveis: { num: number; nome: string }[];
   /** Todo o cadastro, para escolher pelo codigo sem digitar. */
   itens: { id: string; codigo: string; ativo: boolean }[];
   locais: { id: string; nome: string }[];
@@ -42,7 +40,7 @@ export function FiltrosItens({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [busca]);
 
-  const temFiltro = ["busca", "classificacao", "nivel", "situacao", "item", "local"].some((c) =>
+  const temFiltro = ["busca", "classificacao", "situacao", "item", "local"].some((c) =>
     params.get(c),
   );
 
@@ -88,19 +86,6 @@ export function FiltrosItens({
         ))}
       </Selecao>
 
-      <Selecao
-        aria-label="Nível"
-        value={params.get("nivel") ?? ""}
-        onChange={(e) => aplicar("nivel", e.target.value)}
-        className="w-auto min-w-36"
-      >
-        <option value="">Todos os níveis</option>
-        {niveis.map((n) => (
-          <option key={n.num} value={n.num}>
-            {n.num} — {n.nome}
-          </option>
-        ))}
-      </Selecao>
 
       <Selecao
         aria-label="Local"
@@ -126,7 +111,6 @@ export function FiltrosItens({
         <option value="ok">OK</option>
         <option value="falta">Em falta</option>
         <option value="abaixo_minimo">Abaixo do mínimo</option>
-        <option value="nao_estocavel">Não estocável</option>
       </Selecao>
 
       {temFiltro && (

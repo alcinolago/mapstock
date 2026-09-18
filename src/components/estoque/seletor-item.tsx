@@ -4,6 +4,7 @@ import { Check, ChevronsUpDown, Search } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { Entrada } from "@/components/ui/campo";
+import { Selo } from "@/components/ui/selo";
 import { cn, numero } from "@/lib/utils";
 
 export type ItemBusca = {
@@ -12,6 +13,8 @@ export type ItemBusca = {
   descricao: string;
   unidade: string;
   disponivel: number;
+  /** So quem precisa exibir o papel na estrutura preenche. */
+  papel?: number;
 };
 
 /**
@@ -24,11 +27,17 @@ export function SeletorItem({
   valor,
   aoEscolher,
   nome = "itemId",
+  placeholder = "Buscar item por código ou descrição...",
+  /* Quando vem, o papel do item aparece num selo ao lado do codigo. A
+     estrutura precisa disso: ali o papel e que decide o que pode entrar. */
+  nomePapel,
 }: {
   itens: ItemBusca[];
   valor?: string;
   aoEscolher: (id: string) => void;
   nome?: string;
+  placeholder?: string;
+  nomePapel?: (num: number) => string;
 }) {
   const [aberto, setAberto] = useState(false);
   const [busca, setBusca] = useState("");
@@ -65,14 +74,17 @@ export function SeletorItem({
         className="flex h-10 w-full items-center justify-between gap-2 rounded-lg border border-borda-forte bg-superficie px-3 text-left text-sm transition-colors hover:border-marca/50"
       >
         {escolhido ? (
-          <span className="flex min-w-0 items-baseline gap-2">
+          <span className="flex min-w-0 flex-1 items-center gap-2">
             <span className="codigo shrink-0 text-xs font-semibold text-marca">
               {escolhido.codigo}
             </span>
-            <span className="truncate text-texto">{escolhido.descricao}</span>
+            <span className="min-w-0 flex-1 truncate text-texto">{escolhido.descricao}</span>
+            {nomePapel && escolhido.papel !== undefined && (
+              <Selo tom="neutro">{nomePapel(escolhido.papel)}</Selo>
+            )}
           </span>
         ) : (
-          <span className="text-texto-fraco">Buscar item por código ou descrição...</span>
+          <span className="text-texto-fraco">{placeholder}</span>
         )}
         <ChevronsUpDown className="size-4 shrink-0 text-texto-fraco" />
       </button>

@@ -6,7 +6,6 @@ const SITUACAO: Record<SituacaoItem, { rotulo: string; tom: TomSelo }> = {
   ok: { rotulo: "OK", tom: "ok" },
   falta: { rotulo: "Em falta", tom: "perigo" },
   abaixo_minimo: { rotulo: "Abaixo do mínimo", tom: "alerta" },
-  nao_estocavel: { rotulo: "Não estocável", tom: "neutro" },
 };
 
 export function SeloSituacao({ situacao }: { situacao: SituacaoItem }) {

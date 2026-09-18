@@ -25,6 +25,8 @@ src/db/seed.ts          configurações padrão + admin
 src/db/demo.ts          dados de demonstração
 src/lib/labels.ts       chave ASCII → rótulo em português; EFEITO_MOVIMENTO
 src/lib/codigo.ts       sugestão de código e classificação (portado do desktop)
+src/lib/acoes/moldes.ts     molde (receita)     src/lib/acoes/montagem.ts  execução
+src/lib/acoes/divisoes.ts   os nomes das divisões, reutilizáveis entre moldes
 src/lib/sessao.ts       JWT + cookie          src/lib/auth.ts  guardas de página
 src/lib/acoes/*         server actions, uma por módulo
 src/lib/pdf.ts          montagem de PDF (A4, quebra de linha, link clicável)
@@ -72,12 +74,33 @@ listagem, é bug.
   retroativa ainda valorizava a quantidade de agosto pelo preço de hoje.
   `itens.custoUnitario` continua sendo gravado e vale de reserva para o item
   que nunca foi comprado (fabricado, impresso, equipamento montado).
-- **Nível 0 é o equipamento montado**: nunca conta falta nem entra no alerta
-  de reposição, porque equipamento não se compra. Movimenta só por montagem
-  (`src/lib/acoes/montagens.ts`), nunca por compra.
-- **Montar consome os filhos diretos, não as folhas.** Montar EQP-001 dá saída
-  no conjunto EST-001 inteiro; os 24 parafusos dele já saíram quando EST-001
-  foi montada. Cada nível tem saldo próprio.
+- **Estrutura e estoque são mundos separados, e a fronteira é o item.**
+  `moldes`/`molde_nos` e `montagens`/`montagem_nos` são desta parte do sistema:
+  equipamento e divisão existem só aqui, nunca viram item, nunca têm saldo e
+  nunca aparecem em Estoque ou Itens. O único que atravessa é a **peça**, que
+  é um item de verdade — e ela atravessa num momento só: ao montar.
+  Já houve duas tentativas de fazer o equipamento ser item (`bom`, e depois
+  `itens.papel` com Equipamento/Conjunto/Peça). As duas quebraram no mesmo
+  ponto: obrigavam a cadastrar "Domo" no estoque.
+- **Molde é planejamento; montagem é execução.** Criar molde, acrescentar
+  divisão, mudar quantidade — nada disso confere saldo nem pode ser barrado
+  por falta. Quem confere estoque é `montarNo`, e só ele.
+- **Abrir uma montagem copia a árvore do molde para dentro dela**
+  (`abrirMontagens`). A cópia não é otimização: editar o molde amanhã não
+  pode reescrever o que já foi montado ontem. O nome da divisão vai copiado
+  em `montagem_nos.nome` pelo mesmo motivo. Molde não tem versão — receita
+  nova é molde novo.
+- **Três equipamentos são três árvores independentes**, cada uma com seu
+  número, montada no seu ritmo. Não existe contador de "2 de 3": foi decisão
+  explícita de quem monta.
+- **Só divisão se monta.** Peça não se monta — ela é consumida quando a
+  divisão que a contém fecha. `montadoEm` preenchido congela o nó.
+- **Montar é o único caminho entre esta tela e o estoque**, e ele só lança
+  saída das peças. O equipamento montado **não** dá entrada no estoque:
+  ele não é item. Instalar num carro também não movimenta nada.
+- **Montar uma divisão consome os filhos diretos dela**: as peças saem do
+  estoque, e as sub-divisões precisam já estar montadas. Concluir o
+  equipamento (`montarNo` com nó nulo) fecha a raiz e libera o carro.
 - **Toda server action que escreve chama `exigirEdicao()`** (ou `exigirAdmin()`)
   e registra em `logAuditoria` via `registrar()`.
 
@@ -122,6 +145,14 @@ uma traz o ruído de volta:
   banco. Unicidade de um par não depende de ordem.
 - **Default numérico vai como `sql`'0'``** (o helper `zero` em schema.ts), e
   não `.default(0)`: o comparador lê o default do banco como string.
+
+**Subconsulta correlacionada precisa do helper `ref()`** (`consultas.ts`). Na
+lista de seleção o drizzle renderiza `${tabela.coluna}` **sem o nome da
+tabela** — vira só `"id"`. Dentro de uma subconsulta isso passa a ser
+resolvido pela tabela de dentro, que quase sempre também tem `id`, e a
+correlação vira `n.molde_id = n.id`. Não dá erro: a consulta roda e devolve
+zero para tudo. Já derrubou a tela de Montagem ("nenhuma estrutura", com dois
+moldes cheios) e deixou `emUso` das versões zerado por semanas.
 
 Constraint criada fora do drizzle também diverge — ele espera
 `<tabela>_<coluna>_unique` e `<tabela>_<coluna>_<ref>_<refcol>_fk`, não o

@@ -8,14 +8,11 @@ import { Botao } from "@/components/ui/botao";
 import { Entrada } from "@/components/ui/campo";
 import { Selo } from "@/components/ui/selo";
 import {
-  adicionarNivel,
   adicionarRegra,
   removerClassificacao,
   removerLocal,
-  removerNivel,
   removerRegra,
   removerUnidade,
-  renomearNivel,
   salvarClassificacao,
   salvarLocal,
   salvarUnidade,
@@ -57,99 +54,6 @@ function Erro({ texto }: { texto: string | null }) {
     <p role="alert" className="rounded-lg bg-perigo-suave px-3 py-2 text-sm font-medium text-perigo">
       {texto}
     </p>
-  );
-}
-
-/* --------------------------------------------------------------- Níveis --- */
-
-export function PainelNiveis({ niveis }: { niveis: { num: number; nome: string }[] }) {
-  const { pendente, erro, executar } = useAcao();
-  const [editando, setEditando] = useState<number | null>(null);
-  const [rascunho, setRascunho] = useState("");
-  const [novo, setNovo] = useState("");
-
-  return (
-    <div className="space-y-3">
-      <p className="text-sm text-texto-fraco">
-        Os degraus da estrutura. O Nível 0 é o equipamento montado e não entra no controle de falta.
-      </p>
-
-      <Erro texto={erro} />
-
-      <ul className="divide-y divide-borda overflow-hidden rounded-xl border border-borda">
-        {niveis.map((n) => (
-          <li key={n.num} className="flex items-center gap-3 px-4 py-2.5">
-            <Selo tom={n.num === 0 ? "marca" : "neutro"}>Nível {n.num}</Selo>
-
-            {editando === n.num ? (
-              <>
-                <Entrada
-                  value={rascunho}
-                  onChange={(e) => setRascunho(e.target.value)}
-                  placeholder="Nome do nível *"
-                  required
-                  className="h-8 flex-1 text-sm"
-                  autoFocus
-                />
-                <Botao
-                  variante="salvar"
-                  tamanho="sm"
-                  disabled={pendente || !rascunho.trim()}
-                  onClick={() => executar(() => renomearNivel(n.num, rascunho), () => setEditando(null))}
-                >
-                  <Check className="size-3.5" />
-                </Botao>
-                <Botao variante="suave" tamanho="sm" onClick={() => setEditando(null)}>
-                  <X className="size-3.5" />
-                </Botao>
-              </>
-            ) : (
-              <>
-                <span className="flex-1 text-sm font-medium text-texto">{n.nome}</span>
-                <Botao
-                  variante="fantasma"
-                  tamanho="sm"
-                  onClick={() => {
-                    setRascunho(n.nome);
-                    setEditando(n.num);
-                  }}
-                >
-                  <Pencil className="size-3.5" />
-                </Botao>
-                {n.num > 0 && (
-                  <Botao
-                    variante="fantasma"
-                    tamanho="sm"
-                    disabled={pendente}
-                    onClick={() => executar(() => removerNivel(n.num))}
-                  >
-                    <Trash2 className="size-3.5 text-perigo" />
-                  </Botao>
-                )}
-              </>
-            )}
-          </li>
-        ))}
-      </ul>
-
-      <div className="flex gap-2">
-        <Entrada
-          value={novo}
-          onChange={(e) => setNovo(e.target.value)}
-          placeholder="Nome do novo nível *"
-          required
-          className="max-w-64"
-        />
-        <Botao
-          variante="contorno"
-          disabled={pendente || !novo.trim()}
-          onClick={() => executar(() => adicionarNivel(novo), () => setNovo(""))}
-        >
-          <Plus className="size-4" />
-          Adicionar
-        </Botao>
-      </div>
-    </div>
   );
 }
 

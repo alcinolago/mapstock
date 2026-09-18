@@ -27,9 +27,8 @@ export type OpcaoVersao = { id: string; tipo: string; numero: string };
 export type OpcaoMontagem = {
   id: string;
   numero: string;
-  codigo: string;
-  descricao: string;
-  montadaEm: Date;
+  nome: string;
+  montadaEm: Date | null;
 };
 
 export function FormularioCarro({
@@ -118,7 +117,7 @@ export function FormularioCarro({
       <Cartao>
         <CabecalhoCartao
           titulo="Equipamento instalado"
-          descricao="A unidade montada que está neste carro. Instalar tira a unidade do estoque; tirar devolve."
+          descricao="O equipamento montado que está neste carro. Só entra na lista o que já foi montado por inteiro."
         />
         <CorpoCartao>
           <Grupo rotulo="Equipamento" htmlFor="montagemId" erro={erroNoCampo("montagemId")}>
@@ -126,7 +125,7 @@ export function FormularioCarro({
               <option value="">Nenhum equipamento instalado</option>
               {montagens.map((m) => (
                 <option key={m.id} value={m.id}>
-                  {m.numero} — {m.codigo} · {m.descricao} (montado em {data(m.montadaEm)})
+                  {m.numero} — {m.nome}{m.montadaEm ? ` (montado em ${data(m.montadaEm)})` : ""}
                 </option>
               ))}
             </Selecao>

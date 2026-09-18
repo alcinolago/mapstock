@@ -36,7 +36,6 @@ export type DadosItem = {
   descricao: string;
   classificacaoId: string;
   unidadeId: string;
-  nivel: number;
   aquisicao: string | null;
   origemFabricacao: string | null;
   estoqueMinimo: number;
@@ -51,7 +50,6 @@ export type DadosItem = {
 type Props = {
   classificacoes: { id: string; nome: string; prefixoCodigo: string }[];
   unidades: { id: string; sigla: string; nome: string }[];
-  niveis: { num: number; nome: string }[];
   fornecedores: { id: string; nome: string }[];
   locais: { id: string; nome: string; ativo: boolean }[];
   regras: { classificacaoId: string; palavraChave: string }[];
@@ -62,7 +60,6 @@ type Props = {
 export function FormularioItem({
   classificacoes,
   unidades,
-  niveis,
   fornecedores,
   locais,
   regras,
@@ -230,20 +227,6 @@ export function FormularioItem({
             </Selecao>
           </Grupo>
 
-          <Grupo
-            rotulo="Nível na estrutura"
-            obrigatorio
-            htmlFor="nivel"
-            ajuda="Nível 0 é o equipamento montado; não entra no controle de falta."
-          >
-            <Selecao id="nivel" name="nivel" defaultValue={String(item?.nivel ?? 1)} required>
-              {niveis.map((n) => (
-                <option key={n.num} value={n.num}>
-                  {n.num} — {n.nome}
-                </option>
-              ))}
-            </Selecao>
-          </Grupo>
 
           <Grupo rotulo="Aquisição" htmlFor="aquisicao">
             <Selecao id="aquisicao" name="aquisicao" defaultValue={item?.aquisicao ?? ""}>

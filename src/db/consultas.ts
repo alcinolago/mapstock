@@ -1,19 +1,35 @@
-import { and, asc, desc, eq, ilike, inArray, isNull, not, or, sql, type SQL } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  getTableName,
+  ilike,
+  inArray,
+  isNull,
+  not,
+  or,
+  sql,
+  type SQL,
+} from "drizzle-orm";
 import { alias, type PgColumn } from "drizzle-orm/pg-core";
 
 import { diaSeguinte, FUSO, limitesDoMes } from "@/lib/periodo";
 
 import { db } from "./index";
 import {
-  bom,
   carros,
   classificacoes,
   cotacoes,
+  divisoes,
   fornecedores,
   itemFornecedores,
   itens,
   locais,
   itensParametros3d,
+  moldeNos,
+  moldes,
+  montagemNos,
   montagens,
   movimentos,
   pedidoItens,
@@ -22,6 +38,23 @@ import {
   usuarios,
   versoes,
 } from "./schema";
+
+/**
+ * Referencia qualificada de coluna — `"moldes"."id"` em vez de `"id"`.
+ *
+ * Existe por causa de uma armadilha silenciosa: na lista de selecao, o
+ * drizzle renderiza `${tabela.coluna}` sem o nome da tabela. Dentro de uma
+ * subconsulta correlacionada isso passa a ser resolvido pela tabela de
+ * dentro, que quase sempre tambem tem uma coluna `id` — e a correlacao vira
+ * `n.molde_id = n.id`, que nunca e verdade.
+ *
+ * O erro nao aparece: a consulta roda, nao reclama, e devolve zero para
+ * tudo. Foi assim que a tela de montagem passou a dizer que nao existia
+ * nenhuma estrutura, com dois moldes cheios no banco.
+ */
+function ref(coluna: PgColumn): SQL {
+  return sql.raw(`"${getTableName(coluna.table)}"."${coluna.name}"`);
+}
 
 /**
  * Saldo por item, agregado no banco.
@@ -76,7 +109,7 @@ function custoDoUltimoRecebimento() {
     .as("custo_recebido");
 }
 
-export type SituacaoItem = "ok" | "falta" | "abaixo_minimo" | "nao_estocavel";
+export type SituacaoItem = "ok" | "falta" | "abaixo_minimo";
 
 export type ItemComSaldo = {
   id: string;
@@ -84,7 +117,6 @@ export type ItemComSaldo = {
   descricao: string;
   classificacao: string;
   unidade: string;
-  nivel: number;
   custoUnitario: number;
   estoqueMinimo: number;
   localizacao: string | null;
@@ -98,13 +130,11 @@ export type ItemComSaldo = {
 };
 
 /**
- * Nivel 0 e o equipamento montado: nao se compra, entao nunca conta como
- * falta nem entra no alerta de reposicao. Essa parte vem do desktop.
+ * A situacao responde "e agora, o que eu faco?".
  *
- * O que mudou: montar uma estrutura passou a dar entrada de uma unidade no
- * nivel 0, e uma unidade pronta na prateleira nao pode aparecer como "nao
- * estocavel". Com saldo, ele e um item normal; sem saldo, continua fora da
- * conta de falta — ninguem compra um equipamento montado.
+ * Todo item e peca de estoque — equipamento e divisao vivem no molde, nunca
+ * aqui. Entao nao ha mais caso especial: sem saldo e falta, abaixo do minimo
+ * e alerta de reposicao, e pronto.
  */
 const disponivelSql = sql<number>`(coalesce(${saldos.fisico}, 0) - coalesce(${saldos.reservado}, 0))`;
 
@@ -115,7 +145,6 @@ const disponivelSql = sql<number>`(coalesce(${saldos.fisico}, 0) - coalesce(${sa
  * versao em JS existia e foi movida para ca inteira.
  */
 const situacaoSql = sql<SituacaoItem>`case
-  when ${itens.nivel} = 0 then case when ${disponivelSql} > 0 then 'ok' else 'nao_estocavel' end
   when ${disponivelSql} <= 0 then 'falta'
   when ${itens.estoqueMinimo} > 0 and ${disponivelSql} < ${itens.estoqueMinimo}
     then 'abaixo_minimo'
@@ -125,7 +154,6 @@ end`;
 export type FiltrosItens = {
   busca?: string;
   classificacaoId?: string;
-  nivel?: number;
   situacao?: SituacaoItem;
   incluirInativos?: boolean;
   /** Um item so, escolhido pelo codigo no seletor. */
@@ -145,7 +173,6 @@ function condicoesDeItens(filtros?: FiltrosItens): SQL[] {
   if (filtros?.classificacaoId) {
     condicoes.push(eq(itens.classificacaoId, filtros.classificacaoId));
   }
-  if (filtros?.nivel !== undefined) condicoes.push(eq(itens.nivel, filtros.nivel));
   if (filtros?.localId) condicoes.push(eq(itens.localId, filtros.localId));
   if (filtros?.situacao) condicoes.push(sql`${situacaoSql} = ${filtros.situacao}`);
   if (filtros?.busca) {
@@ -186,7 +213,6 @@ export async function listarItensComSaldo(
       descricao: itens.descricao,
       classificacao: classificacoes.nome,
       unidade: unidades.sigla,
-      nivel: itens.nivel,
       custoUnitario: itens.custoUnitario,
       custoRecebido: sql<number | null>`${custo.preco}`,
       estoqueMinimo: itens.estoqueMinimo,
@@ -207,7 +233,7 @@ export async function listarItensComSaldo(
 
   consulta
     .where(condicoes.length ? and(...condicoes) : undefined)
-    .orderBy(asc(itens.nivel), asc(itens.codigo));
+    .orderBy(asc(itens.codigo));
 
   if (filtros?.porPagina) consulta.limit(filtros.porPagina).offset(filtros.pular ?? 0);
 
@@ -345,7 +371,6 @@ export async function pedidoCompleto(id: string) {
       descricao: itens.descricao,
       classificacao: classificacoes.nome,
       unidade: unidades.sigla,
-      nivel: itens.nivel,
       aquisicao: itens.aquisicao,
       origemFabricacao: itens.origemFabricacao,
       linkCompra: itens.linkCompra,
@@ -401,70 +426,132 @@ export type LinhaPedidoCompleta = PedidoCompleto["linhas"][number];
 
 /* ------------------------------------------------------------ Montagem --- */
 
-export type ComponenteDaMontagem = {
-  itemId: string;
-  codigo: string;
-  descricao: string;
-  unidade: string;
-  necessario: number;
-  disponivel: number;
+export type NoDoMolde = {
+  id: string;
+  paiId: string | null;
+  /** Divisao: nome do agrupador. Peca: null. */
+  divisaoId: string | null;
+  nome: string | null;
+  itemId: string | null;
+  codigo: string | null;
+  descricao: string | null;
+  unidade: string | null;
+  custo: number;
+  quantidade: number;
   obrigatorio: boolean;
   localMontagem: string | null;
-  temEstrutura: boolean;
+  ordem: number;
+  disponivel: number;
 };
 
-/**
- * O que e preciso ter em maos para montar uma unidade deste item.
- *
- * So os filhos diretos, de proposito. Montar EQP-001 consome o conjunto
- * EST-001 inteiro, e nao os 24 parafusos dele — os parafusos ja sairam do
- * estoque quando EST-001 foi montada. Cada nivel tem saldo proprio e o
- * historico mostra a montagem de cada etapa.
- */
-export async function componentesDaMontagem(
-  itemId: string,
-  quantidade = 1,
-): Promise<ComponenteDaMontagem[]> {
-  const linhas = await db
+/** A arvore crua de um molde, plana. Quem monta em arvore e a tela. */
+export async function nosDoMolde(moldeId: string): Promise<NoDoMolde[]> {
+  const custo = custoDoUltimoRecebimento();
+
+  return db
     .select({
-      itemId: itens.id,
+      id: moldeNos.id,
+      paiId: moldeNos.paiId,
+      divisaoId: moldeNos.divisaoId,
+      nome: divisoes.nome,
+      itemId: moldeNos.itemId,
       codigo: itens.codigo,
       descricao: itens.descricao,
       unidade: unidades.sigla,
-      necessario: bom.quantidade,
-      obrigatorio: bom.obrigatorio,
-      localMontagem: bom.localMontagem,
-      fisico: sql<number>`coalesce(${saldos.fisico}, 0)`,
-      reservado: sql<number>`coalesce(${saldos.reservado}, 0)`,
-      /* Filho que tambem tem estrutura pode ser montado antes, e a tela
-         oferece esse caminho quando ele esta em falta. O nome da tabela vai
-         cru porque o bom ja esta no from de fora: o alias do drizzle nao
-         sobrevive dentro do exists. */
-      temEstrutura: sql<boolean>`exists (select 1 from bom sub where sub.pai_id = ${itens.id})`,
+      /* Custo derivado, como manda a regra: o preco do ultimo recebimento,
+         e o campo do item so como reserva para o que nunca foi comprado. */
+      custo: sql<number>`coalesce(${custo.preco}, ${itens.custoUnitario}, 0)`,
+      quantidade: moldeNos.quantidade,
+      obrigatorio: moldeNos.obrigatorio,
+      localMontagem: moldeNos.localMontagem,
+      ordem: moldeNos.ordem,
+      disponivel: sql<number>`coalesce(${saldos.fisico}, 0) - coalesce(${saldos.reservado}, 0)`,
     })
-    .from(bom)
-    .innerJoin(itens, eq(itens.id, bom.filhoId))
-    .innerJoin(unidades, eq(unidades.id, itens.unidadeId))
-    .leftJoin(saldos, eq(saldos.itemId, bom.filhoId))
-    .where(eq(bom.paiId, itemId))
-    .orderBy(asc(bom.ordem), asc(itens.codigo));
-
-  return linhas.map((l) => ({
-    itemId: l.itemId,
-    codigo: l.codigo,
-    descricao: l.descricao,
-    unidade: l.unidade,
-    necessario: l.necessario * quantidade,
-    disponivel: l.fisico - l.reservado,
-    obrigatorio: l.obrigatorio,
-    localMontagem: l.localMontagem,
-    temEstrutura: l.temEstrutura,
-  }));
+    .from(moldeNos)
+    .leftJoin(divisoes, eq(divisoes.id, moldeNos.divisaoId))
+    .leftJoin(saldos, eq(saldos.itemId, moldeNos.itemId))
+    .leftJoin(itens, eq(itens.id, moldeNos.itemId))
+    .leftJoin(unidades, eq(unidades.id, itens.unidadeId))
+    .leftJoin(custo, eq(custo.itemId, moldeNos.itemId))
+    .where(eq(moldeNos.moldeId, moldeId))
+    .orderBy(asc(moldeNos.ordem), asc(moldeNos.id));
 }
 
-export async function listarMontagens(filtros?: { itemId?: string; incluirDesmontadas?: boolean }) {
+export async function listarMoldes() {
+  return db
+    .select({
+      id: moldes.id,
+      nome: moldes.nome,
+      descricao: moldes.descricao,
+      ativo: moldes.ativo,
+      nos: sql<number>`(select count(*)::int from molde_nos n where n.molde_id = ${ref(moldes.id)})`,
+      montagens: sql<number>`(select count(*)::int from montagens m where m.molde_id = ${ref(moldes.id)})`,
+    })
+    .from(moldes)
+    .orderBy(asc(moldes.nome));
+}
+
+export type Molde = Awaited<ReturnType<typeof listarMoldes>>[number];
+
+export type NoDaMontagem = {
+  id: string;
+  paiId: string | null;
+  nome: string | null;
+  itemId: string | null;
+  codigo: string | null;
+  descricao: string | null;
+  unidade: string | null;
+  quantidade: number;
+  obrigatorio: boolean;
+  localMontagem: string | null;
+  ordem: number;
+  montadoEm: Date | null;
+  montadoPor: string | null;
+  /** Saldo do item hoje. Zero para divisao, que nao tem saldo nenhum. */
+  disponivel: number;
+  custo: number;
+};
+
+/**
+ * A arvore de uma montagem, com o saldo de cada peca no momento da consulta.
+ *
+ * O saldo entra aqui e nao na hora de montar porque a tela precisa mostrar o
+ * que falta antes de a pessoa clicar — e a acao confere de novo no servidor,
+ * que entre abrir a tela e confirmar alguem pode ter consumido a ultima peca.
+ */
+export async function nosDaMontagem(montagemId: string): Promise<NoDaMontagem[]> {
+  const custo = custoDoUltimoRecebimento();
+
+  return db
+    .select({
+      id: montagemNos.id,
+      paiId: montagemNos.paiId,
+      nome: montagemNos.nome,
+      itemId: montagemNos.itemId,
+      codigo: itens.codigo,
+      descricao: itens.descricao,
+      unidade: unidades.sigla,
+      quantidade: montagemNos.quantidade,
+      obrigatorio: montagemNos.obrigatorio,
+      localMontagem: montagemNos.localMontagem,
+      ordem: montagemNos.ordem,
+      montadoEm: montagemNos.montadoEm,
+      montadoPor: usuarios.nome,
+      disponivel: sql<number>`coalesce(${saldos.fisico}, 0) - coalesce(${saldos.reservado}, 0)`,
+      custo: sql<number>`coalesce(${custo.preco}, ${itens.custoUnitario}, 0)`,
+    })
+    .from(montagemNos)
+    .leftJoin(itens, eq(itens.id, montagemNos.itemId))
+    .leftJoin(unidades, eq(unidades.id, itens.unidadeId))
+    .leftJoin(saldos, eq(saldos.itemId, montagemNos.itemId))
+    .leftJoin(usuarios, eq(usuarios.id, montagemNos.montadoPor))
+    .leftJoin(custo, eq(custo.itemId, montagemNos.itemId))
+    .where(eq(montagemNos.montagemId, montagemId))
+    .orderBy(asc(montagemNos.ordem), asc(montagemNos.id));
+}
+
+export async function listarMontagens(filtros?: { incluirDesmontadas?: boolean }) {
   const condicoes: SQL[] = [];
-  if (filtros?.itemId) condicoes.push(eq(montagens.itemId, filtros.itemId));
   if (!filtros?.incluirDesmontadas) {
     condicoes.push(sql`${montagens.status} <> 'desmontada'`);
   }
@@ -473,24 +560,30 @@ export async function listarMontagens(filtros?: { itemId?: string; incluirDesmon
     .select({
       id: montagens.id,
       numero: montagens.numero,
+      nome: montagens.nome,
+      moldeId: montagens.moldeId,
       status: montagens.status,
       local: montagens.local,
       observacoes: montagens.observacoes,
+      iniciadaEm: montagens.iniciadaEm,
       montadaEm: montagens.montadaEm,
       desmontadaEm: montagens.desmontadaEm,
-      itemId: itens.id,
-      codigo: itens.codigo,
-      descricao: itens.descricao,
       montadaPor: usuarios.nome,
       carroId: carros.id,
       placa: carros.placa,
+      /* Progresso: so divisao conta como etapa — peca nao se monta sozinha,
+         ela e consumida quando a divisao que a contem fecha. */
+      etapas: sql<number>`(select count(*)::int from montagem_nos n
+        where n.montagem_id = ${ref(montagens.id)} and n.item_id is null)`,
+      etapasFeitas: sql<number>`(select count(*)::int from montagem_nos n
+        where n.montagem_id = ${ref(montagens.id)} and n.item_id is null
+          and n.montado_em is not null)`,
     })
     .from(montagens)
-    .innerJoin(itens, eq(itens.id, montagens.itemId))
     .leftJoin(usuarios, eq(usuarios.id, montagens.montadaPor))
     .leftJoin(carros, eq(carros.id, montagens.carroId))
     .where(condicoes.length ? and(...condicoes) : undefined)
-    .orderBy(desc(montagens.montadaEm));
+    .orderBy(desc(montagens.iniciadaEm));
 }
 
 export type Montagem = Awaited<ReturnType<typeof listarMontagens>>[number];
@@ -514,16 +607,13 @@ export async function listarCarros() {
       versaoTablet: tablet.numero,
       montagemId: montagens.id,
       montagemNumero: montagens.numero,
-      equipamentoId: itens.id,
-      equipamentoCodigo: itens.codigo,
-      equipamento: itens.descricao,
+      equipamento: montagens.nome,
     })
     .from(carros)
     .leftJoin(sistema, eq(sistema.id, carros.versaoSistemaId))
     .leftJoin(tablet, eq(tablet.id, carros.versaoTabletId))
     /* O equipamento do carro e a montagem que aponta para ele. */
     .leftJoin(montagens, eq(montagens.carroId, carros.id))
-    .leftJoin(itens, eq(itens.id, montagens.itemId))
     .orderBy(asc(carros.placa));
 }
 
@@ -537,10 +627,12 @@ export async function listarVersoes() {
       numero: versoes.numero,
       notas: versoes.notas,
       lancadaEm: versoes.lancadaEm,
+      /* Bug antigo: sem o `ref`, o `${versoes.id}` virava `"id"` e era lido
+         como `carros.id`, entao toda versao aparecia como fora de uso. */
       emUso: sql<number>`(
-        select count(*)::int from ${carros}
-        where ${carros.versaoSistemaId} = ${versoes.id}
-           or ${carros.versaoTabletId} = ${versoes.id}
+        select count(*)::int from carros c
+        where c.versao_sistema_id = ${ref(versoes.id)}
+           or c.versao_tablet_id = ${ref(versoes.id)}
       )`,
     })
     .from(versoes)
@@ -562,11 +654,9 @@ export async function montagensParaCarro(carroId?: string) {
       status: montagens.status,
       local: montagens.local,
       montadaEm: montagens.montadaEm,
-      codigo: itens.codigo,
-      descricao: itens.descricao,
+      nome: montagens.nome,
     })
     .from(montagens)
-    .innerJoin(itens, eq(itens.id, montagens.itemId))
     .where(
       or(
         and(eq(montagens.status, "montada"), isNull(montagens.carroId)),

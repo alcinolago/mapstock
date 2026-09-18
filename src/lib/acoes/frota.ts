@@ -9,7 +9,7 @@ import { carros, montagens, versoes } from "@/db/schema";
 import { exigirEdicao } from "@/lib/auth";
 import { registrar } from "@/lib/auditoria";
 import { ehDuplicado } from "@/lib/erros";
-import { definirEquipamentoDoCarro } from "./montagens";
+import { definirEquipamentoDoCarro } from "./montagem";
 
 /* ---------------------------------------------------------------- Carro --- */
 

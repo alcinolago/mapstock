@@ -11,6 +11,7 @@ import {
   timestamp,
   unique,
   uuid,
+  type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 
 /* -------------------------------------------------------------------------
@@ -89,6 +90,9 @@ export const statusMontagem = pgEnum("status_montagem", [
   "montada",
   "instalada",
   "desmontada",
+  /* Arvore aberta e ainda incompleta. Vem por ultimo porque acrescentar valor
+     no meio de um enum do Postgres exige recriar o tipo. */
+  "em_montagem",
 ]);
 
 export const acaoAuditoria = pgEnum("acao_auditoria", ["criar", "atualizar", "excluir"]);
@@ -132,11 +136,6 @@ export const usuarios = pgTable("usuarios", {
  * o dicionario de prefixos dentro de code_suggestion e as regras de classify).
  * Virando tabela, ele edita pela tela de configuracoes sem mexer em codigo.
  * ---------------------------------------------------------------------- */
-
-export const niveis = pgTable("niveis", {
-  num: integer("num").primaryKey(),
-  nome: text("nome").notNull(),
-});
 
 export const classificacoes = pgTable("classificacoes", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -196,10 +195,6 @@ export const itens = pgTable("itens", {
   unidadeId: uuid("unidade_id")
     .notNull()
     .references(() => unidades.id, { onDelete: "restrict" }),
-  nivel: integer("nivel")
-    .notNull()
-    .default(0)
-    .references(() => niveis.num, { onDelete: "restrict" }),
   aquisicao: tipoAquisicao("aquisicao"),
   origemFabricacao: origemFabricacao("origem_fabricacao"),
   linkCompra: text("link_compra"),
@@ -291,23 +286,64 @@ export const itemFornecedores = pgTable(
  * Estrutura (BOM)
  * ---------------------------------------------------------------------- */
 
-export const bom = pgTable(
-  "bom",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    paiId: uuid("pai_id")
-      .notNull()
-      .references(() => itens.id, { onDelete: "cascade" }),
-    filhoId: uuid("filho_id")
-      .notNull()
-      .references(() => itens.id, { onDelete: "cascade" }),
-    quantidade: quantidade("quantidade"),
-    obrigatorio: boolean("obrigatorio").notNull().default(true),
-    localMontagem: text("local_montagem"),
-    ordem: integer("ordem").notNull().default(0),
-  },
-  (t) => [unique("bom_vinculo_unico").on(t.paiId, t.filhoId)],
-);
+/* -------------------------------------------------------------------------
+ * Estrutura — molde e montagem
+ *
+ * Duas coisas separadas de proposito, e a separacao e o coracao do modulo:
+ *
+ *   o molde  e o que o equipamento E. Divisoes e pecas com quantidade.
+ *            estavel, reutilizavel, e nao encosta no estoque nunca.
+ *   a montagem  e o que esta sendo feito agora. Nasce como copia do molde,
+ *            uma arvore por equipamento, e e ela que da baixa no estoque.
+ *
+ * Montar tres equipamentos abre tres arvores independentes — cada uma no seu
+ * quadrado, montada no seu ritmo, sem contador de "2 de 3" e sem uma afetar a
+ * outra. A copia tambem e o que protege o passado: editar o molde depois nao
+ * reescreve o que ja foi montado.
+ *
+ * Divisao e equipamento sao desta tela. Item de estoque e o unico que
+ * atravessa a fronteira, e so no momento de montar.
+ * ---------------------------------------------------------------------- */
+
+/** Nomes livres de divisao: Domo, Estrutura, Fiacao, Fixacao. */
+export const divisoes = pgTable("divisoes", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  nome: text("nome").notNull().unique(),
+  ordem: integer("ordem").notNull().default(0),
+  ativo: boolean("ativo").notNull().default(true),
+  criadoEm,
+  criadoPor: uuid("criado_por").references(() => usuarios.id, { onDelete: "set null" }),
+});
+
+export const moldes = pgTable("moldes", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  nome: text("nome").notNull().unique(),
+  descricao: text("descricao"),
+  ativo: boolean("ativo").notNull().default(true),
+  criadoEm,
+  criadoPor: uuid("criado_por").references(() => usuarios.id, { onDelete: "set null" }),
+  atualizadoEm: timestamp("atualizado_em", { withTimezone: true }).notNull().defaultNow(),
+  atualizadoPor: uuid("atualizado_por").references(() => usuarios.id, { onDelete: "set null" }),
+});
+
+/**
+ * Um no do molde e uma de duas coisas, nunca as duas:
+ *   divisaoId  → agrupador, pode ter filhos
+ *   itemId     → peca do estoque, folha
+ */
+export const moldeNos = pgTable("molde_nos", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  moldeId: uuid("molde_id")
+    .notNull()
+    .references(() => moldes.id, { onDelete: "cascade" }),
+  paiId: uuid("pai_id").references((): AnyPgColumn => moldeNos.id, { onDelete: "cascade" }),
+  divisaoId: uuid("divisao_id").references(() => divisoes.id, { onDelete: "restrict" }),
+  itemId: uuid("item_id").references(() => itens.id, { onDelete: "restrict" }),
+  quantidade: quantidade("quantidade"),
+  obrigatorio: boolean("obrigatorio").notNull().default(true),
+  localMontagem: text("local_montagem"),
+  ordem: integer("ordem").notNull().default(0),
+});
 
 /* -------------------------------------------------------------------------
  * Compras: cotacao -> pedido -> recebimento
@@ -472,13 +508,19 @@ export const carros = pgTable("carros", {
   atualizadoPor: uuid("atualizado_por").references(() => usuarios.id, { onDelete: "set null" }),
 });
 
+/**
+ * Uma arvore em montagem: um equipamento, copiado do molde no momento em que
+ * a ordem e aberta. Pedir tres equipamentos cria tres linhas destas.
+ *
+ * `nome` e copia, nao atalho: o molde pode ser renomeado ou apagado depois, e
+ * o que foi montado nao muda de nome por causa disso.
+ */
 export const montagens = pgTable("montagens", {
   id: uuid("id").primaryKey().defaultRandom(),
   numero: text("numero").notNull().unique(),
-  itemId: uuid("item_id")
-    .notNull()
-    .references(() => itens.id, { onDelete: "restrict" }),
-  status: statusMontagem("status").notNull().default("montada"),
+  moldeId: uuid("molde_id").references(() => moldes.id, { onDelete: "set null" }),
+  nome: text("nome").notNull(),
+  status: statusMontagem("status").notNull().default("em_montagem"),
   /* Onde a unidade esta enquanto nao tem carro: prateleira, bancada, ou a
      placa escrita a mao de um carro que ainda nao foi cadastrado. */
   local: text("local"),
@@ -489,9 +531,37 @@ export const montagens = pgTable("montagens", {
     .references(() => carros.id, { onDelete: "set null" })
     .unique(),
   observacoes: text("observacoes"),
-  montadaEm: timestamp("montada_em", { withTimezone: true }).notNull().defaultNow(),
+  iniciadaEm: timestamp("iniciada_em", { withTimezone: true }).notNull().defaultNow(),
+  /* So existe quando a arvore inteira fecha — e o que libera associar o carro. */
+  montadaEm: timestamp("montada_em", { withTimezone: true }),
   montadaPor: uuid("montada_por").references(() => usuarios.id, { onDelete: "set null" }),
   desmontadaEm: timestamp("desmontada_em", { withTimezone: true }),
+});
+
+/**
+ * O no da arvore de uma montagem. Copia do no do molde, com o estado.
+ *
+ * O nome da divisao vem copiado em vez de apontar para `divisoes`: renomear
+ * "Domo" amanha nao pode reescrever o que foi montado ontem. A peca continua
+ * apontando para o item, porque e do item que sai o saldo.
+ *
+ * `montadoEm` preenchido e o congelamento: dali em diante o no nao se mexe.
+ */
+export const montagemNos = pgTable("montagem_nos", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  montagemId: uuid("montagem_id")
+    .notNull()
+    .references(() => montagens.id, { onDelete: "cascade" }),
+  paiId: uuid("pai_id").references((): AnyPgColumn => montagemNos.id, { onDelete: "cascade" }),
+  /* Divisao: nome copiado. Peca: itemId. Nunca os dois. */
+  nome: text("nome"),
+  itemId: uuid("item_id").references(() => itens.id, { onDelete: "restrict" }),
+  quantidade: quantidade("quantidade"),
+  obrigatorio: boolean("obrigatorio").notNull().default(true),
+  localMontagem: text("local_montagem"),
+  ordem: integer("ordem").notNull().default(0),
+  montadoEm: timestamp("montado_em", { withTimezone: true }),
+  montadoPor: uuid("montado_por").references(() => usuarios.id, { onDelete: "set null" }),
 });
 
 /* -------------------------------------------------------------------------

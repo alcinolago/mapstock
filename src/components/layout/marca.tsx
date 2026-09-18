@@ -2,7 +2,7 @@ import { cn } from "@/lib/utils";
 
 /**
  * Marca do MapStock: tres camadas empilhadas, do cheio ao vazio — a leitura
- * visual de nivel de estoque, que e o que o sistema faz.
+ * visual de nível de estoque, que e o que o sistema faz.
  */
 export function Marca({ className }: { className?: string }) {
   return (

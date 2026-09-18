@@ -77,7 +77,7 @@ export default async function PaginaItens({
     <div className="mx-auto max-w-[100rem]">
       <CabecalhoPagina
         titulo="Itens"
-        descricao={`${total} ${total === 1 ? "item" : "itens"} — peças, componentes e consumíveis`}
+        descricao={`${total} ${total === 1 ? "item" : "itens"} em estoque — saldo, custo e situação de cada um`}
         acao={
           podeEditar && (
             <Link href="/itens/novo">

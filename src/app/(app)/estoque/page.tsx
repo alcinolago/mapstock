@@ -15,7 +15,7 @@ import { exigirSessao } from "@/lib/auth";
 import { lerPaginacao, paginaValida } from "@/lib/paginacao";
 import { dataValida, mesesAte } from "@/lib/periodo";
 
-export const metadata = { title: "Estoque" };
+export const metadata = { title: "Movimentações" };
 
 export default async function PaginaEstoque({
   searchParams,
@@ -101,8 +101,8 @@ export default async function PaginaEstoque({
   return (
     <div className="mx-auto max-w-[100rem]">
       <CabecalhoPagina
-        titulo="Estoque"
-        descricao="Entradas, saídas, reservas e ajustes. O saldo é sempre a soma do histórico."
+        titulo="Movimentações"
+        descricao="O histórico do estoque: entradas, saídas, reservas e ajustes. O saldo de cada item é sempre a soma disto."
       />
 
       <div className="grid gap-5 xl:grid-cols-[22rem_1fr]">

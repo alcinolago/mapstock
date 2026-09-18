@@ -91,6 +91,44 @@ export function FornecedoresItem({
 
   return (
     <div className="space-y-3">
+      {/* Escolher vem antes de cadastrar. Sem este bloco, a aba abria com um
+          botão só — "Adicionar fornecedor" — e a lista dos que já existem
+          ficava escondida atrás dele, como se o único caminho fosse criar
+          um novo. */}
+      {vinculos.length === 0 && (
+        <div className="rounded-xl border border-dashed border-borda-forte bg-superficie-2 p-4">
+          <p className="mb-3 text-sm text-texto-fraco">
+            Nenhum fornecedor vinculado a este item ainda. Escolha um dos{" "}
+            {lista.length} já cadastrados:
+          </p>
+          <div className="flex flex-wrap items-end gap-3">
+            <Grupo rotulo="Fornecedor" className="min-w-56 flex-1">
+              <Selecao
+                value=""
+                onChange={(e) =>
+                  e.target.value &&
+                  aoMudar([
+                    { ...VINCULO_VAZIO, fornecedorId: e.target.value, principal: true },
+                  ])
+                }
+              >
+                <option value="">Selecione...</option>
+                {lista.map((f) => (
+                  <option key={f.id} value={f.id}>
+                    {f.nome}
+                  </option>
+                ))}
+              </Selecao>
+            </Grupo>
+
+            <div className="flex items-center gap-3 pb-0.5">
+              <span className="text-xs text-texto-fraco">ou</span>
+              <NovoFornecedor aoCriar={(f) => acolher(f)} compacto />
+            </div>
+          </div>
+        </div>
+      )}
+
       {vinculos.map((v, i) => {
         const jaUsados = vinculos.filter((_, j) => j !== i).map((o) => o.fornecedorId);
         return (
@@ -135,7 +173,9 @@ export function FornecedoresItem({
                 obrigatorio
                 className="lg:col-span-2"
                 ajuda={
-                  <NovoFornecedor aoCriar={(f) => acolher(f, i)} compacto />
+                  v.fornecedorId ? undefined : (
+                    <NovoFornecedor aoCriar={(f) => acolher(f, i)} compacto />
+                  )
                 }
               >
                 <Selecao

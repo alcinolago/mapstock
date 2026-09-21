@@ -3,6 +3,7 @@
 import { Check, ChevronsUpDown, Search } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { MiniaturaItem } from "@/components/itens/miniatura-item";
 import { Entrada } from "@/components/ui/campo";
 import { Selo } from "@/components/ui/selo";
 import { cn, numero } from "@/lib/utils";
@@ -15,6 +16,8 @@ export type ItemBusca = {
   disponivel: number;
   /** So quem precisa exibir o papel na estrutura preenche. */
   papel?: number;
+  /** Foto principal, quando o item tem uma. */
+  fotoId?: string;
 };
 
 /**
@@ -75,6 +78,11 @@ export function SeletorItem({
       >
         {escolhido ? (
           <span className="flex min-w-0 flex-1 items-center gap-2">
+            <MiniaturaItem
+              fotoId={escolhido.fotoId}
+              descricao={escolhido.descricao}
+              className="size-6"
+            />
             <span className="codigo shrink-0 text-xs font-semibold text-marca">
               {escolhido.codigo}
             </span>
@@ -130,6 +138,7 @@ export function SeletorItem({
                         i.id === valor ? "opacity-100" : "opacity-0",
                       )}
                     />
+                    <MiniaturaItem fotoId={i.fotoId} descricao={i.descricao} />
                     <span className="min-w-0 flex-1">
                       <span className="codigo block text-xs font-semibold text-marca">
                         {i.codigo}

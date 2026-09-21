@@ -5,6 +5,7 @@ import {
   classificacoes,
   fornecedores,
   itemFornecedores,
+  itemFotos,
   itens,
   itensParametros3d,
   locais,
@@ -57,13 +58,20 @@ export async function carregarItem(id: string): Promise<DadosItem | null> {
   const [item] = await db.select().from(itens).where(eq(itens.id, id));
   if (!item) return null;
 
-  const [vinculos, [params]] = await Promise.all([
+  const [vinculos, [params], fotos] = await Promise.all([
     db
       .select()
       .from(itemFornecedores)
       .where(eq(itemFornecedores.itemId, id))
       .orderBy(asc(itemFornecedores.ordem)),
     db.select().from(itensParametros3d).where(eq(itensParametros3d.itemId, id)),
+    /* So o id: trazer o bytea aqui carregaria as tres fotos inteiras em toda
+       abertura do cadastro, para exibir miniaturas. */
+    db
+      .select({ id: itemFotos.id })
+      .from(itemFotos)
+      .where(eq(itemFotos.itemId, id))
+      .orderBy(asc(itemFotos.ordem)),
   ]);
 
   return {
@@ -79,6 +87,7 @@ export async function carregarItem(id: string): Promise<DadosItem | null> {
     observacoes: item.observacoes,
     fichaTecnica: item.fichaTecnica,
     ativo: item.ativo,
+    fotos: fotos.map((f) => f.id),
     vinculos: vinculos.map((v) => ({
       fornecedorId: v.fornecedorId,
       skuFornecedor: v.skuFornecedor ?? "",

@@ -2,6 +2,7 @@ import { Plus } from "lucide-react";
 import Link from "next/link";
 
 import { FiltrosItens } from "@/components/itens/filtros-itens";
+import { MiniaturaItem } from "@/components/itens/miniatura-item";
 import { SeloSituacao } from "@/components/situacao";
 import { Botao } from "@/components/ui/botao";
 import { CabecalhoPagina } from "@/components/ui/cabecalho-pagina";
@@ -21,6 +22,7 @@ import { db } from "@/db";
 import {
   codigosDeItens,
   contarItens,
+  fotosPrincipais,
   listarItensComSaldo,
   listarLocais,
   type FiltrosItens as Filtros,
@@ -71,6 +73,9 @@ export default async function PaginaItens({
     listarLocais(),
   ]);
 
+  /* Depois da lista: so as fotos dos itens que esta pagina mostra. */
+  const fotos = await fotosPrincipais(lista.map((i) => i.id));
+
   const podeEditar = sessao.papel !== "leitura";
 
   return (
@@ -101,6 +106,7 @@ export default async function PaginaItens({
           <Tabela>
             <Cabecalho>
               <tr>
+                <Coluna className="w-8" />
                 <Coluna>Código</Coluna>
                 <Coluna>Descrição</Coluna>
                 <Coluna>Classificação</Coluna>
@@ -115,12 +121,15 @@ export default async function PaginaItens({
             </Cabecalho>
             <Corpo>
               {lista.length === 0 ? (
-                <Vazio colSpan={10}>
+                <Vazio colSpan={11}>
                   Nenhum item encontrado. Ajuste os filtros ou cadastre o primeiro.
                 </Vazio>
               ) : (
                 lista.map((i) => (
                   <Linha key={i.id}>
+                    <Celula className="pr-0">
+                      <MiniaturaItem fotoId={fotos.get(i.id)} descricao={i.descricao} />
+                    </Celula>
                     <Celula>
                       <Link
                         href={`/itens/${i.id}`}

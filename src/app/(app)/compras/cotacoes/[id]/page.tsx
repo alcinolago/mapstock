@@ -8,7 +8,7 @@ import { Comparativo, type ItemCotado } from "@/components/compras/comparativo";
 import { SeloCotacao } from "@/components/situacao";
 import { CabecalhoPagina } from "@/components/ui/cabecalho-pagina";
 import { db } from "@/db";
-import { listarItensComSaldo } from "@/db/consultas";
+import { fotosPrincipais, listarItensComSaldo } from "@/db/consultas";
 import {
   cotacaoItens,
   cotacaoPrecos,
@@ -101,6 +101,8 @@ export default async function PaginaCotacao({
     cotacao.status !== "fechada" &&
     cotacao.status !== "cancelada";
 
+  const fotos = await fotosPrincipais(comSaldo.map((i) => i.id));
+
   return (
     <div className="mx-auto max-w-[100rem]">
       <Link
@@ -144,6 +146,7 @@ export default async function PaginaCotacao({
           descricao: i.descricao,
           unidade: i.unidade,
           disponivel: i.disponivel,
+          fotoId: fotos.get(i.id),
         }))}
         editavel={editavel}
       />

@@ -1,6 +1,6 @@
 "use server";
 
-import { count, eq, inArray } from "drizzle-orm";
+import { and, count, eq, inArray, notInArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
@@ -10,6 +10,7 @@ import {
   classificacoes,
   cotacaoItens,
   itemFornecedores,
+  itemFotos,
   itens,
   itensParametros3d,
   montagemNos,
@@ -22,6 +23,7 @@ import { registrar } from "@/lib/auditoria";
 import { ehDuplicado, ehVinculado } from "@/lib/erros";
 import { codigoBase, codigoDisponivel } from "@/lib/codigo";
 import { contagens, emTexto, type Dependencias } from "@/lib/exclusao";
+import { MAX_BYTES_FOTO, MAX_FOTOS } from "@/lib/imagem";
 import { ORIGENS_3D } from "@/lib/labels";
 
 /* ------------------------------------------------------------------------ */
@@ -54,6 +56,14 @@ const parametros3d = z.object({
   pesoEstimado: z.string().trim().optional(),
   tempoEstimado: z.string().trim().optional(),
 });
+
+/* Cada posicao e uma foto que ja esta no banco ou uma que veio agora no
+   proprio envio, apontando para o indice dela em `fotoNova`. A ordem do array
+   e a ordem que a pessoa deixou na tela. */
+const fotoOrdenada = z.union([
+  z.object({ id: z.uuid() }),
+  z.object({ nova: z.number().int().nonnegative() }),
+]);
 
 const esquemaItem = z.object({
   id: z.uuid().optional(),
@@ -90,6 +100,10 @@ const esquemaItem = z.object({
   fichaTecnica: z.string().trim().optional(),
   ativo: z.coerce.boolean(),
   fornecedores: z.array(fornecedorVinculado).default([]),
+  fotos: z
+    .array(fotoOrdenada)
+    .max(MAX_FOTOS, `São no máximo ${MAX_FOTOS} fotos por item`)
+    .default([]),
   parametros3d: parametros3d.nullable().default(null),
 });
 
@@ -129,6 +143,7 @@ export async function salvarItem(
     aquisicao: formulario.get("aquisicao") || null,
     origemFabricacao: formulario.get("origemFabricacao") || null,
     fornecedores: JSON.parse((formulario.get("fornecedores") as string) || "[]"),
+    fotos: JSON.parse((formulario.get("fotos") as string) || "[]"),
     parametros3d: JSON.parse((formulario.get("parametros3d") as string) || "null"),
   };
 
@@ -139,6 +154,14 @@ export async function salvarItem(
   }
 
   const d = dados.data;
+
+  /* Foto e miniatura vem em dois campos paralelos, casados pelo indice: o
+     navegador gera as duas de uma vez (src/lib/imagem.ts). */
+  const enviadas = arquivosDe(formulario, "fotoNova");
+  const miniaturas = arquivosDe(formulario, "miniaturaNova");
+
+  const problemaFoto = conferirFotos(enviadas, miniaturas);
+  if (problemaFoto) return { erro: problemaFoto, campo: "fotos" };
 
   /* Parametros 3D so fazem sentido para itens impressos. Guardar o bloco em
      um item usinado deixaria lixo que reaparece se a origem mudar de volta. */
@@ -218,6 +241,8 @@ export async function salvarItem(
       );
     }
 
+    await sincronizarFotos(itemId, d.fotos, enviadas, miniaturas, sessao.id);
+
     await db.delete(itensParametros3d).where(eq(itensParametros3d.itemId, itemId));
     if (guarda3d && Object.values(guarda3d).some(Boolean)) {
       await db.insert(itensParametros3d).values({ itemId, ...guarda3d });
@@ -234,6 +259,89 @@ export async function salvarItem(
     return { erro: "Não foi possível salvar o item. Tente de novo." };
   }
 }
+
+/* ------------------------------------------------------------------ Fotos */
+
+const TIPOS_ACEITOS = ["image/jpeg", "image/png", "image/webp"];
+
+/**
+ * Confere o que chegou antes de escrever qualquer coisa.
+ *
+ * O navegador ja compacta (src/lib/imagem.ts), entao o teto aqui e rede de
+ * seguranca contra um envio que nao passou por aquela tela — e tambem o que
+ * mantem o corpo da action longe do limite de 1 MB do Next.
+ */
+function arquivosDe(formulario: FormData, campo: string): File[] {
+  return formulario.getAll(campo).filter((f): f is File => f instanceof File && f.size > 0);
+}
+
+function conferirFotos(arquivos: File[], miniaturas: File[]): string | null {
+  if (arquivos.length > MAX_FOTOS) return `São no máximo ${MAX_FOTOS} fotos por item.`;
+  if (miniaturas.length !== arquivos.length) {
+    return "Envio de foto incompleto. Recarregue a tela e tente de novo.";
+  }
+
+  for (const arquivo of [...arquivos, ...miniaturas]) {
+    if (!TIPOS_ACEITOS.includes(arquivo.type)) {
+      return "Foto em formato não aceito. Use JPG, PNG ou WebP.";
+    }
+    if (arquivo.size > MAX_BYTES_FOTO) {
+      return "Uma das fotos ficou grande demais. Tente de novo com outra imagem.";
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Deixa as fotos do item exatamente como a tela mostra.
+ *
+ * Diferente dos vinculos de fornecedor, aqui nao da para apagar e regravar: o
+ * binario das fotos que ficaram nao volta do navegador no envio, so o id
+ * delas. Entao apaga o que saiu, reordena o que ficou e insere o que chegou.
+ */
+async function sincronizarFotos(
+  itemId: string,
+  ordem: ({ id: string } | { nova: number })[],
+  enviadas: File[],
+  miniaturas: File[],
+  usuarioId: string,
+) {
+  const mantidas = ordem.filter((f) => "id" in f).map((f) => f.id);
+
+  if (mantidas.length === 0) {
+    await db.delete(itemFotos).where(eq(itemFotos.itemId, itemId));
+  } else {
+    await db
+      .delete(itemFotos)
+      .where(and(eq(itemFotos.itemId, itemId), notInArray(itemFotos.id, mantidas)));
+  }
+
+  for (const [posicao, entrada] of ordem.entries()) {
+    if ("id" in entrada) {
+      await db
+        .update(itemFotos)
+        .set({ ordem: posicao })
+        .where(and(eq(itemFotos.id, entrada.id), eq(itemFotos.itemId, itemId)));
+      continue;
+    }
+
+    const arquivo = enviadas[entrada.nova];
+    const miniatura = miniaturas[entrada.nova];
+    if (!arquivo || !miniatura) continue;
+
+    await db.insert(itemFotos).values({
+      itemId,
+      dados: Buffer.from(await arquivo.arrayBuffer()),
+      miniatura: Buffer.from(await miniatura.arrayBuffer()),
+      tipo: arquivo.type,
+      ordem: posicao,
+      criadoPor: usuarioId,
+    });
+  }
+}
+
+/* ------------------------------------------------------------------------ */
 
 export async function alternarAtivoItem(id: string, ativo: boolean) {
   const sessao = await exigirEdicao();
@@ -265,7 +373,7 @@ export async function alternarAtivoItem(id: string, ativo: boolean) {
 export async function dependenciasItem(id: string): Promise<Dependencias> {
   await exigirEdicao();
 
-  const [emCotacoes, emPedidos, emMontagens, naEstrutura, comMovimentos, comFornecedores] =
+  const [emCotacoes, emPedidos, emMontagens, naEstrutura, comMovimentos, comFornecedores, comFotos] =
     await Promise.all([
       db.select({ n: count() }).from(cotacaoItens).where(eq(cotacaoItens.itemId, id)),
       db.select({ n: count() }).from(pedidoItens).where(eq(pedidoItens.itemId, id)),
@@ -273,6 +381,7 @@ export async function dependenciasItem(id: string): Promise<Dependencias> {
       db.select({ n: count() }).from(moldeNos).where(eq(moldeNos.itemId, id)),
       db.select({ n: count() }).from(movimentos).where(eq(movimentos.itemId, id)),
       db.select({ n: count() }).from(itemFornecedores).where(eq(itemFornecedores.itemId, id)),
+      db.select({ n: count() }).from(itemFotos).where(eq(itemFotos.itemId, id)),
     ]);
 
   return {
@@ -297,6 +406,7 @@ export async function dependenciasItem(id: string): Promise<Dependencias> {
         singular: "fornecedor vinculado",
         plural: "fornecedores vinculados",
       },
+      { quantidade: comFotos[0].n, singular: "foto", plural: "fotos" },
     ]),
   };
 }

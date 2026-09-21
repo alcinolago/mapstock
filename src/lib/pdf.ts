@@ -213,6 +213,23 @@ export class Folha {
     }
   }
 
+  /**
+   * Desenha uma imagem alinhada a margem esquerda, respeitando o fluxo.
+   *
+   * So JPEG: e o que o pdf-lib embute (JPEG e PNG), e e por causa disso que a
+   * foto do item e guardada em JPEG desde o navegador.
+   */
+  async imagem(bytes: Uint8Array, larguraMaxima: number) {
+    const imagem = await this.doc.embedJpg(bytes);
+    const escala = Math.min(1, larguraMaxima / imagem.width);
+    const largura = imagem.width * escala;
+    const altura = imagem.height * escala;
+
+    this.garantir(altura);
+    this.y -= altura;
+    this.pagina.drawImage(imagem, { x: MARGEM, y: this.y, width: largura, height: altura });
+  }
+
   titulo(texto: string) {
     this.texto(texto, { tamanho: 17, negrito: true });
     this.espaco(4);

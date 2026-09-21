@@ -4,7 +4,13 @@ import { NovoMolde, PainelMoldes, type MoldeNaTela } from "@/components/moldes/p
 import type { NoMolde } from "@/components/moldes/arvore-molde";
 import { CabecalhoPagina } from "@/components/ui/cabecalho-pagina";
 import { db } from "@/db";
-import { listarItensComSaldo, listarMoldes, nosDoMolde, type NoDoMolde } from "@/db/consultas";
+import {
+  fotosPrincipais,
+  listarItensComSaldo,
+  listarMoldes,
+  nosDoMolde,
+  type NoDoMolde,
+} from "@/db/consultas";
 import { divisoes } from "@/db/schema";
 import { exigirSessao } from "@/lib/auth";
 
@@ -64,12 +70,15 @@ export default async function PaginaEstrutura() {
     }),
   );
 
+  const fotos = await fotosPrincipais(itens.map((i) => i.id));
+
   const selecionaveis = itens.map((i) => ({
     id: i.id,
     codigo: i.codigo,
     descricao: i.descricao,
     unidade: i.unidade,
     disponivel: i.disponivel,
+    fotoId: fotos.get(i.id),
   }));
 
   return (

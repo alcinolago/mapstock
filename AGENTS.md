@@ -25,6 +25,7 @@ src/db/seed.ts          configurações padrão + admin
 src/db/demo.ts          dados de demonstração
 src/lib/labels.ts       chave ASCII → rótulo em português; EFEITO_MOVIMENTO
 src/lib/codigo.ts       sugestão de código e classificação (portado do desktop)
+src/lib/imagem.ts       compactação da foto no navegador (MB → KB)
 src/lib/mapa.ts         endereço do fornecedor → link de rota
 src/lib/acoes/moldes.ts     molde (receita)     src/lib/acoes/montagem.ts  execução
 src/lib/acoes/divisoes.ts   os nomes das divisões, reutilizáveis entre moldes
@@ -102,6 +103,18 @@ listagem, é bug.
 - **Montar uma divisão consome os filhos diretos dela**: as peças saem do
   estoque, e as sub-divisões precisam já estar montadas. Concluir o
   equipamento (`montarNo` com nó nulo) fecha a raiz e libera o carro.
+- **Foto de item é JPEG, e são duas cópias.** O navegador compacta antes de
+  enviar (`src/lib/imagem.ts`): sem isso, guardar binário no Postgres não se
+  sustentaria — a foto do celular tem 4 MB e chega ao banco com ~200 KB. JPEG
+  e não WebP porque a mesma foto entra no PDF do pedido, e o `pdf-lib` só
+  embute JPEG e PNG. A segunda cópia é a miniatura (260px, ~14 KB): é ela que
+  a lista, o seletor e o PDF carregam — a foto inteira num quadrado de 32px
+  faria uma página de 50 itens puxar megabytes.
+- **A linha de `item_fotos` é imutável**: trocar uma foto é apagar e inserir
+  outra. É o que deixa `/api/fotos/<id>` responder com cache eterno.
+- **Máximo de 3 fotos, e elas vão no mesmo envio do cadastro.** Por isso
+  `serverActions.bodySizeLimit` está em 2 MB no `next.config.ts` — o padrão de
+  1 MB estoura com três fotos mais as miniaturas.
 - **Toda server action que escreve chama `exigirEdicao()`** (ou `exigirAdmin()`)
   e registra em `logAuditoria` via `registrar()`.
 

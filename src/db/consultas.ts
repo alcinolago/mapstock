@@ -24,6 +24,7 @@ import {
   divisoes,
   fornecedores,
   itemFornecedores,
+  itemFotos,
   itens,
   locais,
   itensParametros3d,
@@ -419,7 +420,37 @@ export async function pedidoCompleto(id: string) {
     .where(eq(pedidoItens.pedidoId, id))
     .orderBy(asc(itens.codigo));
 
-  return { pedido, linhas };
+  /* Consulta a parte para o bytea nao entrar no join la em cima: ali ele se
+     repetiria em cada linha do resultado. */
+  const fotos = await fotosDoPdf(linhas.map((l) => l.itemId));
+
+  return { pedido, linhas, fotos };
+}
+
+/**
+ * A miniatura da foto principal de cada item, em bytes, para o PDF.
+ *
+ * Vai a miniatura e nao a foto inteira: o pedido e anexo de e-mail, e quinze
+ * fotos de 220 KB fariam um arquivo de 3 MB. Nos 90pt que ela ocupa na folha,
+ * os 260px da miniatura dao cerca de 200 DPI.
+ */
+async function fotosDoPdf(itemIds: string[]): Promise<Map<string, Buffer>> {
+  if (itemIds.length === 0) return new Map();
+
+  const linhas = await db
+    .select({ itemId: itemFotos.itemId, bytes: itemFotos.miniatura, tipo: itemFotos.tipo })
+    .from(itemFotos)
+    .where(inArray(itemFotos.itemId, itemIds))
+    .orderBy(asc(itemFotos.itemId), asc(itemFotos.ordem));
+
+  const primeira = new Map<string, Buffer>();
+  for (const linha of linhas) {
+    /* O pdf-lib so embute JPEG, e e o que o navegador gera. Outro formato
+       aqui so chegaria por caminho que nao passou pela tela — ignora. */
+    if (linha.tipo !== "image/jpeg") continue;
+    if (!primeira.has(linha.itemId)) primeira.set(linha.itemId, linha.bytes);
+  }
+  return primeira;
 }
 
 export type PedidoCompleto = NonNullable<Awaited<ReturnType<typeof pedidoCompleto>>>;
@@ -734,6 +765,30 @@ export async function codigosDeItens() {
     .select({ id: itens.id, codigo: itens.codigo, ativo: itens.ativo })
     .from(itens)
     .orderBy(asc(itens.codigo));
+}
+
+/**
+ * A foto principal (a primeira) de cada item de uma lista ja carregada.
+ *
+ * Consulta a parte, e nao subconsulta dentro da listagem, por dois motivos:
+ * a listagem de itens ja e grande demais para ganhar mais um correlacionado,
+ * e assim so os ids da pagina vao ao banco. Devolve id de foto, nunca bytes —
+ * quem busca a imagem e /api/fotos.
+ */
+export async function fotosPrincipais(itemIds: string[]): Promise<Map<string, string>> {
+  if (itemIds.length === 0) return new Map();
+
+  const linhas = await db
+    .select({ itemId: itemFotos.itemId, id: itemFotos.id })
+    .from(itemFotos)
+    .where(inArray(itemFotos.itemId, itemIds))
+    .orderBy(asc(itemFotos.itemId), asc(itemFotos.ordem));
+
+  const primeira = new Map<string, string>();
+  for (const linha of linhas) {
+    if (!primeira.has(linha.itemId)) primeira.set(linha.itemId, linha.id);
+  }
+  return primeira;
 }
 
 /**

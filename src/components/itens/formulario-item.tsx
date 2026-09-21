@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useActionState, useEffect, useRef, useState } from "react";
 
 import { FornecedoresItem, type VinculoFornecedor } from "./fornecedores-item";
+import { FotosItem } from "./fotos-item";
 import { PARAMS_3D_PADRAO, Parametros3D, type Params3D } from "./parametros-3d";
 import { BotaoExcluir } from "@/components/exclusao/botao-excluir";
 import { Abas } from "@/components/ui/abas";
@@ -44,6 +45,8 @@ export type DadosItem = {
   fichaTecnica: string | null;
   ativo: boolean;
   vinculos: VinculoFornecedor[];
+  /* So os ids: os bytes ficam no banco e chegam por /api/fotos. */
+  fotos: string[];
   parametros3d: Params3D | null;
 };
 
@@ -314,6 +317,17 @@ export function FormularioItem({
             />
             Item ativo
           </label>
+        </CorpoCartao>
+      </Cartao>
+
+      {/* ------------------------------------------------ Fotos */}
+      <Cartao>
+        <CabecalhoCartao
+          titulo="Fotos"
+          descricao="Para reconhecer a peça na prateleira e para quem compra saber o que pedir."
+        />
+        <CorpoCartao>
+          <FotosItem iniciais={item?.fotos ?? []} />
         </CorpoCartao>
       </Cartao>
 

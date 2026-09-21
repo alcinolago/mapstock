@@ -18,7 +18,7 @@ import { linkRota } from "@/lib/mapa";
 import { CORES, Folha, nomeArquivoPdf } from "@/lib/pdf";
 import { data, dataHora, moeda, numero } from "@/lib/utils";
 
-export async function montarPdfDoPedido({ pedido, linhas }: PedidoCompleto) {
+export async function montarPdfDoPedido({ pedido, linhas, fotos }: PedidoCompleto) {
   const subtotal = linhas.reduce((s, l) => s + l.quantidade * l.precoUnitario, 0);
   const total = subtotal + pedido.frete;
 
@@ -88,7 +88,7 @@ export async function montarPdfDoPedido({ pedido, linhas }: PedidoCompleto) {
 
   folha.secao(`Itens a comprar (${linhas.length})`);
 
-  linhas.forEach((linha, indice) => {
+  for (const [indice, linha] of linhas.entries()) {
     /* Um item nunca comeca no pe da folha: se nao cabe o cabecalho dele mais
        algumas linhas, ja vai inteiro para a proxima pagina. */
     folha.garantir(120);
@@ -96,6 +96,14 @@ export async function montarPdfDoPedido({ pedido, linhas }: PedidoCompleto) {
     folha.texto(`${indice + 1}. ${linha.codigo}`, { tamanho: 11, negrito: true });
     folha.texto(linha.descricao, { tamanho: 10, cor: CORES.suave });
     folha.espaco(6);
+
+    /* A foto vem logo abaixo do codigo, antes dos campos: quem compra olha a
+       peca primeiro e so depois confere a quantidade. */
+    const foto = fotos.get(linha.itemId);
+    if (foto) {
+      await folha.imagem(new Uint8Array(foto), 90);
+      folha.espaco(8);
+    }
 
     folha.campos([
       ["Quantidade a comprar", `${numero(linha.quantidade)} ${linha.unidade}`],
@@ -173,7 +181,7 @@ export async function montarPdfDoPedido({ pedido, linhas }: PedidoCompleto) {
 
     folha.espaco(4);
     folha.divisoria();
-  });
+  }
 
   /* -------------------------------------------------------------- Resumo  */
 

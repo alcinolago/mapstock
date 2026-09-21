@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import {
   boolean,
+  customType,
   date,
   integer,
   jsonb,
@@ -115,6 +116,13 @@ const quantidade = (nome: string) =>
 
 const criadoEm = timestamp("criado_em", { withTimezone: true }).notNull().defaultNow();
 
+/* bytea nao vem pronto no drizzle. O driver do Neon ja devolve Buffer na
+   leitura e aceita Buffer na escrita, entao o tipo so precisa dizer ao banco
+   como a coluna se chama. */
+const bytea = customType<{ data: Buffer; driverData: Buffer }>({
+  dataType: () => "bytea",
+});
+
 /* -------------------------------------------------------------------------
  * Acesso
  * ---------------------------------------------------------------------- */
@@ -214,6 +222,32 @@ export const itens = pgTable("itens", {
   criadoPor: uuid("criado_por").references(() => usuarios.id, { onDelete: "set null" }),
   atualizadoEm: timestamp("atualizado_em", { withTimezone: true }).notNull().defaultNow(),
   atualizadoPor: uuid("atualizado_por").references(() => usuarios.id, { onDelete: "set null" }),
+});
+
+/**
+ * Fotos do item, no maximo tres, guardadas no proprio banco.
+ *
+ * O arquivo vem compactado do navegador (ver src/lib/imagem.ts): a foto de
+ * celular de 4 MB chega aqui com ~200 KB, senao guardar binario no Postgres
+ * nao se sustentaria. JPEG e nao WebP porque a mesma foto precisa entrar no
+ * PDF do pedido, e o pdf-lib so embute JPEG e PNG.
+ *
+ * A linha e imutavel: trocar uma foto e apagar e inserir outra. E o que deixa
+ * /api/fotos/<id> responder com cache eterno.
+ */
+export const itemFotos = pgTable("item_fotos", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  itemId: uuid("item_id")
+    .notNull()
+    .references(() => itens.id, { onDelete: "cascade" }),
+  dados: bytea("dados").notNull(),
+  /* Copia de ~200px, uns 10 KB. A lista de itens e o seletor mostram esta: a
+     foto inteira ali dentro faria uma tela de 20 linhas puxar megabytes. */
+  miniatura: bytea("miniatura").notNull(),
+  tipo: text("tipo").notNull(),
+  ordem: integer("ordem").notNull().default(0),
+  criadoEm,
+  criadoPor: uuid("criado_por").references(() => usuarios.id, { onDelete: "set null" }),
 });
 
 /* No desktop estes campos eram concatenados como texto no fim das

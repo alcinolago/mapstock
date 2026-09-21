@@ -5,6 +5,7 @@ import { Historico } from "@/components/estoque/historico";
 import { CabecalhoPagina } from "@/components/ui/cabecalho-pagina";
 import { db } from "@/db";
 import {
+  fotosPrincipais,
   itensComMovimento,
   listarItensComSaldo,
   primeiroMovimento,
@@ -90,12 +91,15 @@ export default async function PaginaEstoque({
     itensComMovimento(),
   ]);
 
+  const fotos = await fotosPrincipais(comSaldo.map((i) => i.id));
+
   const selecionaveis = comSaldo.map((i) => ({
     id: i.id,
     codigo: i.codigo,
     descricao: i.descricao,
     unidade: i.unidade,
     disponivel: i.disponivel,
+    fotoId: fotos.get(i.id),
   }));
 
   return (

@@ -454,6 +454,64 @@ async function fotosDoPdf(itemIds: string[]): Promise<Map<string, Buffer>> {
   return primeira;
 }
 
+/**
+ * O que o PDF de cotacao pode mostrar — e, principalmente, o que ele nao pode.
+ *
+ * O mesmo arquivo vai para varios fornecedores ao mesmo tempo, que estao
+ * sendo comparados entre si. Entao aqui nao entra nome de fornecedor, preco,
+ * vinculo, SKU nem link de loja: qualquer um desses contaria a um deles com
+ * quem ele esta competindo, ou por quanto. Sai so o que descreve a peca.
+ *
+ * `cotacoes.observacoes` tambem fica de fora de proposito: e campo livre da
+ * equipe, onde cabe "pedir pra fulano" — nao da para garantir que nao vaze.
+ */
+export async function cotacaoParaPdf(id: string) {
+  const [cotacao] = await db
+    .select({
+      id: cotacoes.id,
+      numero: cotacoes.numero,
+      titulo: cotacoes.titulo,
+      criadoEm: cotacoes.criadoEm,
+      criadoPor: usuarios.nome,
+    })
+    .from(cotacoes)
+    .leftJoin(usuarios, eq(usuarios.id, cotacoes.criadoPor))
+    .where(eq(cotacoes.id, id));
+
+  if (!cotacao) return null;
+
+  const linhas = await db
+    .select({
+      itemId: itens.id,
+      codigo: itens.codigo,
+      descricao: itens.descricao,
+      quantidade: cotacaoItens.quantidade,
+      unidade: unidades.sigla,
+      /* Especificacao da peca: e o que deixa o fornecedor cotar a coisa certa
+         em vez de perguntar de volta. */
+      fichaTecnica: itens.fichaTecnica,
+      material3d: itensParametros3d.material,
+      alturaCamada3d: itensParametros3d.alturaCamada,
+      preenchimento3d: itensParametros3d.preenchimento,
+      pesoEstimado3d: itensParametros3d.pesoEstimado,
+    })
+    .from(cotacaoItens)
+    .innerJoin(itens, eq(itens.id, cotacaoItens.itemId))
+    .innerJoin(unidades, eq(unidades.id, itens.unidadeId))
+    .leftJoin(itensParametros3d, eq(itensParametros3d.itemId, cotacaoItens.itemId))
+    .where(eq(cotacaoItens.cotacaoId, id))
+    .orderBy(asc(itens.codigo));
+
+  /* Consulta a parte pelo mesmo motivo do pedido: o bytea se repetiria em
+     cada linha se entrasse no join la em cima. */
+  const fotos = await fotosDoPdf(linhas.map((l) => l.itemId));
+
+  return { cotacao, linhas, fotos };
+}
+
+export type CotacaoParaPdf = NonNullable<Awaited<ReturnType<typeof cotacaoParaPdf>>>;
+export type LinhaDaCotacaoPdf = CotacaoParaPdf["linhas"][number];
+
 export type PedidoCompleto = NonNullable<Awaited<ReturnType<typeof pedidoCompleto>>>;
 export type LinhaPedidoCompleta = PedidoCompleto["linhas"][number];
 

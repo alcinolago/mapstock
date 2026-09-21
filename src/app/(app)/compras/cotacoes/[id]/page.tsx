@@ -1,11 +1,12 @@
 import { asc, eq, inArray } from "drizzle-orm";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, FileDown } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { AcoesCotacao } from "@/components/compras/acoes-cotacao";
 import { Comparativo, type ItemCotado } from "@/components/compras/comparativo";
 import { SeloCotacao } from "@/components/situacao";
+import { botao } from "@/components/ui/botao";
 import { CabecalhoPagina } from "@/components/ui/cabecalho-pagina";
 import { db } from "@/db";
 import { fotosDosItens, itensJaPedidos, listarItensComSaldo } from "@/db/consultas";
@@ -144,6 +145,19 @@ export default async function PaginaCotacao({
         acao={
           <div className="flex flex-wrap items-center gap-3">
             <SeloCotacao status={cotacao.status} />
+
+            {/* Link comum, como no pedido: funciona sem JavaScript, o
+                navegador cuida do arquivo e ninguem fica esperando na tela.
+                Vale tambem para quem so le — pedir preco nao e editar. */}
+            <a
+              href={`/api/exportar/cotacao/${cotacao.id}`}
+              className={botao({ variante: "contorno", tamanho: "md" })}
+              title="PDF para mandar aos fornecedores, sem preço e sem nome de fornecedor"
+            >
+              <FileDown className="size-4" />
+              PDF para fornecedores
+            </a>
+
             {sessao.papel !== "leitura" && (
               <AcoesCotacao
                 cotacaoId={cotacao.id}

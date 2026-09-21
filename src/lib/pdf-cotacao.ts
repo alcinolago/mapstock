@@ -15,8 +15,11 @@
  * ou por quanto — e é justamente o que se está tentando descobrir.
  *
  * O que fica é a peça: código, descrição, quantidade, foto e especificação.
- * Mais os campos em branco para ele preencher e devolver, que é o que faz a
- * folha valer como orçamento de volta.
+ *
+ * E só isso. Não há campo em branco para o fornecedor preencher nem instrução
+ * de como responder: cada um usa o próprio sistema e devolve o orçamento no
+ * documento que o sistema dele gera. Linha pontilhada para preencher à mão
+ * seria estorvo numa folha que ninguém vai preencher à mão.
  *
  * Separado da rota de propósito, como o do pedido: montar a folha não depende
  * de requisição nenhuma, e assim dá para gerar o arquivo num script.
@@ -25,10 +28,6 @@
 import type { CotacaoParaPdf } from "@/db/consultas";
 import { CORES, Folha, nomeArquivoPdf } from "@/lib/pdf";
 import { data, dataHora, numero } from "@/lib/utils";
-
-/* Linha para preencher a mão. Underscore está na WinAnsi, ao contrário de um
-   traço longo repetido, e imprime igual em qualquer leitor. */
-const PREENCHER = "____________________";
 
 export async function montarPdfDaCotacao({ cotacao, linhas, fotos }: CotacaoParaPdf) {
   const folha = await Folha.criar({
@@ -49,15 +48,6 @@ export async function montarPdfDaCotacao({ cotacao, linhas, fotos }: CotacaoPara
       .filter(Boolean)
       .join("  ·  "),
     { tamanho: 9, cor: CORES.fraco },
-  );
-
-  folha.caixa(
-    "Como responder",
-    "Preencha, para cada item, o preço unitário e o prazo de entrega, e devolva este " +
-      "documento preenchido. No fim da folha há um espaço para os seus dados e para as " +
-      "condições da proposta. Havendo dúvida sobre especificação ou quantidade, fale com " +
-      "quem enviou antes de cotar.",
-    "destaque",
   );
 
   /* ---------------------------------------------------------------- Itens */
@@ -85,14 +75,7 @@ export async function montarPdfDaCotacao({ cotacao, linhas, fotos }: CotacaoPara
       folha.espaco(8);
     }
 
-    folha.campos(
-      [
-        ["Quantidade", `${numero(linha.quantidade)} ${linha.unidade}`],
-        ["Preço unitário", PREENCHER],
-        ["Prazo de entrega", PREENCHER],
-      ],
-      3,
-    );
+    folha.campos([["Quantidade", `${numero(linha.quantidade)} ${linha.unidade}`]]);
 
     if (linha.fichaTecnica) {
       folha.caixa("Especificação", linha.fichaTecnica);
@@ -113,27 +96,8 @@ export async function montarPdfDaCotacao({ cotacao, linhas, fotos }: CotacaoPara
     folha.divisoria();
   }
 
-  /* ------------------------------------------------------------- Resposta */
-
-  /* Sem total nenhum, nem somando as quantidades em dinheiro: o fechamento da
-     folha é o espaço da resposta, não um resumo de valores que não existem. */
-  folha.garantir(170);
-  folha.secao("Dados da proposta — preencher");
-
-  folha.campos(
-    [
-      ["Fornecedor", PREENCHER],
-      ["Contato", PREENCHER],
-      ["Telefone / e-mail", PREENCHER],
-      ["Validade da proposta", PREENCHER],
-      ["Condição de pagamento", PREENCHER],
-      ["Frete", PREENCHER],
-    ],
-    2,
-  );
-
-  folha.espaco(6);
-  folha.caixa("Observações do fornecedor", "\n\n\n");
+  /* A folha acaba na última peça. Não há resumo: somar quantidade não diz
+     nada, e valor é exatamente o que não pode estar aqui. */
 
   const arquivo = nomeArquivoPdf(`cotacao_${cotacao.numero}`);
   const bytes = await folha.bytes(

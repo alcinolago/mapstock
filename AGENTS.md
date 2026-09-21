@@ -25,6 +25,7 @@ src/db/seed.ts          configurações padrão + admin
 src/db/demo.ts          dados de demonstração
 src/lib/labels.ts       chave ASCII → rótulo em português; EFEITO_MOVIMENTO
 src/lib/codigo.ts       sugestão de código e classificação (portado do desktop)
+src/lib/mapa.ts         endereço do fornecedor → link de rota
 src/lib/acoes/moldes.ts     molde (receita)     src/lib/acoes/montagem.ts  execução
 src/lib/acoes/divisoes.ts   os nomes das divisões, reutilizáveis entre moldes
 src/lib/sessao.ts       JWT + cookie          src/lib/auth.ts  guardas de página

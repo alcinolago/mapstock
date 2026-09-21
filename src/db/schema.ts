@@ -247,6 +247,9 @@ export const fornecedores = pgTable("fornecedores", {
   telefone: text("telefone"),
   email: text("email"),
   site: text("site"),
+  /* Texto livre de proposito: fornecedor online (Mercado Livre, AliExpress)
+     nao tem endereco, e quem tem escreve do jeito que o Maps entende. */
+  endereco: text("endereco"),
   condicaoPagamento: text("condicao_pagamento"),
   frete: text("frete"),
   status: statusFornecedor("status").notNull().default("em_avaliacao"),

@@ -341,6 +341,7 @@ export async function pedidoCompleto(id: string) {
       fornecedorContato: fornecedores.contato,
       fornecedorTelefone: fornecedores.telefone,
       fornecedorEmail: fornecedores.email,
+      fornecedorEndereco: fornecedores.endereco,
       fornecedorSite: fornecedores.site,
       fornecedorFrete: fornecedores.frete,
       fornecedorObservacoes: fornecedores.observacoes,

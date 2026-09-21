@@ -14,6 +14,7 @@
 
 import type { LinhaPedidoCompleta, PedidoCompleto } from "@/db/consultas";
 import { AQUISICOES, ORIGENS, STATUS_PEDIDO } from "@/lib/labels";
+import { linkRota } from "@/lib/mapa";
 import { CORES, Folha, nomeArquivoPdf } from "@/lib/pdf";
 import { data, dataHora, moeda, numero } from "@/lib/utils";
 
@@ -53,10 +54,21 @@ export async function montarPdfDoPedido({ pedido, linhas }: PedidoCompleto) {
     ["Contato", pedido.fornecedorContato],
     ["Telefone", pedido.fornecedorTelefone],
     ["E-mail", pedido.fornecedorEmail],
+    ["Endereço", pedido.fornecedorEndereco],
     ["Condição de pagamento", pedido.condicaoPagamento],
     ["Frete do pedido", pedido.frete > 0 ? moeda(pedido.frete) : null],
     ["Frete combinado", pedido.fornecedorFrete],
   ]);
+
+  /* O endereco ja saiu escrito acima; o link e para quem abrir o PDF no
+     celular e sair dirigindo, sem copiar o texto na mao. Fornecedor online
+     nao tem endereco, e ai nao aparece nada. */
+  const rota = linkRota(pedido.fornecedorEndereco);
+  if (rota) {
+    folha.texto("COMO CHEGAR", { tamanho: 7.5, negrito: true, cor: CORES.fraco });
+    folha.link("Abrir a rota no Google Maps", rota);
+    folha.espaco(4);
+  }
 
   if (pedido.fornecedorSite) {
     folha.texto("SITE DO FORNECEDOR", { tamanho: 7.5, negrito: true, cor: CORES.fraco });

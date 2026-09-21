@@ -75,6 +75,22 @@ function higienizar(texto: string): string {
     .join("");
 }
 
+/*
+ * O que precisa virar %XX numa URL, sem mexer no que ja veio escapado.
+ *
+ * Era um encodeURI direto, que serve para o site digitado a mao ("loja.com/
+ * peças e coisas") mas destroi URL montada por codigo: o link de rota do
+ * fornecedor chega com %20 no endereco, e o encodeURI o transformava em
+ * %2520 — o Maps abriria buscando o texto literal "Av.%20Brasil".
+ *
+ * O `%` so e escapado quando nao inicia um par hexadecimal de verdade.
+ */
+const INSEGURO_NA_URL = /%(?![0-9A-Fa-f]{2})|[^\x21-\x7E]|["<>\\^`{|}]/g;
+
+function urlDeLink(url: string): string {
+  return url.replace(INSEGURO_NA_URL, (c) => encodeURIComponent(c));
+}
+
 type OpcoesTexto = {
   tamanho?: number;
   negrito?: boolean;
@@ -318,7 +334,7 @@ export class Folha {
           A: this.doc.context.obj({
             Type: "Action",
             S: "URI",
-            URI: PDFString.of(encodeURI(url)),
+            URI: PDFString.of(urlDeLink(url)),
           }),
         }),
       ),

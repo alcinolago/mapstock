@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertCircle, LoaderCircle, MessageCircle, Save } from "lucide-react";
+import { AlertCircle, Check, Link2, LoaderCircle, MapPin, MessageCircle, Save } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useActionState, useEffect, useState } from "react";
 
@@ -17,6 +17,7 @@ import {
   type EstadoFornecedor,
 } from "@/lib/acoes/fornecedores";
 import { opcoes, STATUS_FORNECEDOR } from "@/lib/labels";
+import { linkRota } from "@/lib/mapa";
 import { mascaraTelefone } from "@/lib/mascaras";
 
 export type DadosFornecedor = {
@@ -26,6 +27,7 @@ export type DadosFornecedor = {
   telefone: string | null;
   email: string | null;
   site: string | null;
+  endereco: string | null;
   condicaoPagamento: string | null;
   frete: string | null;
   status: string;
@@ -54,12 +56,28 @@ export function FormularioFornecedor({
     {},
   );
   const [telefone, setTelefone] = useState(mascaraTelefone(fornecedor?.telefone ?? ""));
+  const [endereco, setEndereco] = useState(fornecedor?.endereco ?? "");
+  const [copia, setCopia] = useState<"feita" | "falhou" | null>(null);
 
   useEffect(() => {
     if (estado.ok) router.push("/fornecedores");
   }, [estado.ok, router]);
 
   const whatsapp = linkWhatsapp(telefone);
+  const rota = linkRota(endereco);
+
+  /* Copiar em vez de so abrir: quem cadastra aqui nao e quem vai buscar. O
+     link vai pelo WhatsApp e abre o Maps ja na rota no celular de quem for. */
+  async function copiarRota() {
+    if (!rota) return;
+    try {
+      await navigator.clipboard.writeText(rota);
+      setCopia("feita");
+    } catch {
+      setCopia("falhou");
+    }
+  }
+
   const erroNoCampo = (campo: string) => (estado.campo === campo ? estado.erro : undefined);
 
   return (
@@ -108,6 +126,63 @@ export function FormularioFornecedor({
 
           <Grupo rotulo="Site / loja" htmlFor="site">
             <Entrada id="site" name="site" type="url" defaultValue={fornecedor?.site ?? ""} placeholder="https://" />
+          </Grupo>
+
+          <Grupo
+            rotulo="Endereço"
+            htmlFor="endereco"
+            className="sm:col-span-2"
+            ajuda={
+              copia === "feita" ? (
+                <span className="text-ok">Link copiado — é só colar no WhatsApp.</span>
+              ) : copia === "falhou" ? (
+                <span className="text-perigo">
+                  O navegador não deixou copiar. Abra no mapa e compartilhe por lá.
+                </span>
+              ) : (
+                "Opcional — fornecedor online não tem para onde ir."
+              )
+            }
+          >
+            <div className="flex gap-2">
+              <Entrada
+                id="endereco"
+                name="endereco"
+                value={endereco}
+                onChange={(e) => {
+                  setEndereco(e.target.value);
+                  setCopia(null);
+                }}
+                placeholder="Av. Brasil, 1500 - Centro, Curitiba/PR"
+              />
+              {rota && (
+                <>
+                  <a href={rota} target="_blank" rel="noopener noreferrer">
+                    <Botao
+                      type="button"
+                      variante="contorno"
+                      tamanho="icone"
+                      title="Abrir a rota no mapa"
+                    >
+                      <MapPin className="size-4" />
+                    </Botao>
+                  </a>
+                  <Botao
+                    type="button"
+                    variante="contorno"
+                    tamanho="icone"
+                    onClick={copiarRota}
+                    title="Copiar o link da rota"
+                  >
+                    {copia === "feita" ? (
+                      <Check className="size-4 text-ok" />
+                    ) : (
+                      <Link2 className="size-4" />
+                    )}
+                  </Botao>
+                </>
+              )}
+            </div>
           </Grupo>
 
           <Grupo rotulo="Condição de pagamento" htmlFor="condicaoPagamento">

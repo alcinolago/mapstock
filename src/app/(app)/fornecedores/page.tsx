@@ -1,5 +1,5 @@
 import { desc, eq, sql } from "drizzle-orm";
-import { ExternalLink, MessageCircle, Plus } from "lucide-react";
+import { ExternalLink, MapPin, MessageCircle, Plus } from "lucide-react";
 import Link from "next/link";
 
 import { Botao } from "@/components/ui/botao";
@@ -20,6 +20,7 @@ import { db } from "@/db";
 import { fornecedores, itemFornecedores } from "@/db/schema";
 import { exigirSessao } from "@/lib/auth";
 import { STATUS_FORNECEDOR, type StatusFornecedor } from "@/lib/labels";
+import { linkRota } from "@/lib/mapa";
 
 export const metadata = { title: "Fornecedores" };
 
@@ -43,6 +44,7 @@ export default async function PaginaFornecedores() {
       telefone: fornecedores.telefone,
       email: fornecedores.email,
       site: fornecedores.site,
+      endereco: fornecedores.endereco,
       status: fornecedores.status,
       ativo: fornecedores.ativo,
       condicaoPagamento: fornecedores.condicaoPagamento,
@@ -89,66 +91,80 @@ export default async function PaginaFornecedores() {
                   Nenhum fornecedor cadastrado. Comece por aqui — os itens se ligam a esta lista.
                 </Vazio>
               ) : (
-                lista.map((f) => (
-                  <Linha key={f.id}>
-                    <Celula>
-                      <Link
-                        href={`/fornecedores/${f.id}`}
-                        className="font-semibold text-marca hover:underline"
-                      >
-                        {f.nome}
-                      </Link>
-                      {!f.ativo && (
-                        <span className="ml-2 text-xs text-texto-fraco">inativo</span>
-                      )}
-                      {f.email && (
-                        <span className="block text-xs text-texto-fraco">{f.email}</span>
-                      )}
-                    </Celula>
-                    <Celula className="text-xs text-texto-suave">
-                      {f.contato && <span className="block">{f.contato}</span>}
-                      {f.telefone && <span className="block">{f.telefone}</span>}
-                      {!f.contato && !f.telefone && "—"}
-                    </Celula>
-                    <Celula className="text-xs text-texto-fraco">
-                      {f.condicaoPagamento ?? "—"}
-                    </Celula>
-                    <Celula className="num text-right font-semibold">{f.qtdItens}</Celula>
-                    <Celula>
-                      <Selo tom={TOM[f.status]}>{STATUS_FORNECEDOR[f.status]}</Selo>
-                    </Celula>
-                    <Celula>
-                      <div className="flex items-center justify-end gap-1">
-                        {f.telefone && (
-                          <a
-                            href={`https://wa.me/${
-                              f.telefone.replace(/\D/g, "").startsWith("55")
-                                ? f.telefone.replace(/\D/g, "")
-                                : `55${f.telefone.replace(/\D/g, "")}`
-                            }`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            title="WhatsApp"
-                            className="rounded-md p-1.5 text-texto-fraco transition-colors hover:bg-ok-suave hover:text-ok"
-                          >
-                            <MessageCircle className="size-4" />
-                          </a>
+                lista.map((f) => {
+                  const rota = linkRota(f.endereco);
+                  return (
+                    <Linha key={f.id}>
+                      <Celula>
+                        <Link
+                          href={`/fornecedores/${f.id}`}
+                          className="font-semibold text-marca hover:underline"
+                        >
+                          {f.nome}
+                        </Link>
+                        {!f.ativo && (
+                          <span className="ml-2 text-xs text-texto-fraco">inativo</span>
                         )}
-                        {f.site && (
-                          <a
-                            href={f.site}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            title="Abrir site"
-                            className="rounded-md p-1.5 text-texto-fraco transition-colors hover:bg-marca-suave hover:text-marca"
-                          >
-                            <ExternalLink className="size-4" />
-                          </a>
+                        {f.email && (
+                          <span className="block text-xs text-texto-fraco">{f.email}</span>
                         )}
-                      </div>
-                    </Celula>
-                  </Linha>
-                ))
+                      </Celula>
+                      <Celula className="text-xs text-texto-suave">
+                        {f.contato && <span className="block">{f.contato}</span>}
+                        {f.telefone && <span className="block">{f.telefone}</span>}
+                        {!f.contato && !f.telefone && "—"}
+                      </Celula>
+                      <Celula className="text-xs text-texto-fraco">
+                        {f.condicaoPagamento ?? "—"}
+                      </Celula>
+                      <Celula className="num text-right font-semibold">{f.qtdItens}</Celula>
+                      <Celula>
+                        <Selo tom={TOM[f.status]}>{STATUS_FORNECEDOR[f.status]}</Selo>
+                      </Celula>
+                      <Celula>
+                        <div className="flex items-center justify-end gap-1">
+                          {f.telefone && (
+                            <a
+                              href={`https://wa.me/${
+                                f.telefone.replace(/\D/g, "").startsWith("55")
+                                  ? f.telefone.replace(/\D/g, "")
+                                  : `55${f.telefone.replace(/\D/g, "")}`
+                              }`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              title="WhatsApp"
+                              className="rounded-md p-1.5 text-texto-fraco transition-colors hover:bg-ok-suave hover:text-ok"
+                            >
+                              <MessageCircle className="size-4" />
+                            </a>
+                          )}
+                          {rota && (
+                            <a
+                              href={rota}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              title="Como chegar"
+                              className="rounded-md p-1.5 text-texto-fraco transition-colors hover:bg-marca-suave hover:text-marca"
+                            >
+                              <MapPin className="size-4" />
+                            </a>
+                          )}
+                          {f.site && (
+                            <a
+                              href={f.site}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              title="Abrir site"
+                              className="rounded-md p-1.5 text-texto-fraco transition-colors hover:bg-marca-suave hover:text-marca"
+                            >
+                              <ExternalLink className="size-4" />
+                            </a>
+                          )}
+                        </div>
+                      </Celula>
+                    </Linha>
+                  );
+                })
               )}
             </Corpo>
           </Tabela>

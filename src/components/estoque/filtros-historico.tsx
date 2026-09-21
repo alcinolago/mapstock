@@ -1,11 +1,14 @@
 "use client";
 
-import { Search, X } from "lucide-react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState, useTransition } from "react";
+import { Search } from "lucide-react";
 
-import { Botao } from "@/components/ui/botao";
 import { Entrada, Selecao } from "@/components/ui/campo";
+import {
+  AvisoFiltrando,
+  BotaoLimpar,
+  useBuscaComEspera,
+  useFiltrosUrl,
+} from "@/components/ui/filtros";
 import { hoje, intervaloDoMes, mesDoIntervalo, rotuloMes } from "@/lib/periodo";
 
 /**
@@ -27,34 +30,14 @@ export function FiltrosHistorico({
   itens: { id: string; codigo: string; descricao: string }[];
   meses: string[];
 }) {
-  const router = useRouter();
-  const caminho = usePathname();
-  const params = useSearchParams();
-  const [pendente, iniciar] = useTransition();
+  const { params, aplicar, limpar, pendente } = useFiltrosUrl();
 
   const de = params.get("de") ?? "";
   const ate = params.get("ate") ?? "";
   const mes = mesDoIntervalo(de || undefined, ate || undefined) ?? "";
   const personalizado = Boolean(de || ate) && !mes;
 
-  const [busca, setBusca] = useState(params.get("busca") ?? "");
-
-  function aplicar(mudancas: Record<string, string>) {
-    const novos = new URLSearchParams(params);
-    for (const [chave, valor] of Object.entries(mudancas)) {
-      if (valor) novos.set(chave, valor);
-      else novos.delete(chave);
-    }
-    iniciar(() => router.replace(`${caminho}?${novos}`, { scroll: false }));
-  }
-
-  /* Busca com espera: nao dispara uma consulta por tecla digitada. */
-  useEffect(() => {
-    if (busca === (params.get("busca") ?? "")) return;
-    const t = setTimeout(() => aplicar({ busca }), 350);
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [busca]);
+  const [busca, setBusca] = useBuscaComEspera(params, aplicar);
 
   const temFiltro = Boolean(de || ate || params.get("item") || params.get("busca"));
 
@@ -123,21 +106,8 @@ export function FiltrosHistorico({
         />
       </div>
 
-      {temFiltro && (
-        <Botao
-          variante="suave"
-          tamanho="sm"
-          onClick={() => {
-            setBusca("");
-            iniciar(() => router.replace(caminho, { scroll: false }));
-          }}
-        >
-          <X className="size-3.5" />
-          Limpar
-        </Botao>
-      )}
-
-      {pendente && <span className="text-xs text-texto-fraco">Filtrando...</span>}
+      {temFiltro && <BotaoLimpar aoLimpar={limpar} />}
+      <AvisoFiltrando pendente={pendente} />
     </div>
   );
 }

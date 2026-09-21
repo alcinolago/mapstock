@@ -1,10 +1,12 @@
-import { desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, ilike, or, sql, type SQL } from "drizzle-orm";
 import { ExternalLink, MapPin, MessageCircle, Plus } from "lucide-react";
 import Link from "next/link";
 
+import { FiltrosFornecedores } from "@/components/fornecedores/filtros-fornecedores";
 import { Botao } from "@/components/ui/botao";
 import { CabecalhoPagina } from "@/components/ui/cabecalho-pagina";
 import { Cartao } from "@/components/ui/cartao";
+import { Paginacao } from "@/components/ui/paginacao";
 import { Selo, type TomSelo } from "@/components/ui/selo";
 import {
   Cabecalho,
@@ -17,10 +19,11 @@ import {
   Vazio,
 } from "@/components/ui/tabela";
 import { db } from "@/db";
-import { fornecedores, itemFornecedores } from "@/db/schema";
+import { fornecedores, itemFornecedores, statusFornecedor } from "@/db/schema";
 import { exigirSessao } from "@/lib/auth";
 import { STATUS_FORNECEDOR, type StatusFornecedor } from "@/lib/labels";
 import { linkRota } from "@/lib/mapa";
+import { lerPaginacao, paginaValida } from "@/lib/paginacao";
 
 export const metadata = { title: "Fornecedores" };
 
@@ -32,9 +35,47 @@ const TOM: Record<StatusFornecedor, TomSelo> = {
   bloqueado: "perigo",
 };
 
-export default async function PaginaFornecedores() {
+export default async function PaginaFornecedores({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | undefined>>;
+}) {
   const sessao = await exigirSessao();
   const podeEditar = sessao.papel !== "leitura";
+
+  const p = await searchParams;
+  const busca = p.busca?.trim() || undefined;
+  const situacao = p.situacao === "ativos" || p.situacao === "inativos" ? p.situacao : undefined;
+  const status = (statusFornecedor.enumValues as readonly string[]).includes(p.status ?? "")
+    ? (p.status as StatusFornecedor)
+    : undefined;
+
+  /* Os filtros correm na consulta, nunca no cliente: a lista chega paginada,
+     e peneirar depois so olharia a pagina que ja veio. */
+  const condicoes = [
+    busca
+      ? or(
+          ilike(fornecedores.nome, `%${busca}%`),
+          ilike(fornecedores.contato, `%${busca}%`),
+          ilike(fornecedores.email, `%${busca}%`),
+          ilike(fornecedores.telefone, `%${busca}%`),
+        )
+      : undefined,
+    status ? eq(fornecedores.status, status) : undefined,
+    situacao ? eq(fornecedores.ativo, situacao === "ativos") : undefined,
+  ].filter(Boolean) as SQL[];
+
+  const onde = condicoes.length ? and(...condicoes) : undefined;
+
+  /* A contagem vem antes para prender a pagina ao que existe: filtrar
+     encolhe a lista com a pessoa parada numa pagina alta. */
+  const [{ total }] = await db
+    .select({ total: sql<number>`count(*)::int` })
+    .from(fornecedores)
+    .where(onde);
+
+  const pedida = lerPaginacao(p.pagina, p.porPagina);
+  const pagina = paginaValida(pedida.pagina, total, pedida.porPagina);
 
   const lista = await db
     .select({
@@ -52,8 +93,11 @@ export default async function PaginaFornecedores() {
     })
     .from(fornecedores)
     .leftJoin(itemFornecedores, eq(itemFornecedores.fornecedorId, fornecedores.id))
+    .where(onde)
     .groupBy(fornecedores.id)
-    .orderBy(desc(fornecedores.ativo), fornecedores.nome);
+    .orderBy(desc(fornecedores.ativo), fornecedores.nome)
+    .limit(pedida.porPagina)
+    .offset((pagina - 1) * pedida.porPagina);
 
   return (
     <div className="mx-auto max-w-7xl">
@@ -72,6 +116,8 @@ export default async function PaginaFornecedores() {
         }
       />
 
+      <FiltrosFornecedores />
+
       <Cartao className="overflow-hidden">
         <RolagemTabela>
           <Tabela>
@@ -88,7 +134,9 @@ export default async function PaginaFornecedores() {
             <Corpo>
               {lista.length === 0 ? (
                 <Vazio colSpan={6}>
-                  Nenhum fornecedor cadastrado. Comece por aqui — os itens se ligam a esta lista.
+                  {busca || status || situacao
+                    ? "Nenhum fornecedor com esses filtros."
+                    : "Nenhum fornecedor cadastrado. Comece por aqui — os itens se ligam a esta lista."}
                 </Vazio>
               ) : (
                 lista.map((f) => {
@@ -169,6 +217,13 @@ export default async function PaginaFornecedores() {
             </Corpo>
           </Tabela>
         </RolagemTabela>
+
+        <Paginacao
+          pagina={pagina}
+          porPagina={pedida.porPagina}
+          total={total}
+          oQue="fornecedores"
+        />
       </Cartao>
     </div>
   );

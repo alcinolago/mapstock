@@ -6,7 +6,7 @@ import { ItensPedido } from "@/components/compras/itens-pedido";
 import { SeloPedido } from "@/components/situacao";
 import { botao } from "@/components/ui/botao";
 import { CabecalhoPagina } from "@/components/ui/cabecalho-pagina";
-import { pedidoCompleto } from "@/db/consultas";
+import { fotosDosItens, pedidoCompleto } from "@/db/consultas";
 import { exigirSessao } from "@/lib/auth";
 import { data } from "@/lib/utils";
 
@@ -24,6 +24,10 @@ export default async function PaginaPedido({
   if (!dados) notFound();
 
   const { pedido, linhas } = dados;
+
+  /* So os ids: `pedidoCompleto` ja traz os bytes da miniatura, mas aqueles
+     sao do PDF e nao atravessam para o navegador. */
+  const fotos = await fotosDosItens(linhas.map((l) => l.itemId));
 
   return (
     <div className="mx-auto max-w-5xl">
@@ -75,6 +79,7 @@ export default async function PaginaPedido({
       <ItensPedido
         pedidoId={pedido.id}
         linhas={linhas}
+        fotos={Object.fromEntries(fotos)}
         frete={pedido.frete}
         podeEditar={sessao.papel !== "leitura"}
         status={pedido.status}

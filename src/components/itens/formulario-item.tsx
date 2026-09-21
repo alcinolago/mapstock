@@ -58,6 +58,8 @@ type Props = {
   regras: { classificacaoId: string; palavraChave: string }[];
   item?: DadosItem;
   podeExcluir: boolean;
+  /** Para onde salvar, cancelar e excluir devolvem. Ver `lib/voltar.ts`. */
+  voltarPara?: string;
 };
 
 export function FormularioItem({
@@ -68,6 +70,7 @@ export function FormularioItem({
   regras,
   item,
   podeExcluir,
+  voltarPara = "/itens",
 }: Props) {
   const router = useRouter();
   const [estado, acao, salvando] = useActionState<EstadoItem, FormData>(salvarItem, {});
@@ -112,8 +115,8 @@ export function FormularioItem({
   }, [descricao, classificacaoId]);
 
   useEffect(() => {
-    if (estado.ok) router.push("/itens");
-  }, [estado.ok, router]);
+    if (estado.ok) router.push(voltarPara);
+  }, [estado.ok, router, voltarPara]);
 
   async function regerarCodigo() {
     codigoAuto.current = true;
@@ -408,7 +411,7 @@ export function FormularioItem({
       <div className="fixed inset-x-0 bottom-0 z-20 border-t border-borda bg-superficie/90 px-4 py-3 backdrop-blur-sm sm:px-6">
         <div className="mx-auto flex max-w-5xl items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <Botao type="button" variante="suave" onClick={() => router.push("/itens")}>
+            <Botao type="button" variante="suave" onClick={() => router.push(voltarPara)}>
               Cancelar
             </Botao>
             {item && podeExcluir && (
@@ -419,6 +422,8 @@ export function FormularioItem({
                 dependencias={() => dependenciasItem(item.id)}
                 excluir={() => excluirItem(item.id)}
                 desativar={() => alternarAtivoItem(item.id, false)}
+                /* Excluido, o item nao existe mais: voltar para a cotacao de
+                   origem mostraria a linha que acabou de sumir. */
                 aoConcluir={() => router.push("/itens")}
               />
             )}

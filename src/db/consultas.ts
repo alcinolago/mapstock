@@ -20,6 +20,7 @@ import { db } from "./index";
 import {
   carros,
   classificacoes,
+  cotacaoItens,
   cotacoes,
   divisoes,
   fornecedores,
@@ -768,14 +769,19 @@ export async function codigosDeItens() {
 }
 
 /**
- * A foto principal (a primeira) de cada item de uma lista ja carregada.
+ * Todas as fotos de cada item de uma lista ja carregada, na ordem do cadastro
+ * — a primeira e a principal.
  *
  * Consulta a parte, e nao subconsulta dentro da listagem, por dois motivos:
  * a listagem de itens ja e grande demais para ganhar mais um correlacionado,
  * e assim so os ids da pagina vao ao banco. Devolve id de foto, nunca bytes —
  * quem busca a imagem e /api/fotos.
+ *
+ * Vem a lista inteira e nao so a principal porque quem clica na miniatura
+ * abre a galeria, e ela precisa saber para onde navegar sem outra ida ao
+ * servidor. Sao ids: tres por item, no maximo.
  */
-export async function fotosPrincipais(itemIds: string[]): Promise<Map<string, string>> {
+export async function fotosDosItens(itemIds: string[]): Promise<Map<string, string[]>> {
   if (itemIds.length === 0) return new Map();
 
   const linhas = await db
@@ -784,11 +790,131 @@ export async function fotosPrincipais(itemIds: string[]): Promise<Map<string, st
     .where(inArray(itemFotos.itemId, itemIds))
     .orderBy(asc(itemFotos.itemId), asc(itemFotos.ordem));
 
-  const primeira = new Map<string, string>();
+  const porItem = new Map<string, string[]>();
   for (const linha of linhas) {
-    if (!primeira.has(linha.itemId)) primeira.set(linha.itemId, linha.id);
+    const lista = porItem.get(linha.itemId);
+    if (lista) lista.push(linha.id);
+    else porItem.set(linha.itemId, [linha.id]);
   }
-  return primeira;
+  return porItem;
+}
+
+/** So a foto principal, para quem mostra um quadrado e nada mais. */
+export async function fotosPrincipais(itemIds: string[]): Promise<Map<string, string>> {
+  const todas = await fotosDosItens(itemIds);
+  return new Map([...todas].map(([itemId, fotos]) => [itemId, fotos[0]]));
+}
+
+/** Um item de um documento, com a foto que o representa na lista. */
+export type MiniaturaDeItem = {
+  itemId: string;
+  codigo: string;
+  descricao: string;
+  fotoId: string;
+};
+
+/**
+ * A foto principal de cada item das cotacoes de uma pagina.
+ *
+ * A lista mostra documentos, nao itens — a pilha de miniaturas e o unico
+ * jeito de reconhecer a cotacao antes de abrir. So os ids da pagina vao ao
+ * banco, e so quem tem foto volta: item sem foto nao ocupa lugar na pilha.
+ */
+export async function miniaturasDeCotacoes(
+  cotacaoIds: string[],
+): Promise<Map<string, MiniaturaDeItem[]>> {
+  if (cotacaoIds.length === 0) return new Map();
+
+  const linhas = await db
+    .select({
+      documentoId: cotacaoItens.cotacaoId,
+      itemId: itens.id,
+      codigo: itens.codigo,
+      descricao: itens.descricao,
+      fotoId: itemFotos.id,
+    })
+    .from(cotacaoItens)
+    .innerJoin(itens, eq(itens.id, cotacaoItens.itemId))
+    .innerJoin(itemFotos, eq(itemFotos.itemId, cotacaoItens.itemId))
+    .where(inArray(cotacaoItens.cotacaoId, cotacaoIds))
+    .orderBy(asc(cotacaoItens.cotacaoId), asc(itens.codigo), asc(itemFotos.ordem));
+
+  return primeiraFotoPorItem(linhas);
+}
+
+/** O mesmo para os pedidos. */
+export async function miniaturasDePedidos(
+  pedidoIds: string[],
+): Promise<Map<string, MiniaturaDeItem[]>> {
+  if (pedidoIds.length === 0) return new Map();
+
+  const linhas = await db
+    .select({
+      documentoId: pedidoItens.pedidoId,
+      itemId: itens.id,
+      codigo: itens.codigo,
+      descricao: itens.descricao,
+      fotoId: itemFotos.id,
+    })
+    .from(pedidoItens)
+    .innerJoin(itens, eq(itens.id, pedidoItens.itemId))
+    .innerJoin(itemFotos, eq(itemFotos.itemId, pedidoItens.itemId))
+    .where(inArray(pedidoItens.pedidoId, pedidoIds))
+    .orderBy(asc(pedidoItens.pedidoId), asc(itens.codigo), asc(itemFotos.ordem));
+
+  return primeiraFotoPorItem(linhas);
+}
+
+/* Um item aparece uma vez so na pilha: a pilha representa o que o documento
+   pede, nao quantas fotos cada peca tem. */
+function primeiraFotoPorItem(
+  linhas: (MiniaturaDeItem & { documentoId: string })[],
+): Map<string, MiniaturaDeItem[]> {
+  const porDocumento = new Map<string, MiniaturaDeItem[]>();
+
+  for (const linha of linhas) {
+    const lista = porDocumento.get(linha.documentoId) ?? [];
+    if (lista.some((m) => m.itemId === linha.itemId)) continue;
+    lista.push({
+      itemId: linha.itemId,
+      codigo: linha.codigo,
+      descricao: linha.descricao,
+      fotoId: linha.fotoId,
+    });
+    porDocumento.set(linha.documentoId, lista);
+  }
+  return porDocumento;
+}
+
+/**
+ * So os itens que ja foram cotados, para o filtro da tela de cotacoes nao
+ * oferecer codigo que devolve lista vazia. Mesmo espirito de
+ * `itensComMovimento`.
+ */
+export async function itensEmCotacoes() {
+  return db
+    .selectDistinct({ id: itens.id, codigo: itens.codigo, descricao: itens.descricao })
+    .from(cotacaoItens)
+    .innerJoin(itens, eq(itens.id, cotacaoItens.itemId))
+    .orderBy(asc(itens.codigo));
+}
+
+/** O mesmo para os pedidos. */
+export async function itensEmPedidos() {
+  return db
+    .selectDistinct({ id: itens.id, codigo: itens.codigo, descricao: itens.descricao })
+    .from(pedidoItens)
+    .innerJoin(itens, eq(itens.id, pedidoItens.itemId))
+    .orderBy(asc(itens.codigo));
+}
+
+/** So quem ja recebeu pedido, para o filtro de fornecedor da tela de pedidos. */
+export async function fornecedoresComPedido() {
+  return db
+    .selectDistinct({ id: fornecedores.id, nome: fornecedores.nome })
+    .from(pedidosCompra)
+    .innerJoin(fornecedores, eq(fornecedores.id, pedidosCompra.fornecedorId))
+    .orderBy(asc(fornecedores.nome));
 }
 
 /**
@@ -826,6 +952,29 @@ export async function primeiroPedido(): Promise<Date | null> {
     .select({ quando: sql<Date | null>`min(${pedidosCompra.criadoEm})` })
     .from(pedidosCompra);
   return l?.quando ? new Date(l.quando) : null;
+}
+
+/**
+ * Os itens de uma cotacao que ja viraram linha de pedido.
+ *
+ * Existe porque a cotacao agora pode ficar aberta depois de uma geracao
+ * parcial: sem isto, gerar de novo duplicaria as linhas que ja foram
+ * compradas. Pedido cancelado nao conta — ali a compra precisa mesmo voltar
+ * a ser possivel pela cotacao de origem.
+ */
+export async function itensJaPedidos(cotacaoId: string): Promise<Set<string>> {
+  const linhas = await db
+    .select({ itemId: pedidoItens.itemId })
+    .from(pedidoItens)
+    .innerJoin(pedidosCompra, eq(pedidosCompra.id, pedidoItens.pedidoId))
+    .where(
+      and(
+        eq(pedidosCompra.cotacaoId, cotacaoId),
+        not(eq(pedidosCompra.status, "cancelado")),
+      ),
+    );
+
+  return new Set(linhas.map((l) => l.itemId));
 }
 
 /**

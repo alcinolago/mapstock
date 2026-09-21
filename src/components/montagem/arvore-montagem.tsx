@@ -7,6 +7,7 @@ import { useState } from "react";
 import { Selo } from "@/components/ui/selo";
 import { MontarNo } from "./montar-no";
 import { cn, dataHora, numero } from "@/lib/utils";
+import { linkDoItem } from "@/lib/voltar";
 
 export type NoMontagem = {
   id: string;
@@ -120,7 +121,7 @@ function No({
           ) : (
             <>
               <Link
-                href={`/itens/${no.itemId}`}
+                href={linkDoItem(no.itemId!, "/montagem")}
                 className="codigo shrink-0 text-xs font-semibold text-marca hover:underline"
               >
                 {no.codigo}

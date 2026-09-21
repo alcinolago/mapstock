@@ -12,6 +12,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
+import { MiniaturaAmpliavel } from "@/components/itens/miniatura-ampliavel";
 import { Botao } from "@/components/ui/botao";
 import { AreaTexto } from "@/components/ui/campo";
 import { CampoNumero } from "@/components/ui/campo-mascarado";
@@ -26,6 +27,7 @@ import {
 import type { LinhaPedidoCompleta } from "@/db/consultas";
 import type { StatusPedido } from "@/lib/labels";
 import { moeda, numero, paraNumero } from "@/lib/utils";
+import { linkDoItem } from "@/lib/voltar";
 
 /**
  * As linhas do pedido em cartoes, nao em tabela.
@@ -39,12 +41,15 @@ import { moeda, numero, paraNumero } from "@/lib/utils";
 export function ItensPedido({
   pedidoId,
   linhas,
+  fotos,
   frete,
   podeEditar,
   status,
 }: {
   pedidoId: string;
   linhas: LinhaPedidoCompleta[];
+  /** Ids das fotos de cada item, por itemId. */
+  fotos: Record<string, string[]>;
   frete: number;
   podeEditar: boolean;
   status: StatusPedido;
@@ -92,14 +97,22 @@ export function ItensPedido({
         return (
           <article key={l.id} className="rounded-xl border border-borda bg-superficie p-4">
             <div className="flex flex-wrap items-start justify-between gap-2">
-              <div className="min-w-0">
-                <Link
-                  href={`/itens/${l.itemId}`}
-                  className="codigo text-sm font-semibold text-marca hover:underline"
-                >
-                  {l.codigo}
-                </Link>
-                <p className="text-sm text-texto">{l.descricao}</p>
+              <div className="flex min-w-0 items-start gap-3">
+                <MiniaturaAmpliavel
+                  fotos={fotos[l.itemId] ?? []}
+                  descricao={l.descricao}
+                  codigo={l.codigo}
+                  className="size-12"
+                />
+                <div className="min-w-0">
+                  <Link
+                    href={linkDoItem(l.itemId, `/compras/pedidos/${pedidoId}`)}
+                    className="codigo text-sm font-semibold text-marca hover:underline"
+                  >
+                    {l.codigo}
+                  </Link>
+                  <p className="text-sm text-texto">{l.descricao}</p>
+                </div>
               </div>
 
               {devolvido ? (

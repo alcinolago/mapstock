@@ -12,11 +12,17 @@ import { opcoes, STATUS_COTACAO, type StatusCotacao } from "@/lib/labels";
 export function AcoesCotacao({
   cotacaoId,
   status,
-  temEscolhido,
+  pedidosPrevistos,
+  itensPrevistos,
+  semVencedor,
 }: {
   cotacaoId: string;
   status: StatusCotacao;
-  temEscolhido: boolean;
+  /** Quantos pedidos saem: um por fornecedor vencedor ainda nao comprado. */
+  pedidosPrevistos: number;
+  itensPrevistos: number;
+  /** Codigos dos itens que ficam de fora por nao terem vencedor marcado. */
+  semVencedor: string[];
 }) {
   const router = useRouter();
   const [pendente, iniciar] = useTransition();
@@ -56,18 +62,49 @@ export function AcoesCotacao({
           Icone={FileCheck2}
           variante="primario"
           tom="marca"
-          desabilitado={pendente || !temEscolhido}
+          desabilitado={pendente || itensPrevistos === 0}
           titulo="Gerar pedidos de compra"
-          rotuloConfirmar="Gerar e fechar"
+          rotuloConfirmar={
+            pedidosPrevistos === 1 ? "Gerar o pedido" : `Gerar os ${pedidosPrevistos} pedidos`
+          }
           aoConfirmar={gerar}
         >
           <p>
-            Sai um pedido por fornecedor escolhido no comparativo, com os itens e os preços
-            que venceram.
+            Saem{" "}
+            <strong className="font-semibold text-texto">
+              {pedidosPrevistos} {pedidosPrevistos === 1 ? "pedido" : "pedidos"} com{" "}
+              {itensPrevistos} {itensPrevistos === 1 ? "item" : "itens"}
+            </strong>
+            , um pedido por fornecedor escolhido, com os preços que venceram.
           </p>
-          <p className="text-texto-fraco">
-            A cotação é fechada no mesmo passo e deixa de aceitar alteração de preço.
-          </p>
+
+          {/* O aviso é o ponto todo desta janela: item sem vencedor não vira
+              linha de pedido, e antes ele sumia junto com a cotação fechada. */}
+          {semVencedor.length > 0 ? (
+            <>
+              <p>
+                <strong className="font-semibold text-alerta">
+                  {semVencedor.length}{" "}
+                  {semVencedor.length === 1 ? "item fica de fora" : "itens ficam de fora"}
+                </strong>
+                , sem fornecedor escolhido:
+              </p>
+              <ul className="codigo ml-4 list-disc text-xs text-texto-suave">
+                {semVencedor.map((codigo) => (
+                  <li key={codigo}>{codigo}</li>
+                ))}
+              </ul>
+              <p className="text-texto-fraco">
+                A cotação continua aberta com eles — dá para escolher o vencedor e gerar o
+                resto depois, sem cotar de novo.
+              </p>
+            </>
+          ) : (
+            <p className="text-texto-fraco">
+              Não sobra item: a cotação é fechada no mesmo passo e deixa de aceitar
+              alteração de preço.
+            </p>
+          )}
         </BotaoConfirmar>
       )}
     </div>

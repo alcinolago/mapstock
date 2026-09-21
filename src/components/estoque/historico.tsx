@@ -2,9 +2,10 @@
 
 import { Undo2 } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { FiltrosHistorico } from "./filtros-historico";
+import { MiniaturaAmpliavel } from "@/components/itens/miniatura-ampliavel";
 import { SeloMovimento } from "@/components/situacao";
 import { BotaoConfirmar } from "@/components/ui/confirmar";
 import { CabecalhoCartao, Cartao } from "@/components/ui/cartao";
@@ -22,6 +23,7 @@ import {
 import { estornarMovimento } from "@/lib/acoes/estoque";
 import { MOVIMENTOS, type TipoMovimento } from "@/lib/labels";
 import { dataHora, numero } from "@/lib/utils";
+import { linkDoItem } from "@/lib/voltar";
 
 export type LinhaMovimento = {
   id: string;
@@ -35,6 +37,8 @@ export type LinhaMovimento = {
   observacao: string | null;
   usuario: string | null;
   criadoEm: Date;
+  /** Fotos do item movimentado, na ordem do cadastro. */
+  fotos: string[];
 };
 
 export function Historico({
@@ -60,6 +64,12 @@ export function Historico({
 }) {
   const router = useRouter();
 
+  /* Com os filtros e a pagina: voltar da tela do item tem de cair onde a
+     pessoa estava, e nao no topo do historico. */
+  const caminho = usePathname();
+  const params = useSearchParams();
+  const daqui = params.size > 0 ? `${caminho}?${params}` : caminho;
+
   async function estornar(id: string) {
     const r = await estornarMovimento(id);
     if (r.erro) return r;
@@ -79,6 +89,7 @@ export function Historico({
           <Cabecalho>
             <tr>
               <Coluna>Quando</Coluna>
+              <Coluna className="w-8" />
               <Coluna>Tipo</Coluna>
               <Coluna>Item</Coluna>
               <Coluna className="text-right">Qtd.</Coluna>
@@ -89,7 +100,7 @@ export function Historico({
           </Cabecalho>
           <Corpo>
             {movimentos.length === 0 ? (
-              <Vazio colSpan={podeEditar ? 7 : 6}>
+              <Vazio colSpan={podeEditar ? 8 : 7}>
                 {temFiltro
                   ? "Nada encontrado com esses filtros."
                   : "Nenhuma movimentação lançada ainda."}
@@ -100,11 +111,18 @@ export function Historico({
                   <Celula className="text-xs whitespace-nowrap text-texto-fraco">
                     {dataHora(m.criadoEm)}
                   </Celula>
+                  <Celula className="pr-0">
+                    <MiniaturaAmpliavel
+                      fotos={m.fotos}
+                      descricao={m.descricao}
+                      codigo={m.codigo}
+                    />
+                  </Celula>
                   <Celula>
                     <SeloMovimento tipo={m.tipo} />
                   </Celula>
                   <Celula>
-                    <Link href={`/itens/${m.itemId}`} className="group block min-w-0">
+                    <Link href={linkDoItem(m.itemId, daqui)} className="group block min-w-0">
                       <span className="codigo block text-xs font-semibold text-marca group-hover:underline">
                         {m.codigo}
                       </span>

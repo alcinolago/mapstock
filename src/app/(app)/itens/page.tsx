@@ -2,7 +2,7 @@ import { Plus } from "lucide-react";
 import Link from "next/link";
 
 import { FiltrosItens } from "@/components/itens/filtros-itens";
-import { MiniaturaItem } from "@/components/itens/miniatura-item";
+import { MiniaturaAmpliavel } from "@/components/itens/miniatura-ampliavel";
 import { SeloSituacao } from "@/components/situacao";
 import { Botao } from "@/components/ui/botao";
 import { CabecalhoPagina } from "@/components/ui/cabecalho-pagina";
@@ -22,7 +22,7 @@ import { db } from "@/db";
 import {
   codigosDeItens,
   contarItens,
-  fotosPrincipais,
+  fotosDosItens,
   listarItensComSaldo,
   listarLocais,
   type FiltrosItens as Filtros,
@@ -73,8 +73,10 @@ export default async function PaginaItens({
     listarLocais(),
   ]);
 
-  /* Depois da lista: so as fotos dos itens que esta pagina mostra. */
-  const fotos = await fotosPrincipais(lista.map((i) => i.id));
+  /* Depois da lista: so as fotos dos itens que esta pagina mostra. Vem
+     todas, e nao so a principal — quem clica na miniatura abre a galeria, e
+     ela precisa saber para onde navegar sem outra ida ao servidor. */
+  const fotos = await fotosDosItens(lista.map((i) => i.id));
 
   const podeEditar = sessao.papel !== "leitura";
 
@@ -128,7 +130,11 @@ export default async function PaginaItens({
                 lista.map((i) => (
                   <Linha key={i.id}>
                     <Celula className="pr-0">
-                      <MiniaturaItem fotoId={fotos.get(i.id)} descricao={i.descricao} />
+                      <MiniaturaAmpliavel
+                        fotos={fotos.get(i.id) ?? []}
+                        descricao={i.descricao}
+                        codigo={i.codigo}
+                      />
                     </Celula>
                     <Celula>
                       <Link

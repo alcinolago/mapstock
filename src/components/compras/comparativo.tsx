@@ -1,11 +1,12 @@
 "use client";
 
-import { Check, ChevronRight, Plus, Trash2, X } from "lucide-react";
+import { Check, CheckCheck, ChevronRight, Plus, Trash2, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
 
 import { SeletorItem, type ItemBusca } from "@/components/estoque/seletor-item";
+import { MiniaturaAmpliavel } from "@/components/itens/miniatura-ampliavel";
 import { Botao } from "@/components/ui/botao";
 import { Selecao } from "@/components/ui/campo";
 import { CampoMoeda, CampoNumero } from "@/components/ui/campo-mascarado";
@@ -15,11 +16,13 @@ import {
   adicionarItemNaCotacao,
   atualizarQuantidadeCotacao,
   escolherFornecedor,
+  escolherMenoresPrecos,
   removerItemDaCotacao,
   removerPrecoCotado,
   salvarPrecoCotado,
 } from "@/lib/acoes/compras";
 import { cn, moeda, numero, paraNumero } from "@/lib/utils";
+import { linkDoItem } from "@/lib/voltar";
 
 export type PrecoCotado = {
   id: string;
@@ -38,6 +41,10 @@ export type ItemCotado = {
   descricao: string;
   unidade: string;
   quantidade: number;
+  /** Fotos do item, na ordem do cadastro. */
+  fotos: string[];
+  /** Ja virou linha de pedido; nao entra numa nova geracao. */
+  jaPedido: boolean;
   precos: PrecoCotado[];
   /** Os fornecedores que este item tem no cadastro. */
   fornecedoresDoItem: { id: string; nome: string }[];
@@ -154,7 +161,21 @@ export function Comparativo({
           </Botao>
 
           {itensCotados.length > 1 && (
-            <div className="ml-auto flex gap-1">
+            <div className="ml-auto flex flex-wrap items-center gap-1">
+              {/* Escolher item a item foi o que deixou pedido sair pela
+                  metade numa cotacao de equipamento, com dezenas de linhas. */}
+              {semEscolha > 0 && (
+                <Botao
+                  variante="contorno"
+                  tamanho="sm"
+                  disabled={pendente}
+                  onClick={() => agir(() => escolherMenoresPrecos(cotacaoId))}
+                  title="Marca o menor preço de cada item que ainda está sem vencedor"
+                >
+                  <CheckCheck className="size-3.5" />
+                  Menor preço em tudo
+                </Botao>
+              )}
               <Botao
                 variante="fantasma"
                 tamanho="sm"
@@ -183,7 +204,9 @@ export function Comparativo({
           Nenhum item nesta cotação ainda. Adicione acima o que você precisa comprar.
         </p>
       ) : (
-        <div className="space-y-2">
+        /* Espaco generoso entre os cartoes: com `space-y-2` a lista de itens
+           lia como um bloco so, e numa cotacao de equipamento sao dezenas. */
+        <div className="space-y-3">
           {itensCotados.map((item) => (
             <ItemDaCotacao
               key={item.id}
@@ -294,8 +317,21 @@ function ItemDaCotacao({
   const nomeEscolhido = fornecedores.find((f) => f.id === escolhido?.fornecedorId)?.nome;
 
   return (
-    <div className="overflow-hidden rounded-xl border border-borda bg-superficie">
-      <div className="flex items-center gap-2 px-2 py-2 sm:px-3">
+    /* Borda forte e sombra porque o cartao e branco sobre um fundo quase
+       branco (`--superficie` #fff em `--fundo` #f1f5f9): com a borda fraca os
+       itens nao se separavam a olho. No escuro vale o mesmo, com menos
+       diferenca ainda entre superficie e fundo. */
+    <div className="overflow-hidden rounded-xl border border-borda-forte bg-superficie shadow-[var(--sombra)]">
+      <div className="flex items-center gap-2 px-2 py-2.5 sm:px-3">
+        {/* Fora do botao que abre e fecha: botao dentro de botao nao e HTML
+            valido, e o clique na foto e outro assunto. */}
+        <MiniaturaAmpliavel
+          fotos={item.fotos}
+          descricao={item.descricao}
+          codigo={item.codigo}
+          className="size-9"
+        />
+
         <button
           type="button"
           onClick={aoAlternar}
@@ -311,6 +347,9 @@ function ItemDaCotacao({
           <span className="codigo shrink-0 text-xs font-semibold text-marca">{item.codigo}</span>
           <span className="min-w-0 truncate text-xs text-texto-fraco">{item.descricao}</span>
         </button>
+
+        {/* Diz por que este item nao entra numa nova geracao de pedidos. */}
+        {item.jaPedido && <Selo tom="ok">já pedido</Selo>}
 
         {/* Fechado, o resumo é a única leitura que sobra do item. */}
         {!aberto && (
@@ -360,7 +399,7 @@ function ItemDaCotacao({
             <p className="px-3 py-4 text-xs text-texto-fraco">
               Este item não tem fornecedor no cadastro.{" "}
               <Link
-                href={`/itens/${item.itemId}`}
+                href={linkDoItem(item.itemId, `/compras/cotacoes/${cotacaoId}`)}
                 className="font-semibold text-marca hover:underline"
               >
                 Vincule um no cadastro do item
@@ -375,9 +414,15 @@ function ItemDaCotacao({
                     {colunas.map((f) => (
                       <th
                         key={f.id}
-                        className="min-w-36 border-b border-l border-borda px-3 py-2 text-left text-xs font-semibold text-texto-suave first:border-l-0"
+                        className="min-w-44 border-b border-l border-borda px-3 py-2 text-left first:border-l-0"
                       >
-                        {f.nome}
+                        {/* O nome sozinho nao dizia o que era: quem bate o
+                            olho precisa saber que aquilo e fornecedor, e nao
+                            local, marca ou codigo. */}
+                        <span className="block text-[10px] font-semibold tracking-wide text-texto-fraco uppercase">
+                          Fornecedor
+                        </span>
+                        <span className="block text-xs font-semibold text-texto">{f.nome}</span>
                       </th>
                     ))}
                   </tr>
@@ -398,6 +443,7 @@ function ItemDaCotacao({
                           cotacaoId={cotacaoId}
                           cotacaoItemId={item.id}
                           fornecedorId={f.id}
+                          fornecedorNome={f.nome}
                           preco={preco}
                           quantidade={item.quantidade}
                           eMenor={eMenor}
@@ -415,10 +461,13 @@ function ItemDaCotacao({
 
           {editavel && restantes.length > 0 && (
             <div className="flex flex-wrap items-center gap-2 border-t border-borda px-3 py-2">
+              {/* Na cor da marca: era um campo cinza no rodape do cartao, com
+                  a mesma cara de um campo desabilitado, e acrescentar
+                  fornecedor e justamente a acao que a tela oferece ali. */}
               <Selecao
                 value=""
                 onChange={(e) => e.target.value && aoCotarOutro(e.target.value)}
-                className="h-8 w-auto min-w-56 text-xs"
+                className="h-8 w-auto min-w-56 border-marca bg-marca-suave text-xs font-semibold text-marca hover:border-marca"
                 aria-label={`Cotar outro fornecedor para ${item.codigo}`}
               >
                 <option value="">+ Cotar outro fornecedor para este item...</option>
@@ -429,7 +478,7 @@ function ItemDaCotacao({
                 ))}
               </Selecao>
               <Link
-                href={`/itens/${item.itemId}`}
+                href={linkDoItem(item.itemId, `/compras/cotacoes/${cotacaoId}`)}
                 className="text-xs font-semibold text-texto-fraco transition-colors hover:text-marca"
               >
                 Abrir cadastro do item
@@ -447,6 +496,7 @@ function Celula({
   cotacaoId,
   cotacaoItemId,
   fornecedorId,
+  fornecedorNome,
   preco,
   quantidade,
   eMenor,
@@ -457,6 +507,9 @@ function Celula({
   cotacaoId: string;
   cotacaoItemId: string;
   fornecedorId: string;
+  /** So para o rotulo acessivel: "Preço unitário" repetido em cada coluna
+      daria o mesmo nome a campos diferentes. */
+  fornecedorNome: string;
   preco?: PrecoCotado;
   quantidade: number;
   eMenor: boolean;
@@ -495,27 +548,42 @@ function Celula({
         !preco?.escolhido && eMenor && "bg-ok-suave/40",
       )}
     >
+      {/* O campo nao se explicava: chegava vazio, do tamanho da coluna
+          inteira quando o item tinha um fornecedor so, e sem dizer que numero
+          se digita ali. Agora tem rotulo, o "R$" dentro e largura propria —
+          preco nao ocupa 600px de tela. */}
+      <span className="mb-1 block text-[10px] font-semibold tracking-wide text-texto-fraco uppercase">
+        Preço unitário
+      </span>
+
       {editavel ? (
-        <CampoMoeda
-          valor={rascunho ?? (preco?.precoUnitario ? String(preco.precoUnitario) : "")}
-          aoMudar={setRascunho}
-          onBlur={() => {
-            if (rascunho !== null) salvar(rascunho);
-            setRascunho(null);
-          }}
-          placeholder="—"
-          className="h-8 text-xs"
-          aria-label="Preço unitário"
-        />
+        <div className="relative w-40">
+          <span className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-[11px] font-semibold text-texto-fraco">
+            R$
+          </span>
+          <CampoMoeda
+            valor={rascunho ?? (preco?.precoUnitario ? String(preco.precoUnitario) : "")}
+            aoMudar={setRascunho}
+            onBlur={() => {
+              if (rascunho !== null) salvar(rascunho);
+              setRascunho(null);
+            }}
+            placeholder="0,00"
+            className="h-9 pr-2 pl-8 text-xs"
+            aria-label={`Preço unitário em ${fornecedorNome}`}
+          />
+        </div>
       ) : (
-        <p className="num py-1 text-right text-xs">
+        <p className="num w-40 py-1 text-right text-xs">
           {preco?.precoUnitario ? moeda(preco.precoUnitario) : "—"}
         </p>
       )}
 
       {preco && preco.precoUnitario > 0 && (
-        <div className="mt-1 flex items-center justify-between gap-1">
-          <span className="num text-[10px] text-texto-fraco">{moeda(total)}</span>
+        <div className="mt-1.5 flex w-40 items-center justify-between gap-1">
+          <span className="text-[10px] text-texto-fraco">
+            Total <span className="num font-semibold text-texto-suave">{moeda(total)}</span>
+          </span>
 
           {editavel && (
             <div className="flex items-center gap-0.5">

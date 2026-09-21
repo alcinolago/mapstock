@@ -8,7 +8,7 @@ import { Comparativo, type ItemCotado } from "@/components/compras/comparativo";
 import { SeloCotacao } from "@/components/situacao";
 import { CabecalhoPagina } from "@/components/ui/cabecalho-pagina";
 import { db } from "@/db";
-import { fotosPrincipais, listarItensComSaldo } from "@/db/consultas";
+import { fotosDosItens, itensJaPedidos, listarItensComSaldo } from "@/db/consultas";
 import {
   cotacaoItens,
   cotacaoPrecos,
@@ -88,20 +88,45 @@ export default async function PaginaCotacao({
           .where(inArray(itemFornecedores.itemId, [...new Set(linhas.map((l) => l.itemId))]))
           .orderBy(asc(itemFornecedores.ordem), asc(fornecedores.nome));
 
+  /* Uma consulta so para os dois usos: o seletor de "adicionar item" mostra a
+     principal de cada item do catalogo, e cada linha cotada abre a galeria do
+     proprio item. Item desativado depois de entrar na cotacao nao vem em
+     `comSaldo`, mas continua precisando da foto. */
+  const fotos = await fotosDosItens([
+    ...new Set([...comSaldo.map((i) => i.id), ...linhas.map((l) => l.itemId)]),
+  ]);
+
+  /* O que ja foi comprado por esta cotacao: nao entra numa nova geracao de
+     pedidos, e a tela precisa dizer isso antes de alguem clicar. */
+  const jaPedidos = await itensJaPedidos(cotacao.id);
+
   const itensCotados: ItemCotado[] = linhas.map((l) => ({
     ...l,
+    fotos: fotos.get(l.itemId) ?? [],
+    jaPedido: jaPedidos.has(l.itemId),
     precos: precos.filter((p) => p.cotacaoItemId === l.id),
     fornecedoresDoItem: vinculos
       .filter((v) => v.itemId === l.itemId)
       .map((v) => ({ id: v.id, nome: v.nome })),
   }));
 
+  /* O que sai se alguem gerar agora — e o que fica para tras. A janela de
+     confirmacao mostra os dois: item sem vencedor nao vira linha de pedido, e
+     ate agora sumia sem aviso junto com a cotacao fechada. */
+  const aGerar = itensCotados.filter(
+    (i) => !i.jaPedido && i.precos.some((p) => p.escolhido),
+  );
+  const semVencedor = itensCotados
+    .filter((i) => !i.jaPedido && !i.precos.some((p) => p.escolhido))
+    .map((i) => i.codigo);
+  const pedidosPrevistos = new Set(
+    aGerar.map((i) => i.precos.find((p) => p.escolhido)!.fornecedorId),
+  ).size;
+
   const editavel =
     sessao.papel !== "leitura" &&
     cotacao.status !== "fechada" &&
     cotacao.status !== "cancelada";
-
-  const fotos = await fotosPrincipais(comSaldo.map((i) => i.id));
 
   return (
     <div className="mx-auto max-w-[100rem]">
@@ -123,7 +148,9 @@ export default async function PaginaCotacao({
               <AcoesCotacao
                 cotacaoId={cotacao.id}
                 status={cotacao.status}
-                temEscolhido={precos.some((p) => p.escolhido)}
+                pedidosPrevistos={pedidosPrevistos}
+                itensPrevistos={aGerar.length}
+                semVencedor={semVencedor}
               />
             )}
           </div>
@@ -146,7 +173,7 @@ export default async function PaginaCotacao({
           descricao: i.descricao,
           unidade: i.unidade,
           disponivel: i.disponivel,
-          fotoId: fotos.get(i.id),
+          fotoId: fotos.get(i.id)?.[0],
         }))}
         editavel={editavel}
       />

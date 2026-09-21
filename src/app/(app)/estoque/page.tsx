@@ -5,7 +5,7 @@ import { Historico } from "@/components/estoque/historico";
 import { CabecalhoPagina } from "@/components/ui/cabecalho-pagina";
 import { db } from "@/db";
 import {
-  fotosPrincipais,
+  fotosDosItens,
   itensComMovimento,
   listarItensComSaldo,
   primeiroMovimento,
@@ -91,7 +91,13 @@ export default async function PaginaEstoque({
     itensComMovimento(),
   ]);
 
-  const fotos = await fotosPrincipais(comSaldo.map((i) => i.id));
+  /* Uma consulta so para os dois usos: o seletor mostra a principal de cada
+     item do catalogo, e o historico abre a galeria do item da linha. O item
+     inativo entra pelo historico — ele nao vem em `comSaldo`, mas continua
+     tendo movimento. */
+  const fotos = await fotosDosItens([
+    ...new Set([...comSaldo.map((i) => i.id), ...historico.map((m) => m.itemId)]),
+  ]);
 
   const selecionaveis = comSaldo.map((i) => ({
     id: i.id,
@@ -99,7 +105,7 @@ export default async function PaginaEstoque({
     descricao: i.descricao,
     unidade: i.unidade,
     disponivel: i.disponivel,
-    fotoId: fotos.get(i.id),
+    fotoId: fotos.get(i.id)?.[0],
   }));
 
   return (
@@ -120,7 +126,7 @@ export default async function PaginaEstoque({
         )}
 
         <Historico
-          movimentos={historico}
+          movimentos={historico.map((m) => ({ ...m, fotos: fotos.get(m.itemId) ?? [] }))}
           podeEditar={podeEditar}
           meses={mesesAte(maisAntigo)}
           itensDoFiltro={itensDoFiltro}

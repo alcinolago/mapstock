@@ -20,6 +20,7 @@ import { db } from "@/db";
 import { fornecedores, itemFornecedores, itens } from "@/db/schema";
 import { exigirSessao } from "@/lib/auth";
 import { moeda, numero } from "@/lib/utils";
+import { linkDoItem } from "@/lib/voltar";
 
 export const metadata = { title: "Editar fornecedor" };
 
@@ -96,7 +97,7 @@ export default async function EditarFornecedor({
                   <Linha key={f.itemId}>
                     <Celula>
                       <Link
-                        href={`/itens/${f.itemId}`}
+                        href={linkDoItem(f.itemId, `/fornecedores/${id}`)}
                         className="codigo text-xs font-semibold text-marca hover:underline"
                       >
                         {f.codigo}

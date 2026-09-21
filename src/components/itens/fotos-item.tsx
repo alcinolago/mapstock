@@ -4,7 +4,7 @@ import { ChevronLeft, ChevronRight, ImagePlus, LoaderCircle, Trash2 } from "luci
 import { useEffect, useRef, useState } from "react";
 
 import { Botao } from "@/components/ui/botao";
-import { Modal } from "@/components/ui/modal";
+import { Galeria } from "@/components/ui/galeria";
 import { compactarFoto, ehImagem, MAX_FOTOS } from "@/lib/imagem";
 
 /** Foto que já está no banco, ou uma escolhida agora e ainda não enviada. */
@@ -27,7 +27,9 @@ export function FotosItem({ iniciais }: { iniciais: string[] }) {
   );
   const [processando, setProcessando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
-  const [ampliada, setAmpliada] = useState<FotoItem | null>(null);
+  /* A posicao, e nao a foto: a galeria navega entre as tres, e ela precisa
+     saber de onde partiu. */
+  const [ampliadaEm, setAmpliadaEm] = useState<number | null>(null);
 
   const escolher = useRef<HTMLInputElement>(null);
   const campoFotos = useRef<HTMLInputElement>(null);
@@ -134,7 +136,7 @@ export function FotosItem({ iniciais }: { iniciais: string[] }) {
               src={miniaturaDe(foto)}
               alt={`Foto ${posicao + 1} do item`}
               className="size-full cursor-zoom-in object-cover"
-              onClick={() => setAmpliada(foto)}
+              onClick={() => setAmpliadaEm(posicao)}
             />
 
             {posicao === 0 && (
@@ -202,22 +204,13 @@ export function FotosItem({ iniciais }: { iniciais: string[] }) {
         </p>
       )}
 
-      <Modal
-        aberto={Boolean(ampliada)}
-        aoFechar={() => setAmpliada(null)}
-        titulo="Foto do item"
-        centralizado
-        className="sm:max-w-3xl"
-      >
-        {ampliada && (
-          // eslint-disable-next-line @next/next/no-img-element -- idem acima.
-          <img
-            src={fotoDe(ampliada)}
-            alt="Foto do item ampliada"
-            className="mx-auto max-h-[70vh] w-auto rounded-lg object-contain"
-          />
-        )}
-      </Modal>
+      <Galeria
+        fotos={fotos.map((foto) => ({ grande: fotoDe(foto), mini: miniaturaDe(foto) }))}
+        inicial={ampliadaEm ?? 0}
+        aberto={ampliadaEm !== null}
+        aoFechar={() => setAmpliadaEm(null)}
+        titulo="Fotos do item"
+      />
     </div>
   );
 }

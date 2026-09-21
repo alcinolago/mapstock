@@ -1,11 +1,13 @@
-import { desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, ilike, inArray, sql, type SQL } from "drizzle-orm";
 import Link from "next/link";
 
 import { AbasCompras } from "@/components/compras/abas-compras";
+import { FiltrosPedidos } from "@/components/compras/filtros-pedidos";
+import { MiniaturasItens } from "@/components/itens/miniaturas-itens";
 import { SeloPedido } from "@/components/situacao";
 import { CabecalhoPagina } from "@/components/ui/cabecalho-pagina";
-import { FiltroMes } from "@/components/ui/filtro-mes";
 import { Cartao } from "@/components/ui/cartao";
+import { Paginacao } from "@/components/ui/paginacao";
 import {
   Cabecalho,
   Celula,
@@ -17,9 +19,18 @@ import {
   Vazio,
 } from "@/components/ui/tabela";
 import { db } from "@/db";
-import { abertosForaDoMes, primeiroPedido, recorteDoMes } from "@/db/consultas";
-import { fornecedores, pedidoItens, pedidosCompra } from "@/db/schema";
+import {
+  abertosForaDoMes,
+  fornecedoresComPedido,
+  itensEmPedidos,
+  miniaturasDePedidos,
+  primeiroPedido,
+  recorteDoMes,
+} from "@/db/consultas";
+import { fornecedores, pedidoItens, pedidosCompra, statusPedido } from "@/db/schema";
 import { exigirSessao } from "@/lib/auth";
+import type { StatusPedido } from "@/lib/labels";
+import { lerPaginacao, paginaValida } from "@/lib/paginacao";
 import { mesesAte, mesValido, rotuloMes } from "@/lib/periodo";
 import { data, moeda } from "@/lib/utils";
 
@@ -32,40 +43,94 @@ export default async function PaginaPedidos({
 }) {
   await exigirSessao();
 
-  const mes = mesValido((await searchParams).mes);
+  const p = await searchParams;
+  const mes = mesValido(p.mes);
+  const busca = p.busca?.trim() || undefined;
+  const item = p.item?.trim() || undefined;
+  const fornecedor = p.fornecedor?.trim() || undefined;
+  const status = (statusPedido.enumValues as readonly string[]).includes(p.status ?? "")
+    ? (p.status as StatusPedido)
+    : undefined;
 
-  const [lista, maisAntigo, escondidos] = await Promise.all([
-    db
-    .select({
-      id: pedidosCompra.id,
-      numero: pedidosCompra.numero,
-      status: pedidosCompra.status,
-      criadoEm: pedidosCompra.criadoEm,
-      frete: pedidosCompra.frete,
-      fornecedor: fornecedores.nome,
-      qtdLinhas: sql<number>`count(${pedidoItens.id})::int`,
-      total: sql<number>`coalesce(sum(${pedidoItens.quantidade} * ${pedidoItens.precoUnitario}), 0)::float8`,
-      pendentes: sql<number>`count(*) filter (where ${pedidoItens.quantidadeRecebida} < ${pedidoItens.quantidade})::int`,
-    })
+  /* Todo filtro corre na consulta, nunca no cliente: a lista chega paginada,
+     e peneirar depois so olharia a pagina que ja veio. */
+  const condicoes = [
+    recorteDoMes(pedidosCompra.criadoEm, mes),
+    busca ? ilike(pedidosCompra.numero, `%${busca}%`) : undefined,
+    status ? eq(pedidosCompra.status, status) : undefined,
+    fornecedor ? eq(pedidosCompra.fornecedorId, fornecedor) : undefined,
+    /* Subconsulta e nao join: com join, o pedido apareceria uma vez por
+       linha que casasse com o item. */
+    item
+      ? inArray(
+          pedidosCompra.id,
+          db
+            .select({ id: pedidoItens.pedidoId })
+            .from(pedidoItens)
+            .where(eq(pedidoItens.itemId, item)),
+        )
+      : undefined,
+  ].filter(Boolean) as SQL[];
+
+  const onde = condicoes.length ? and(...condicoes) : undefined;
+
+  /* A contagem vem antes para prender a pagina ao que existe: filtrar
+     encolhe a lista com a pessoa parada numa pagina alta. */
+  const [{ total }] = await db
+    .select({ total: sql<number>`count(*)::int` })
     .from(pedidosCompra)
-    .innerJoin(fornecedores, eq(fornecedores.id, pedidosCompra.fornecedorId))
-    .leftJoin(pedidoItens, eq(pedidoItens.pedidoId, pedidosCompra.id))
-    .where(recorteDoMes(pedidosCompra.criadoEm, mes))
-    .groupBy(pedidosCompra.id, fornecedores.nome)
-    .orderBy(desc(pedidosCompra.criadoEm)),
-    primeiroPedido(),
-    abertosForaDoMes("pedidos", mes),
-  ]);
+    .where(onde);
+
+  const pedida = lerPaginacao(p.pagina, p.porPagina);
+  const pagina = paginaValida(pedida.pagina, total, pedida.porPagina);
+
+  const [lista, maisAntigo, escondidos, itensDoFiltro, fornecedoresDoFiltro] =
+    await Promise.all([
+      db
+        .select({
+          id: pedidosCompra.id,
+          numero: pedidosCompra.numero,
+          status: pedidosCompra.status,
+          criadoEm: pedidosCompra.criadoEm,
+          frete: pedidosCompra.frete,
+          fornecedor: fornecedores.nome,
+          qtdLinhas: sql<number>`count(${pedidoItens.id})::int`,
+          total: sql<number>`coalesce(sum(${pedidoItens.quantidade} * ${pedidoItens.precoUnitario}), 0)::float8`,
+          pendentes: sql<number>`count(*) filter (where ${pedidoItens.quantidadeRecebida} < ${pedidoItens.quantidade})::int`,
+        })
+        .from(pedidosCompra)
+        .innerJoin(fornecedores, eq(fornecedores.id, pedidosCompra.fornecedorId))
+        .leftJoin(pedidoItens, eq(pedidoItens.pedidoId, pedidosCompra.id))
+        .where(onde)
+        .groupBy(pedidosCompra.id, fornecedores.nome)
+        .orderBy(desc(pedidosCompra.criadoEm))
+        .limit(pedida.porPagina)
+        .offset((pagina - 1) * pedida.porPagina),
+      primeiroPedido(),
+      abertosForaDoMes("pedidos", mes),
+      itensEmPedidos(),
+      fornecedoresComPedido(),
+    ]);
+
+  /* Depois da lista: so as fotos dos itens dos pedidos desta pagina. */
+  const fotos = await miniaturasDePedidos(lista.map((l) => l.id));
+
+  const temFiltro = Boolean(mes || busca || item || fornecedor || status);
 
   return (
     <div className="mx-auto max-w-7xl">
       <CabecalhoPagina
         titulo="Compras"
         descricao="Pedidos gerados a partir das cotações. Receber dá entrada no estoque."
-        acao={<FiltroMes meses={mesesAte(maisAntigo)} />}
       />
 
       <AbasCompras />
+
+      <FiltrosPedidos
+        fornecedores={fornecedoresDoFiltro}
+        itens={itensDoFiltro}
+        meses={mesesAte(maisAntigo)}
+      />
 
       {escondidos > 0 && (
         <p className="mb-4 rounded-xl border-l-4 border-alerta bg-alerta-suave px-4 py-3 text-sm text-texto-suave">
@@ -84,6 +149,7 @@ export default async function PaginaPedidos({
               <tr>
                 <Coluna>Número</Coluna>
                 <Coluna>Fornecedor</Coluna>
+                <Coluna>Itens</Coluna>
                 <Coluna className="text-right">Linhas</Coluna>
                 <Coluna className="text-right">Total</Coluna>
                 <Coluna>Status</Coluna>
@@ -92,37 +158,40 @@ export default async function PaginaPedidos({
             </Cabecalho>
             <Corpo>
               {lista.length === 0 ? (
-                <Vazio colSpan={6}>
-                  {mes
-                    ? `Nenhum pedido criado em ${rotuloMes(mes)}.`
+                <Vazio colSpan={7}>
+                  {temFiltro
+                    ? "Nenhum pedido com esses filtros."
                     : "Nenhum pedido ainda. Eles nascem ao fechar uma cotação com fornecedor escolhido."}
                 </Vazio>
               ) : (
-                lista.map((p) => (
-                  <Linha key={p.id}>
+                lista.map((l) => (
+                  <Linha key={l.id}>
                     <Celula>
                       <Link
-                        href={`/compras/pedidos/${p.id}`}
+                        href={`/compras/pedidos/${l.id}`}
                         className="codigo text-xs font-semibold text-marca hover:underline"
                       >
-                        {p.numero}
+                        {l.numero}
                       </Link>
                     </Celula>
-                    <Celula className="font-medium">{p.fornecedor}</Celula>
+                    <Celula className="font-medium">{l.fornecedor}</Celula>
+                    <Celula>
+                      <MiniaturasItens itens={fotos.get(l.id) ?? []} />
+                    </Celula>
                     <Celula className="num text-right">
-                      {p.qtdLinhas}
-                      {p.pendentes > 0 && (
-                        <span className="ml-1 text-xs text-alerta">({p.pendentes} a receber)</span>
+                      {l.qtdLinhas}
+                      {l.pendentes > 0 && (
+                        <span className="ml-1 text-xs text-alerta">({l.pendentes} a receber)</span>
                       )}
                     </Celula>
                     <Celula className="num text-right font-semibold whitespace-nowrap">
-                      {moeda(p.total + p.frete)}
+                      {moeda(l.total + l.frete)}
                     </Celula>
                     <Celula>
-                      <SeloPedido status={p.status} />
+                      <SeloPedido status={l.status} />
                     </Celula>
                     <Celula className="text-xs whitespace-nowrap text-texto-fraco">
-                      {data(p.criadoEm)}
+                      {data(l.criadoEm)}
                     </Celula>
                   </Linha>
                 ))
@@ -130,6 +199,13 @@ export default async function PaginaPedidos({
             </Corpo>
           </Tabela>
         </RolagemTabela>
+
+        <Paginacao
+          pagina={pagina}
+          porPagina={pedida.porPagina}
+          total={total}
+          oQue="pedidos"
+        />
       </Cartao>
     </div>
   );

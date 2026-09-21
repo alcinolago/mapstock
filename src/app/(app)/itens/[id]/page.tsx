@@ -9,16 +9,23 @@ import { Selo } from "@/components/ui/selo";
 import { saldoDoItem } from "@/db/consultas";
 import { exigirSessao } from "@/lib/auth";
 import { numero } from "@/lib/utils";
+import { voltarPara } from "@/lib/voltar";
 
 export const metadata = { title: "Editar item" };
 
 export default async function EditarItem({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<Record<string, string | undefined>>;
 }) {
   const sessao = await exigirSessao();
   const { id } = await params;
+
+  /* De onde a pessoa veio: quem abriu este cadastro de dentro de uma cotacao
+     precisa voltar para ela, e nao para a lista de itens. */
+  const volta = voltarPara((await searchParams).volta);
 
   const [item, opcoes, saldo] = await Promise.all([
     carregarItem(id),
@@ -31,11 +38,11 @@ export default async function EditarItem({
   return (
     <div className="mx-auto max-w-5xl">
       <Link
-        href="/itens"
+        href={volta.href}
         className="mb-3 inline-flex items-center gap-1.5 text-xs font-semibold text-texto-fraco transition-colors hover:text-marca"
       >
         <ArrowLeft className="size-3.5" />
-        Voltar para itens
+        {volta.rotulo}
       </Link>
 
       <CabecalhoPagina
@@ -54,7 +61,12 @@ export default async function EditarItem({
         }
       />
 
-      <FormularioItem {...opcoes} item={item} podeExcluir={sessao.papel !== "leitura"} />
+      <FormularioItem
+        {...opcoes}
+        item={item}
+        podeExcluir={sessao.papel !== "leitura"}
+        voltarPara={volta.href}
+      />
     </div>
   );
 }

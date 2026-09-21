@@ -12,6 +12,7 @@ import { Selo } from "@/components/ui/selo";
 import { AdicionarNo, type OpcaoDivisao } from "./adicionar-no";
 import { moverNo, removerNo } from "@/lib/acoes/moldes";
 import { cn, moeda, numero } from "@/lib/utils";
+import { linkDoItem } from "@/lib/voltar";
 
 export type NoMolde = {
   id: string;
@@ -154,7 +155,7 @@ function No({
           ) : (
             <>
               <Link
-                href={`/itens/${no.itemId}`}
+                href={linkDoItem(no.itemId!, "/estrutura")}
                 className="codigo shrink-0 text-xs font-semibold text-marca hover:underline"
               >
                 {no.codigo}

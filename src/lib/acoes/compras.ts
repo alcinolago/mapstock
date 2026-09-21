@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { db } from "@/db";
-import { listarItensComSaldo } from "@/db/consultas";
+import { itensJaPedidos, listarItensComSaldo } from "@/db/consultas";
 import {
   cotacaoItens,
   cotacaoPrecos,
@@ -147,6 +147,44 @@ async function preencherPrecosConhecidos(cotacaoId: string) {
   if (aInserir.length > 0) {
     await db.insert(cotacaoPrecos).values(aInserir).onConflictDoNothing();
   }
+
+  await marcarVencedorUnico(cotacaoId);
+}
+
+/**
+ * Item que ficou com um preco so nasce ja escolhido.
+ *
+ * Ter preco do fornecedor na tela nao era a mesma coisa que ter vencedor
+ * marcado, e a diferenca nao aparecia: cotando um equipamento inteiro, os
+ * precos do cadastro vinham preenchidos sozinhos e a tela ficava com cara de
+ * pronta, mas sem nenhum `escolhido`. Ai o pedido saia com um item so — ou
+ * nenhum. Com um unico preco nao ha o que comparar, entao marcar e so dizer
+ * o obvio; quem tem mais de um continua decidindo a mao.
+ */
+async function marcarVencedorUnico(cotacaoId: string) {
+  const precos = await db
+    .select({
+      id: cotacaoPrecos.id,
+      cotacaoItemId: cotacaoPrecos.cotacaoItemId,
+      precoUnitario: cotacaoPrecos.precoUnitario,
+      escolhido: cotacaoPrecos.escolhido,
+    })
+    .from(cotacaoPrecos)
+    .innerJoin(cotacaoItens, eq(cotacaoItens.id, cotacaoPrecos.cotacaoItemId))
+    .where(eq(cotacaoItens.cotacaoId, cotacaoId));
+
+  const porItem = new Map<string, typeof precos>();
+  for (const p of precos) {
+    porItem.set(p.cotacaoItemId, [...(porItem.get(p.cotacaoItemId) ?? []), p]);
+  }
+
+  const unicos = [...porItem.values()]
+    .filter((lista) => lista.length === 1 && lista[0].precoUnitario > 0 && !lista[0].escolhido)
+    .map((lista) => lista[0].id);
+
+  if (unicos.length === 0) return;
+
+  await db.update(cotacaoPrecos).set({ escolhido: true }).where(inArray(cotacaoPrecos.id, unicos));
 }
 
 export async function adicionarItemNaCotacao(
@@ -245,6 +283,54 @@ export async function escolherFornecedor(
   revalidatePath(`/compras/cotacoes/${cotacaoId}`);
 }
 
+/**
+ * Marca o menor preco de cada item que ainda nao tem vencedor.
+ *
+ * So mexe em quem esta sem escolha: decisao ja tomada nao se sobrescreve —
+ * quem escolheu o mais caro tinha motivo (prazo, frete, confianca), e um
+ * botao de atalho nao pode desfazer isso calado.
+ */
+export async function escolherMenoresPrecos(
+  cotacaoId: string,
+): Promise<{ erro?: string; marcados?: number }> {
+  await exigirEdicao();
+
+  const precos = await db
+    .select({
+      id: cotacaoPrecos.id,
+      cotacaoItemId: cotacaoPrecos.cotacaoItemId,
+      precoUnitario: cotacaoPrecos.precoUnitario,
+      escolhido: cotacaoPrecos.escolhido,
+    })
+    .from(cotacaoPrecos)
+    .innerJoin(cotacaoItens, eq(cotacaoItens.id, cotacaoPrecos.cotacaoItemId))
+    .where(eq(cotacaoItens.cotacaoId, cotacaoId));
+
+  const porItem = new Map<string, typeof precos>();
+  for (const p of precos) {
+    porItem.set(p.cotacaoItemId, [...(porItem.get(p.cotacaoItemId) ?? []), p]);
+  }
+
+  const aMarcar: string[] = [];
+  for (const lista of porItem.values()) {
+    if (lista.some((p) => p.escolhido)) continue;
+    /* Preco zerado e "nao respondeu", nao "de graca". */
+    const validos = lista.filter((p) => p.precoUnitario > 0);
+    if (validos.length === 0) continue;
+    aMarcar.push(validos.reduce((a, b) => (b.precoUnitario < a.precoUnitario ? b : a)).id);
+  }
+
+  if (aMarcar.length > 0) {
+    await db
+      .update(cotacaoPrecos)
+      .set({ escolhido: true })
+      .where(inArray(cotacaoPrecos.id, aMarcar));
+  }
+
+  revalidatePath(`/compras/cotacoes/${cotacaoId}`);
+  return { marcados: aMarcar.length };
+}
+
 export async function removerPrecoCotado(cotacaoId: string, precoId: string) {
   await exigirEdicao();
   await db.delete(cotacaoPrecos).where(eq(cotacaoPrecos.id, precoId));
@@ -269,15 +355,25 @@ export async function atualizarStatusCotacao(
 }
 
 /**
- * Fecha a cotacao e gera um pedido por fornecedor escolhido — um fornecedor
- * com tres itens vencedores vira um pedido so, com as tres linhas.
+ * Gera um pedido por fornecedor escolhido — um fornecedor com tres itens
+ * vencedores vira um pedido so, com as tres linhas.
+ *
+ * Fecha a cotacao apenas quando nao sobra item para comprar. Antes fechava
+ * sempre, e isso apagava trabalho sem avisar: item sem vencedor nao virava
+ * linha de pedido nenhuma, e com a cotacao fechada ele tambem nao podia mais
+ * ser escolhido — sumia. Numa cotacao montada a partir de um equipamento,
+ * onde entram dezenas de itens de uma vez, bastava esquecer um.
  */
 export async function gerarPedidos(
   cotacaoId: string,
-): Promise<{ erro?: string; pedidos?: number }> {
+): Promise<{ erro?: string; pedidos?: number; itens?: number; pendentes?: number }> {
   const sessao = await exigirEdicao();
 
-  const escolhidos = await db
+  /* O que ja virou pedido nao vira de novo: a cotacao pode ficar aberta
+     depois de uma geracao parcial, e gerar outra vez duplicaria as linhas. */
+  const jaPedidos = await itensJaPedidos(cotacaoId);
+
+  const vencedores = await db
     .select({
       itemId: cotacaoItens.itemId,
       quantidade: cotacaoItens.quantidade,
@@ -289,8 +385,14 @@ export async function gerarPedidos(
     .innerJoin(cotacaoItens, eq(cotacaoItens.id, cotacaoPrecos.cotacaoItemId))
     .where(and(eq(cotacaoItens.cotacaoId, cotacaoId), eq(cotacaoPrecos.escolhido, true)));
 
+  const escolhidos = vencedores.filter((v) => !jaPedidos.has(v.itemId));
+
   if (escolhidos.length === 0) {
-    return { erro: "Escolha o fornecedor vencedor de pelo menos um item antes de gerar o pedido." };
+    return {
+      erro: vencedores.length > 0
+        ? "Todos os itens escolhidos desta cotação já viraram pedido."
+        : "Escolha o fornecedor vencedor de pelo menos um item antes de gerar o pedido.",
+    };
   }
 
   const porFornecedor = new Map<string, typeof escolhidos>();
@@ -329,12 +431,28 @@ export async function gerarPedidos(
     });
   }
 
-  await db.update(cotacoes).set({ status: "fechada" }).where(eq(cotacoes.id, cotacaoId));
+  /* O que sobrou sem virar pedido: nem vencedor marcado, nem comprado antes. */
+  const todos = await db
+    .select({ itemId: cotacaoItens.itemId })
+    .from(cotacaoItens)
+    .where(eq(cotacaoItens.cotacaoId, cotacaoId));
 
+  const comprados = new Set([...jaPedidos, ...escolhidos.map((e) => e.itemId)]);
+  const pendentes = todos.filter((t) => !comprados.has(t.itemId)).length;
+
+  /* Fecha so quando nao sobrou nada. Com item pendente a cotacao continua
+     editavel — e "respondida", que e o que ela de fato e: tem preco, tem
+     parte comprada, e ainda falta decidir o resto. */
+  await db
+    .update(cotacoes)
+    .set({ status: pendentes === 0 ? "fechada" : "respondida" })
+    .where(eq(cotacoes.id, cotacaoId));
+
+  revalidatePath(`/compras/cotacoes/${cotacaoId}`);
   revalidatePath("/compras/cotacoes");
   revalidatePath("/compras/pedidos");
   revalidatePath("/");
-  return { pedidos: porFornecedor.size };
+  return { pedidos: porFornecedor.size, itens: escolhidos.length, pendentes };
 }
 
 /* -------------------------------------------------------------- Pedido --- */

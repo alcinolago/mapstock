@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Plus, Trash2, X } from "lucide-react";
+import { Check, ChevronRight, Plus, Trash2, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
@@ -39,8 +39,25 @@ export type ItemCotado = {
   unidade: string;
   quantidade: number;
   precos: PrecoCotado[];
+  /** Os fornecedores que este item tem no cadastro. */
+  fornecedoresDoItem: { id: string; nome: string }[];
 };
 
+type Agir = (fn: () => Promise<unknown>) => void;
+
+/**
+ * O comparativo de precos, um bloco por item.
+ *
+ * Era uma tabela unica com todo fornecedor virando coluna global. Numa
+ * cotacao de dois itens ja confundia — o fornecedor que atendia so um deles
+ * abria coluna vazia no outro —, e com trinta itens virava rolagem
+ * horizontal sem fim, com a maior parte da grade vazia.
+ *
+ * Agora cada item traz embaixo de si so os fornecedores que interessam a ele:
+ * os do cadastro, mais quem ja tiver preco lancado aqui. Quando um item tem
+ * fornecedor demais, a rolagem lateral fica presa naquele item, e nao na
+ * pagina inteira.
+ */
 export function Comparativo({
   cotacaoId,
   itensCotados,
@@ -58,17 +75,20 @@ export function Comparativo({
   const [pendente, iniciar] = useTransition();
   const [novoItem, setNovoItem] = useState<string>();
   const [novaQtd, setNovaQtd] = useState("1");
-  const [colunaExtra, setColunaExtra] = useState("");
 
-  /* Colunas do comparativo: todo fornecedor que ja tem algum preco lancado,
-     mais o que a pessoa acabou de acrescentar a mao. */
-  const colunas = useMemo(() => {
-    const ids = new Set(itensCotados.flatMap((i) => i.precos.map((p) => p.fornecedorId)));
-    if (colunaExtra) ids.add(colunaExtra);
-    return fornecedores.filter((f) => ids.has(f.id));
-  }, [itensCotados, fornecedores, colunaExtra]);
+  /* Fornecedor acrescentado a mao, por item. Some quando o preco e salvo —
+     dali em diante ele entra pela propria lista de precos. */
+  const [extras, setExtras] = useState<Record<string, string[]>>({});
 
-  const semColuna = fornecedores.filter((f) => !colunas.some((c) => c.id === f.id));
+  /* O que ja foi decidido nasce recolhido: numa cotacao longa, a tela vai
+     encurtando conforme cada item fecha. Depois disso quem manda e o clique,
+     nao o estado do item — recolher sozinho debaixo da mao de quem acabou de
+     escolher seria pior que a rolagem. */
+  const [abertos, setAbertos] = useState<Record<string, boolean>>(() =>
+    Object.fromEntries(
+      itensCotados.map((i) => [i.id, !i.precos.some((p) => p.escolhido)]),
+    ),
+  );
 
   /* Total por fornecedor considerando so os itens em que ele venceu. */
   const totaisEscolhidos = useMemo(() => {
@@ -133,20 +153,27 @@ export function Comparativo({
             Adicionar item
           </Botao>
 
-          {semColuna.length > 0 && (
-            <Selecao
-              value=""
-              onChange={(e) => setColunaExtra(e.target.value)}
-              className="w-auto min-w-48"
-              aria-label="Adicionar coluna de fornecedor"
-            >
-              <option value="">+ Cotar outro fornecedor...</option>
-              {semColuna.map((f) => (
-                <option key={f.id} value={f.id}>
-                  {f.nome}
-                </option>
-              ))}
-            </Selecao>
+          {itensCotados.length > 1 && (
+            <div className="ml-auto flex gap-1">
+              <Botao
+                variante="fantasma"
+                tamanho="sm"
+                onClick={() =>
+                  setAbertos(Object.fromEntries(itensCotados.map((i) => [i.id, true])))
+                }
+              >
+                Expandir tudo
+              </Botao>
+              <Botao
+                variante="fantasma"
+                tamanho="sm"
+                onClick={() =>
+                  setAbertos(Object.fromEntries(itensCotados.map((i) => [i.id, false])))
+                }
+              >
+                Recolher tudo
+              </Botao>
+            </div>
           )}
         </div>
       )}
@@ -156,133 +183,35 @@ export function Comparativo({
           Nenhum item nesta cotação ainda. Adicione acima o que você precisa comprar.
         </p>
       ) : (
-        <div className="overflow-hidden rounded-xl border border-borda bg-superficie">
-          <RolagemTabela>
-            <table className="w-full border-collapse text-sm">
-              <thead className="bg-superficie-2">
-                <tr>
-                  <th className="sticky left-0 z-10 min-w-56 border-b border-borda bg-superficie-2 px-3 py-2.5 text-left text-xs font-semibold text-texto-suave">
-                    Item
-                  </th>
-                  <th className="border-b border-borda px-3 py-2.5 text-right text-xs font-semibold text-texto-suave">
-                    Qtd.
-                  </th>
-                  {colunas.map((f) => (
-                    <th
-                      key={f.id}
-                      className="min-w-36 border-b border-l border-borda px-3 py-2.5 text-left text-xs font-semibold text-texto-suave"
-                    >
-                      {f.nome}
-                      {totaisEscolhidos.has(f.id) && (
-                        <span className="num mt-0.5 block font-bold text-marca">
-                          {moeda(totaisEscolhidos.get(f.id)!)}
-                        </span>
-                      )}
-                    </th>
-                  ))}
-                  {editavel && <th className="border-b border-borda" />}
-                </tr>
-              </thead>
-
-              <tbody className="divide-y divide-borda">
-                {itensCotados.map((item) => {
-                  const validos = item.precos.filter((p) => p.precoUnitario > 0);
-                  const menor = validos.length
-                    ? Math.min(...validos.map((p) => p.precoUnitario))
-                    : null;
-
-                  return (
-                    <tr key={item.id} className="transition-colors hover:bg-superficie-2/60">
-                      <td className="sticky left-0 z-10 bg-superficie px-3 py-2.5">
-                        <Link
-                          href={`/itens/${item.itemId}`}
-                          className="codigo block text-xs font-semibold text-marca hover:underline"
-                        >
-                          {item.codigo}
-                        </Link>
-                        <span className="block max-w-56 truncate text-xs text-texto-fraco">
-                          {item.descricao}
-                        </span>
-                      </td>
-
-                      <td className="px-3 py-2.5 text-right">
-                        {editavel ? (
-                          <QuantidadeCotada
-                            item={item}
-                            cotacaoId={cotacaoId}
-                            agir={agir}
-                          />
-                        ) : (
-                          <span className="num text-xs">{numero(item.quantidade)}</span>
-                        )}
-                        <span className="mt-0.5 block text-[10px] text-texto-fraco">
-                          {item.unidade}
-                        </span>
-                      </td>
-
-                      {colunas.map((f) => {
-                        const preco = item.precos.find((p) => p.fornecedorId === f.id);
-                        const eMenor =
-                          preco != null && menor != null && preco.precoUnitario === menor && menor > 0;
-
-                        return (
-                          <Celula
-                            key={f.id}
-                            cotacaoId={cotacaoId}
-                            cotacaoItemId={item.id}
-                            fornecedorId={f.id}
-                            preco={preco}
-                            quantidade={item.quantidade}
-                            eMenor={eMenor}
-                            editavel={editavel}
-                            pendente={pendente}
-                            agir={agir}
-                          />
-                        );
-                      })}
-
-                      {editavel && (
-                        <td className="px-2 text-right">
-                          <Botao
-                            variante="fantasma"
-                            tamanho="sm"
-                            disabled={pendente}
-                            onClick={() =>
-                              agir(() => removerItemDaCotacao(item.id, cotacaoId))
-                            }
-                            title="Tirar item da cotação"
-                          >
-                            <Trash2 className="size-3.5 text-perigo" />
-                          </Botao>
-                        </td>
-                      )}
-                    </tr>
-                  );
-                })}
-              </tbody>
-
-              <tfoot>
-                <tr className="bg-superficie-2 font-semibold">
-                  <td className="sticky left-0 z-10 bg-superficie-2 px-3 py-3 text-xs">
-                    Total escolhido
-                  </td>
-                  <td />
-                  {colunas.map((f) => (
-                    <td key={f.id} className="num border-l border-borda px-3 py-3 text-xs">
-                      {totaisEscolhidos.has(f.id) ? moeda(totaisEscolhidos.get(f.id)!) : "—"}
-                    </td>
-                  ))}
-                  {editavel && <td />}
-                </tr>
-              </tfoot>
-            </table>
-          </RolagemTabela>
+        <div className="space-y-2">
+          {itensCotados.map((item) => (
+            <ItemDaCotacao
+              key={item.id}
+              item={item}
+              cotacaoId={cotacaoId}
+              fornecedores={fornecedores}
+              extras={extras[item.id] ?? []}
+              aoCotarOutro={(fornecedorId) =>
+                setExtras((atuais) => ({
+                  ...atuais,
+                  [item.id]: [...(atuais[item.id] ?? []), fornecedorId],
+                }))
+              }
+              aberto={abertos[item.id] ?? true}
+              aoAlternar={() =>
+                setAbertos((atuais) => ({ ...atuais, [item.id]: !(atuais[item.id] ?? true) }))
+              }
+              editavel={editavel}
+              pendente={pendente}
+              agir={agir}
+            />
+          ))}
         </div>
       )}
 
       {itensCotados.length > 0 && (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-borda bg-superficie px-4 py-3">
-          <div className="flex items-center gap-2 text-sm">
+        <div className="space-y-3 rounded-xl border border-borda bg-superficie px-4 py-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             {semEscolha > 0 ? (
               <Selo tom="alerta">
                 {semEscolha} {semEscolha === 1 ? "item sem" : "itens sem"} fornecedor escolhido
@@ -290,11 +219,223 @@ export function Comparativo({
             ) : (
               <Selo tom="ok">Todos os itens têm fornecedor escolhido</Selo>
             )}
+            <p className="text-sm">
+              <span className="text-texto-fraco">Total da compra: </span>
+              <span className="num text-lg font-bold text-texto">{moeda(totalGeral)}</span>
+            </p>
           </div>
-          <p className="text-sm">
-            <span className="text-texto-fraco">Total da compra: </span>
-            <span className="num text-lg font-bold text-texto">{moeda(totalGeral)}</span>
-          </p>
+
+          {/* O que cada fornecedor leva. Era o rodape da tabela antiga, e
+              continua sendo o que decide em quantos pedidos isso vai virar. */}
+          {totaisEscolhidos.size > 0 && (
+            <div className="flex flex-wrap gap-x-5 gap-y-1 border-t border-borda pt-3 text-xs">
+              {fornecedores
+                .filter((f) => totaisEscolhidos.has(f.id))
+                .map((f) => (
+                  <span key={f.id} className="text-texto-suave">
+                    {f.nome}{" "}
+                    <span className="num font-semibold text-texto">
+                      {moeda(totaisEscolhidos.get(f.id)!)}
+                    </span>
+                  </span>
+                ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------------ */
+
+/** Um item da cotação com os fornecedores dele embaixo. */
+function ItemDaCotacao({
+  item,
+  cotacaoId,
+  fornecedores,
+  extras,
+  aoCotarOutro,
+  aberto,
+  aoAlternar,
+  editavel,
+  pendente,
+  agir,
+}: {
+  item: ItemCotado;
+  cotacaoId: string;
+  fornecedores: { id: string; nome: string }[];
+  extras: string[];
+  aoCotarOutro: (fornecedorId: string) => void;
+  aberto: boolean;
+  aoAlternar: () => void;
+  editavel: boolean;
+  pendente: boolean;
+  agir: Agir;
+}) {
+  /* Do cadastro, mais quem ja tem preco aqui, mais quem foi acrescentado
+     agora. Quem tem preco entra mesmo tendo sido desvinculado do item depois
+     — senao o preco lancado sumiria da tela sem forma de mexer nele. */
+  const colunas = useMemo(() => {
+    const ids = new Set([
+      ...item.fornecedoresDoItem.map((f) => f.id),
+      ...item.precos.map((p) => p.fornecedorId),
+      ...extras,
+    ]);
+    return fornecedores.filter((f) => ids.has(f.id));
+  }, [item.fornecedoresDoItem, item.precos, extras, fornecedores]);
+
+  const restantes = fornecedores.filter((f) => !colunas.some((c) => c.id === f.id));
+
+  const validos = item.precos.filter((p) => p.precoUnitario > 0);
+  const menor = validos.length ? Math.min(...validos.map((p) => p.precoUnitario)) : null;
+
+  const escolhido = item.precos.find((p) => p.escolhido);
+  const nomeEscolhido = fornecedores.find((f) => f.id === escolhido?.fornecedorId)?.nome;
+
+  return (
+    <div className="overflow-hidden rounded-xl border border-borda bg-superficie">
+      <div className="flex items-center gap-2 px-2 py-2 sm:px-3">
+        <button
+          type="button"
+          onClick={aoAlternar}
+          aria-expanded={aberto}
+          className="flex min-w-0 flex-1 items-center gap-2 rounded-lg px-1 py-1 text-left transition-colors hover:bg-superficie-2"
+        >
+          <ChevronRight
+            className={cn(
+              "size-4 shrink-0 text-texto-fraco transition-transform",
+              aberto && "rotate-90",
+            )}
+          />
+          <span className="codigo shrink-0 text-xs font-semibold text-marca">{item.codigo}</span>
+          <span className="min-w-0 truncate text-xs text-texto-fraco">{item.descricao}</span>
+        </button>
+
+        {/* Fechado, o resumo é a única leitura que sobra do item. */}
+        {!aberto && (
+          <span className="hidden shrink-0 text-xs sm:block">
+            {escolhido ? (
+              <>
+                <span className="text-texto-suave">{nomeEscolhido}</span>{" "}
+                <span className="num font-semibold text-texto">
+                  {moeda(escolhido.precoUnitario * item.quantidade)}
+                </span>
+              </>
+            ) : (
+              <span className="text-texto-fraco">
+                {validos.length > 0
+                  ? `${validos.length} ${validos.length === 1 ? "preço" : "preços"} · sem escolha`
+                  : "sem preço lançado"}
+              </span>
+            )}
+          </span>
+        )}
+
+        <span className="flex shrink-0 items-center gap-1.5">
+          {editavel ? (
+            <QuantidadeCotada item={item} cotacaoId={cotacaoId} agir={agir} />
+          ) : (
+            <span className="num text-xs">{numero(item.quantidade)}</span>
+          )}
+          <span className="text-[10px] text-texto-fraco">{item.unidade}</span>
+        </span>
+
+        {editavel && (
+          <Botao
+            variante="fantasma"
+            tamanho="sm"
+            disabled={pendente}
+            onClick={() => agir(() => removerItemDaCotacao(item.id, cotacaoId))}
+            title="Tirar item da cotação"
+          >
+            <Trash2 className="size-3.5 text-perigo" />
+          </Botao>
+        )}
+      </div>
+
+      {aberto && (
+        <div className="border-t border-borda">
+          {colunas.length === 0 ? (
+            <p className="px-3 py-4 text-xs text-texto-fraco">
+              Este item não tem fornecedor no cadastro.{" "}
+              <Link
+                href={`/itens/${item.itemId}`}
+                className="font-semibold text-marca hover:underline"
+              >
+                Vincule um no cadastro do item
+              </Link>{" "}
+              ou escolha um abaixo.
+            </p>
+          ) : (
+            <RolagemTabela>
+              <table className="w-full border-collapse text-sm">
+                <thead className="bg-superficie-2">
+                  <tr>
+                    {colunas.map((f) => (
+                      <th
+                        key={f.id}
+                        className="min-w-36 border-b border-l border-borda px-3 py-2 text-left text-xs font-semibold text-texto-suave first:border-l-0"
+                      >
+                        {f.nome}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    {colunas.map((f) => {
+                      const preco = item.precos.find((p) => p.fornecedorId === f.id);
+                      const eMenor =
+                        preco != null &&
+                        menor != null &&
+                        preco.precoUnitario === menor &&
+                        menor > 0;
+
+                      return (
+                        <Celula
+                          key={f.id}
+                          cotacaoId={cotacaoId}
+                          cotacaoItemId={item.id}
+                          fornecedorId={f.id}
+                          preco={preco}
+                          quantidade={item.quantidade}
+                          eMenor={eMenor}
+                          editavel={editavel}
+                          pendente={pendente}
+                          agir={agir}
+                        />
+                      );
+                    })}
+                  </tr>
+                </tbody>
+              </table>
+            </RolagemTabela>
+          )}
+
+          {editavel && restantes.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2 border-t border-borda px-3 py-2">
+              <Selecao
+                value=""
+                onChange={(e) => e.target.value && aoCotarOutro(e.target.value)}
+                className="h-8 w-auto min-w-56 text-xs"
+                aria-label={`Cotar outro fornecedor para ${item.codigo}`}
+              >
+                <option value="">+ Cotar outro fornecedor para este item...</option>
+                {restantes.map((f) => (
+                  <option key={f.id} value={f.id}>
+                    {f.nome}
+                  </option>
+                ))}
+              </Selecao>
+              <Link
+                href={`/itens/${item.itemId}`}
+                className="text-xs font-semibold text-texto-fraco transition-colors hover:text-marca"
+              >
+                Abrir cadastro do item
+              </Link>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -321,7 +462,7 @@ function Celula({
   eMenor: boolean;
   editavel: boolean;
   pendente: boolean;
-  agir: (fn: () => Promise<unknown>) => void;
+  agir: Agir;
 }) {
   const total = (preco?.precoUnitario ?? 0) * quantidade;
 
@@ -349,7 +490,7 @@ function Celula({
   return (
     <td
       className={cn(
-        "border-l border-borda px-2 py-2 align-top",
+        "border-l border-borda px-2 py-2 align-top first:border-l-0",
         preco?.escolhido && "bg-marca-suave/60",
         !preco?.escolhido && eMenor && "bg-ok-suave/40",
       )}
@@ -435,7 +576,7 @@ function QuantidadeCotada({
 }: {
   item: ItemCotado;
   cotacaoId: string;
-  agir: (fn: () => Promise<unknown>) => void;
+  agir: Agir;
 }) {
   const [rascunho, setRascunho] = useState<string | null>(null);
 

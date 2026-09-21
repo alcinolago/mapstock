@@ -1,4 +1,4 @@
-import { asc, eq } from "drizzle-orm";
+import { asc, eq, inArray } from "drizzle-orm";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -14,6 +14,7 @@ import {
   cotacaoPrecos,
   cotacoes,
   fornecedores,
+  itemFornecedores,
   itens,
   unidades,
 } from "@/db/schema";
@@ -70,9 +71,29 @@ export default async function PaginaCotacao({
     listarItensComSaldo(),
   ]);
 
+  /* Os fornecedores de cada item, do cadastro. Sao eles que viram coluna
+     embaixo do item — a lista global fazia o fornecedor de um item so abrir
+     coluna vazia em todos os outros. */
+  const vinculos =
+    linhas.length === 0
+      ? []
+      : await db
+          .select({
+            itemId: itemFornecedores.itemId,
+            id: fornecedores.id,
+            nome: fornecedores.nome,
+          })
+          .from(itemFornecedores)
+          .innerJoin(fornecedores, eq(fornecedores.id, itemFornecedores.fornecedorId))
+          .where(inArray(itemFornecedores.itemId, [...new Set(linhas.map((l) => l.itemId))]))
+          .orderBy(asc(itemFornecedores.ordem), asc(fornecedores.nome));
+
   const itensCotados: ItemCotado[] = linhas.map((l) => ({
     ...l,
     precos: precos.filter((p) => p.cotacaoItemId === l.id),
+    fornecedoresDoItem: vinculos
+      .filter((v) => v.itemId === l.itemId)
+      .map((v) => ({ id: v.id, nome: v.nome })),
   }));
 
   const editavel =

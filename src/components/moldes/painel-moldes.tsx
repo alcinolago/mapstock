@@ -69,7 +69,6 @@ export function PainelMoldes({
     <div className="space-y-8">
       <Secao
         titulo="Equipamentos"
-        descricao="O manual do equipamento completo. Não vira item, não tem saldo e não passa pela montagem."
         acao={podeEditar ? <NovoMolde tipo="equipamento" /> : undefined}
         vazio="Nenhum equipamento documentado ainda."
         moldes={equipamentos}
@@ -81,7 +80,6 @@ export function PainelMoldes({
       <Secao
         separada
         titulo="Itens"
-        descricao="A receita de um item do estoque. Montar consome as peças e coloca uma unidade do item na prateleira."
         acao={
           podeEditar ? <NovoMolde tipo="conjunto" itensSemEstrutura={itensSemEstrutura} /> : undefined
         }
@@ -97,7 +95,6 @@ export function PainelMoldes({
 
 function Secao({
   titulo,
-  descricao,
   acao,
   vazio,
   moldes,
@@ -107,7 +104,6 @@ function Secao({
   separada,
 }: {
   titulo: string;
-  descricao: string;
   acao?: React.ReactNode;
   vazio: string;
   moldes: MoldeNaTela[];
@@ -126,7 +122,6 @@ function Secao({
             {titulo}
             <span className="ml-2 text-sm font-normal text-texto-fraco">{moldes.length}</span>
           </h2>
-          <p className="mt-0.5 max-w-2xl text-xs text-texto-fraco">{descricao}</p>
         </div>
         {acao}
       </div>

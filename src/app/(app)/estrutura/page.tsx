@@ -138,10 +138,7 @@ export default async function PaginaEstrutura() {
 
   return (
     <>
-      <CabecalhoPagina
-        titulo="Estrutura"
-        descricao="Em cima, o manual do equipamento completo. Embaixo, os itens que são montados a partir de outros — esses vão para a Montagem."
-      />
+      <CabecalhoPagina titulo="Estrutura" />
 
       <PainelMoldes
         moldes={comArvore}

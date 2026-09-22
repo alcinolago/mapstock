@@ -67,14 +67,10 @@ const fotoOrdenada = z.union([
   z.object({ nova: z.number().int().nonnegative() }),
 ]);
 
+/* Sem `codigo`: ele nao vem do formulario. Quem cadastra descreve a peca e
+   escolhe a classificacao; o codigo e consequencia disso, gerado aqui. */
 const esquemaItem = z.object({
   id: z.uuid().optional(),
-  codigo: z
-    .string()
-    .trim()
-    .min(1, "Informe o código")
-    .max(60, "Código muito longo")
-    .transform((v) => v.toUpperCase()),
   descricao: z.string().trim().min(1, "Informe a descrição"),
   classificacaoId: z.uuid("Escolha a classificação"),
   unidadeId: z.uuid("Escolha a unidade"),
@@ -100,22 +96,23 @@ export type EstadoItem = { erro?: string; campo?: string; ok?: boolean; id?: str
 
 /* ------------------------------------------------------------------------ */
 
-/** Sugere um codigo livre a partir da descricao e da classificacao. */
-export async function sugerirCodigo(
-  descricao: string,
-  classificacaoId: string,
-): Promise<string | null> {
-  if (!descricao.trim() || !classificacaoId) return null;
-
+/**
+ * O codigo do item, gerado a partir da descricao e do prefixo da
+ * classificacao. Nao e sugestao: e o codigo.
+ *
+ * O campo saiu da tela porque ninguem ali quer decidir isso, e deixar editar
+ * so produzia convivencia de padroes — o mesmo tipo de peca com codigo
+ * inventado de tres jeitos diferentes. O sufixo numerico resolve a colisao.
+ */
+async function gerarCodigo(descricao: string, classificacaoId: string): Promise<string> {
   const [classificacao] = await db
     .select({ prefixo: classificacoes.prefixoCodigo })
     .from(classificacoes)
     .where(eq(classificacoes.id, classificacaoId));
-  if (!classificacao) return null;
 
   const usados = await db.select({ codigo: itens.codigo }).from(itens);
   return codigoDisponivel(
-    codigoBase(descricao, classificacao.prefixo),
+    codigoBase(descricao, classificacao?.prefixo ?? ""),
     new Set(usados.map((u) => u.codigo)),
   );
 }
@@ -166,7 +163,6 @@ export async function salvarItem(
   const guarda3d = origemEscolhida?.abre ? d.parametros3d : null;
 
   const campos = {
-    codigo: d.codigo,
     descricao: d.descricao,
     classificacaoId: d.classificacaoId,
     unidadeId: d.unidadeId,
@@ -186,6 +182,9 @@ export async function salvarItem(
       const [antes] = await db.select().from(itens).where(eq(itens.id, d.id));
       if (!antes) return { erro: "Item não encontrado." };
 
+      /* O codigo nao se regera na edicao. Ele ja saiu em pedido, em PDF e
+         provavelmente numa etiqueta colada na gaveta: corrigir a descricao
+         nao pode trocar a identidade da peca. */
       const [atualizado] = await db
         .update(itens)
         .set({ ...campos, atualizadoEm: new Date(), atualizadoPor: sessao.id })
@@ -204,7 +203,12 @@ export async function salvarItem(
     } else {
       const [criado] = await db
         .insert(itens)
-        .values({ ...campos, criadoPor: sessao.id, atualizadoPor: sessao.id })
+        .values({
+          ...campos,
+          codigo: await gerarCodigo(d.descricao, d.classificacaoId),
+          criadoPor: sessao.id,
+          atualizadoPor: sessao.id,
+        })
         .returning();
 
       itemId = criado.id;
@@ -249,8 +253,11 @@ export async function salvarItem(
     revalidatePath("/");
     return { ok: true, id: itemId };
   } catch (e) {
+    /* O codigo ja sai livre de `gerarCodigo`; duplicidade aqui so acontece
+       se dois cadastros nascerem no mesmo instante. Salvar de novo resolve,
+       porque a segunda geracao ja enxerga o primeiro. */
     if (ehDuplicado(e)) {
-      return { erro: `O código ${d.codigo} já está em uso por outro item.`, campo: "codigo" };
+      return { erro: "Dois itens foram criados ao mesmo tempo. Salve de novo." };
     }
     console.error(e);
     return { erro: "Não foi possível salvar o item. Tente de novo." };

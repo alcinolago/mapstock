@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertCircle, LoaderCircle, Save, Sparkles } from "lucide-react";
+import { AlertCircle, LoaderCircle, Save } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useActionState, useEffect, useRef, useState } from "react";
@@ -19,7 +19,6 @@ import {
   dependenciasItem,
   excluirItem,
   salvarItem,
-  sugerirCodigo,
   type EstadoItem,
 } from "@/lib/acoes/itens";
 import { classificarPorRegras } from "@/lib/codigo";
@@ -75,17 +74,14 @@ export function FormularioItem({
   const router = useRouter();
   const [estado, acao, salvando] = useActionState<EstadoItem, FormData>(salvarItem, {});
 
-  const [codigo, setCodigo] = useState(item?.codigo ?? "");
   const [descricao, setDescricao] = useState(item?.descricao ?? "");
   const [classificacaoId, setClassificacaoId] = useState(item?.classificacaoId ?? "");
   const [origem, setOrigem] = useState(item?.origemFabricacaoId ?? "");
   const [vinculos, setVinculos] = useState<VinculoFornecedor[]>(item?.vinculos ?? []);
   const [params3d, setParams3d] = useState<Params3D>(item?.parametros3d ?? PARAMS_3D_PADRAO);
-  const [dica, setDica] = useState<string | null>(null);
 
-  /* Espelha os flags code_auto / class_auto do desktop: a sugestao continua
-     acontecendo ate a pessoa digitar o proprio valor, e a partir dai para. */
-  const codigoAuto = useRef(!item);
+  /* Espelha o flag class_auto do desktop: a sugestao da classificacao continua
+     acontecendo ate a pessoa escolher a dela, e a partir dai para. */
   const classeAuto = useRef(!item);
 
   const editando = Boolean(item);
@@ -104,31 +100,9 @@ export function FormularioItem({
     if (sugerida) setClassificacaoId(sugerida);
   }
 
-  /* Codigo sugerido. Vai ao servidor porque precisa saber quais ja existem. */
-  useEffect(() => {
-    if (!codigoAuto.current || !descricao.trim() || !classificacaoId) return;
-    const t = setTimeout(async () => {
-      const novo = await sugerirCodigo(descricao, classificacaoId);
-      if (novo && codigoAuto.current) {
-        setCodigo(novo);
-        setDica(`Código sugerido: ${novo}. Você pode editar.`);
-      }
-    }, 400);
-    return () => clearTimeout(t);
-  }, [descricao, classificacaoId]);
-
   useEffect(() => {
     if (estado.ok) router.push(voltarPara);
   }, [estado.ok, router, voltarPara]);
-
-  async function regerarCodigo() {
-    codigoAuto.current = true;
-    const novo = await sugerirCodigo(descricao, classificacaoId);
-    if (novo) {
-      setCodigo(novo);
-      setDica(`Código sugerido: ${novo}. Você pode editar.`);
-    }
-  }
 
   const erroNoCampo = (campo: string) => (estado.campo === campo ? estado.erro : undefined);
 
@@ -146,7 +120,7 @@ export function FormularioItem({
       <Cartao>
         <CabecalhoCartao
           titulo="Identificação"
-          descricao="O código e a classificação são sugeridos pela descrição — e podem ser trocados."
+          descricao="Descreva a peça. A classificação vem da descrição e pode ser trocada; o código o sistema gera sozinho."
         />
         <CorpoCartao className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <Grupo
@@ -165,39 +139,6 @@ export function FormularioItem({
               required
               autoFocus={!editando}
             />
-          </Grupo>
-
-          <Grupo
-            rotulo="Código"
-            obrigatorio
-            htmlFor="codigo"
-            erro={erroNoCampo("codigo")}
-            ajuda={dica}
-          >
-            <div className="flex gap-2">
-              <Entrada
-                id="codigo"
-                name="codigo"
-                value={codigo}
-                onChange={(e) => {
-                  codigoAuto.current = false;
-                  setCodigo(e.target.value.toUpperCase());
-                  setDica(null);
-                }}
-                className="codigo font-semibold"
-                required
-              />
-              <Botao
-                type="button"
-                variante="contorno"
-                tamanho="icone"
-                onClick={regerarCodigo}
-                title="Gerar código a partir da descrição"
-                disabled={!descricao.trim() || !classificacaoId}
-              >
-                <Sparkles className="size-4" />
-              </Botao>
-            </div>
           </Grupo>
 
           <Grupo rotulo="Classificação" obrigatorio htmlFor="classificacaoId">

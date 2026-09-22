@@ -24,7 +24,7 @@ export default async function NovoItem() {
 
       <CabecalhoPagina
         titulo="Novo item"
-        descricao="Comece pela descrição — o código e a classificação se preenchem sozinhos."
+        descricao="Comece pela descrição — a classificação e o código se preenchem sozinhos."
       />
 
       <FormularioItem {...opcoes} podeExcluir={false} />

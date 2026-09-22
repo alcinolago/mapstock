@@ -72,6 +72,13 @@ listagem, é bug.
   contagem antes de confirmar (`components/exclusao/botao-excluir.tsx`).
 - **Custo unitário do item não é digitado**: vem do recebimento do pedido
   (`acoes/compras.ts`). O cadastro de item não tem esse campo.
+- **Código de item também não é digitado.** Quem cadastra escreve a descrição
+  e escolhe a classificação; `gerarCodigo` (`acoes/itens.ts`) monta o código
+  a partir disso e resolve colisão com sufixo. O campo existiu na tela, com
+  sugestão automática e um botão de regerar, e o resultado foi confusão: três
+  padrões convivendo para o mesmo tipo de peça. **E o código não se regera na
+  edição** — ele já saiu em pedido, em PDF e na etiqueta da gaveta, então
+  corrigir a descrição não pode trocar a identidade da peça.
 - **O custo exibido é derivado, não lido de `itens.custoUnitario`.** Quem
   manda é o preço do último `entrada_compra` até a data (`custoAte`, em
   `consultas.ts`), seguindo `movimentos.pedidoItemId` até

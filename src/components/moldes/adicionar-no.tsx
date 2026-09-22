@@ -26,6 +26,7 @@ export function AdicionarNo({
   divisoes,
   itens,
   compacto = false,
+  aoAdicionar,
 }: {
   moldeId: string;
   /** Nulo = direto na raiz do molde. */
@@ -34,6 +35,9 @@ export function AdicionarNo({
   divisoes: OpcaoDivisao[];
   itens: ItemBusca[];
   compacto?: boolean;
+  /* A árvore nasce recolhida; quem acabou de pôr algo dentro de uma divisão
+     precisa vê-la abrir, senão o clique parece não ter feito nada. */
+  aoAdicionar?: () => void;
 }) {
   const [aberto, setAberto] = useState(false);
   const [aba, setAba] = useState<"divisao" | "peca">("divisao");
@@ -45,6 +49,7 @@ export function AdicionarNo({
 
   if (estado.ok && estado !== tratado) {
     setTratado(estado);
+    aoAdicionar?.();
     setAberto(false);
     setItemId(undefined);
     setDivisaoId("");

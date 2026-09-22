@@ -153,9 +153,14 @@ listagem, é bug.
   as abertas ela só empurrava para baixo o que ainda tem trabalho — e a tela
   crescia uma linha por unidade feita desde sempre. `/montagem` é lista de
   trabalho pendente; o histórico é consulta, com recorte por período.
-- **A árvore do cartão de montagem vem recolhida.** Com meia dúzia de
-  unidades abertas, seis árvores inteiras empilhadas viram uma parede e some
-  a informação que importa: qual delas dá para montar agora.
+- **Árvore nasce recolhida, nas duas telas.** Em Estrutura o cartão abre
+  mostrando só as divisões — o desenho do equipamento —, e quem quer o
+  detalhe pede; uma divisão sozinha pode trazer a árvore inteira de outro
+  item, quando tem conjunto dentro. Em Montagem a árvore fica atrás de um
+  "Ver N peças": com meia dúzia de unidades abertas, seis árvores empilhadas
+  viram uma parede e some o que importa, que é qual delas dá para montar
+  agora. Quem acabou de acrescentar algo dentro de uma divisão vê ela abrir
+  (`aoAdicionar`), senão o clique parece não ter feito nada.
 - **Montagem montada não volta atrás.** Não existe desmontar: enquanto está
   aberta ela se exclui; depois de montada virou movimento, e movimento não se
   apaga.

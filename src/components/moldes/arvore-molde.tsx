@@ -113,7 +113,10 @@ function No({
   ultimo: boolean;
 }) {
   const router = useRouter();
-  const [aberto, setAberto] = useState(true);
+  /* Recolhido por padrão: o cartão abre mostrando as divisões, que é o
+     desenho do equipamento, e quem quer o detalhe pede. Com um conjunto
+     dentro, uma divisão sozinha já traz a árvore inteira de outro item. */
+  const [aberto, setAberto] = useState(false);
   const [pendente, iniciar] = useTransition();
 
   const ehDivisao = !no.itemId;
@@ -226,6 +229,7 @@ function No({
                 divisoes={divisoes}
                 itens={itens}
                 compacto
+                aoAdicionar={() => setAberto(true)}
               />
             ) : (
               <span className="w-8" aria-hidden />

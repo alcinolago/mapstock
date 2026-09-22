@@ -1,6 +1,6 @@
 "use server";
 
-import { and, count, eq, inArray, notInArray } from "drizzle-orm";
+import { and, count, eq, inArray, like, notInArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
@@ -24,7 +24,6 @@ import {
 import { exigirEdicao } from "@/lib/auth";
 import { registrar } from "@/lib/auditoria";
 import { ehDuplicado, ehVinculado } from "@/lib/erros";
-import { codigoBase, codigoDisponivel } from "@/lib/codigo";
 import { contagens, emTexto, type Dependencias } from "@/lib/exclusao";
 import { MAX_BYTES_FOTO, MAX_FOTOS } from "@/lib/imagem";
 
@@ -97,24 +96,38 @@ export type EstadoItem = { erro?: string; campo?: string; ok?: boolean; id?: str
 /* ------------------------------------------------------------------------ */
 
 /**
- * O codigo do item, gerado a partir da descricao e do prefixo da
- * classificacao. Nao e sugestao: e o codigo.
+ * O codigo do item: prefixo da classificacao mais um sequencial.
+ * `FIX-0001`, `FIX-0002`, `AUT-0001`.
  *
- * O campo saiu da tela porque ninguem ali quer decidir isso, e deixar editar
- * so produzia convivencia de padroes — o mesmo tipo de peca com codigo
- * inventado de tres jeitos diferentes. O sufixo numerico resolve a colisao.
+ * Nao e sugestao e nao tem inteligencia nenhuma, de proposito. Antes ele era
+ * montado a partir de palavras da descricao, e o vocabulario nunca cobria o
+ * catalogo real: metade das pecas caia no prefixo sozinho e sobrava um
+ * amontoado de `FIX-ARR`, `FIX-POR`, `FIX` e `FIX-01` que ninguem conseguia
+ * ler como sequencia. Numero corrido nao tenta dizer o que a peca e — quem
+ * diz isso e a descricao, que esta logo ao lado em toda tela.
+ *
+ * Conta a partir do maior numero em uso, e nao da quantidade de itens:
+ * apagar um item nao pode fazer o proximo reaproveitar um codigo que ja
+ * saiu impresso em algum lugar.
  */
-async function gerarCodigo(descricao: string, classificacaoId: string): Promise<string> {
+async function gerarCodigo(classificacaoId: string): Promise<string> {
   const [classificacao] = await db
     .select({ prefixo: classificacoes.prefixoCodigo })
     .from(classificacoes)
     .where(eq(classificacoes.id, classificacaoId));
 
-  const usados = await db.select({ codigo: itens.codigo }).from(itens);
-  return codigoDisponivel(
-    codigoBase(descricao, classificacao?.prefixo ?? ""),
-    new Set(usados.map((u) => u.codigo)),
-  );
+  const prefixo = classificacao?.prefixo ?? "ITM";
+  const usados = await db
+    .select({ codigo: itens.codigo })
+    .from(itens)
+    .where(like(itens.codigo, `${prefixo}-%`));
+
+  const maior = usados.reduce((maximo, u) => {
+    const n = Number(u.codigo.slice(prefixo.length + 1));
+    return Number.isInteger(n) && n > maximo ? n : maximo;
+  }, 0);
+
+  return `${prefixo}-${String(maior + 1).padStart(4, "0")}`;
 }
 
 export async function salvarItem(
@@ -205,7 +218,7 @@ export async function salvarItem(
         .insert(itens)
         .values({
           ...campos,
-          codigo: await gerarCodigo(d.descricao, d.classificacaoId),
+          codigo: await gerarCodigo(d.classificacaoId),
           criadoPor: sessao.id,
           atualizadoPor: sessao.id,
         })

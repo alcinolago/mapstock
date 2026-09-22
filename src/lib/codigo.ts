@@ -1,9 +1,13 @@
 /**
- * Sugestao automatica de codigo e de classificacao.
+ * Classificacao automatica pela descricao.
  *
- * Porte direto das funcoes norm(), classify() e code_suggestion() do
- * MPZ-ERP-V35.pyw (linhas 199, 629 e 634). E regra de negocio de verdade,
- * construida por quem conhece as pecas, entao vem junto quase sem mudanca.
+ * Porte das funcoes norm() e classify() do MPZ-ERP-V35.pyw (linhas 199 e
+ * 629). A terceira, code_suggestion(), montava o codigo a partir de palavras
+ * da descricao (PARAFUSO -> PAR, M6x20 -> M6X20) e foi removida: o
+ * vocabulario dela era curto demais para o catalogo real, entao a maioria
+ * das pecas caia no prefixo sozinho e o cadastro ficou com meia duzia de
+ * padroes convivendo. Hoje o codigo e prefixo da classificacao mais um
+ * sequencial, montado em `acoes/itens.ts`.
  */
 
 /** Maiusculas, sem acento, so letras/numeros separados por espaco. */
@@ -14,64 +18,6 @@ export function normalizar(texto: string): string {
     .replace(/[^A-Za-z0-9]+/g, " ")
     .toUpperCase()
     .trim();
-}
-
-/**
- * Sufixo de tipo dentro do codigo: PARAFUSO -> PAR, PORCA -> POR.
- *
- * Diferenca proposital em relacao ao desktop: la o valor padrao era "EST",
- * o que gerava codigo redundante como "EST-EST-..." para qualquer item
- * estrutural generico. Aqui, sem palavra reconhecida, o trecho fica de fora.
- */
-const TIPOS: [string, string][] = [
-  ["PARAFUSO", "PAR"],
-  ["PORCA", "POR"],
-  ["ARRUELA", "ARR"],
-  ["FILAMENTO", "FIL"],
-  ["SUPORTE", "SUP"],
-  ["CAMERA", "CAM"],
-];
-
-/** Materiais reconhecidos na descricao, do mais especifico pro mais generico. */
-const MATERIAIS: [(d: string) => boolean, string][] = [
-  [(d) => d.includes("PA6") && d.includes("GF"), "PA6GF"],
-  [(d) => d.includes("PA12"), "PA12"],
-  [(d) => d.includes("PETG"), "PETG"],
-  [(d) => d.includes("ABS"), "ABS"],
-  [(d) => d.includes("PLA"), "PLA"],
-];
-
-/** Medida no padrao M6x20, M 8 X 30 etc. */
-const MEDIDA = /\bM\s*\d+\s*[Xx]\s*\d+\b/;
-
-/**
- * Monta o codigo base a partir da descricao e do prefixo da classificacao.
- * Ex.: ("PARAFUSO M6X20 INOX", "FIX") -> "FIX-PAR-M6X20"
- */
-export function codigoBase(descricao: string, prefixoClassificacao: string): string {
-  const d = normalizar(descricao);
-
-  const tipo = TIPOS.find(([palavra]) => d.includes(palavra))?.[1] ?? "";
-  const medida = MEDIDA.exec(d)?.[0].replace(/\s+/g, "").toUpperCase() ?? "";
-  const material = MATERIAIS.find(([testa]) => testa(d))?.[1] ?? "";
-
-  const partes = [prefixoClassificacao, tipo, medida, material].filter(Boolean);
-  return partes.length > 0 ? partes.join("-") : "ITM";
-}
-
-/**
- * Acrescenta sufixo numerico enquanto o codigo ja existir:
- * FIX-PAR-M6X20 -> FIX-PAR-M6X20-01 -> FIX-PAR-M6X20-02
- */
-export function codigoDisponivel(base: string, existentes: Set<string>): string {
-  if (!existentes.has(base)) return base;
-  let n = 1;
-  let candidato = `${base}-${String(n).padStart(2, "0")}`;
-  while (existentes.has(candidato)) {
-    n += 1;
-    candidato = `${base}-${String(n).padStart(2, "0")}`;
-  }
-  return candidato;
 }
 
 /**

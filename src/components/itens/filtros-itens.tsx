@@ -9,16 +9,13 @@ import {
   useFiltrosUrl,
 } from "@/components/ui/filtros";
 
-const CHAVES = ["busca", "classificacao", "situacao", "item", "local"];
+const CHAVES = ["busca", "classificacao", "situacao", "local"];
 
 export function FiltrosItens({
   classificacoes,
-  itens,
   locais,
 }: {
   classificacoes: { id: string; nome: string }[];
-  /** Todo o cadastro, para escolher pelo codigo sem digitar. */
-  itens: { id: string; codigo: string; ativo: boolean }[];
   locais: { id: string; nome: string }[];
 }) {
   const { params, aplicar, limpar, pendente } = useFiltrosUrl();
@@ -31,24 +28,9 @@ export function FiltrosItens({
       <CampoBusca
         valor={busca}
         aoMudar={setBusca}
-        placeholder="Buscar por código, descrição ou localização"
+        placeholder="Buscar por descrição, código ou localização"
         rotulo="Buscar itens"
       />
-
-      <Selecao
-        aria-label="Código do item"
-        value={params.get("item") ?? ""}
-        onChange={(e) => aplicar({ item: e.target.value })}
-        className="codigo w-auto min-w-36"
-      >
-        <option value="">Todos os códigos</option>
-        {itens.map((i) => (
-          <option key={i.id} value={i.id}>
-            {i.codigo}
-            {i.ativo ? "" : " (inativo)"}
-          </option>
-        ))}
-      </Selecao>
 
       <Selecao
         aria-label="Classificação"

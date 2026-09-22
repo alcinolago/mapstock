@@ -20,7 +20,6 @@ import {
 } from "@/components/ui/tabela";
 import { db } from "@/db";
 import {
-  codigosDeItens,
   contarItens,
   fotosDosItens,
   listarItensComSaldo,
@@ -54,7 +53,6 @@ export default async function PaginaItens({
     classificacaoId: p.classificacao,
     situacao,
     incluirInativos: p.inativos === "1",
-    itemId: p.item?.trim() || undefined,
     localId: p.local?.trim() || undefined,
   };
 
@@ -66,10 +64,9 @@ export default async function PaginaItens({
   const pagina = paginaValida(pedida.pagina, total, pedida.porPagina);
   const pular = (pagina - 1) * pedida.porPagina;
 
-  const [lista, listaClassificacoes, cadastro, listaLocais] = await Promise.all([
+  const [lista, listaClassificacoes, listaLocais] = await Promise.all([
     listarItensComSaldo({ ...filtros, porPagina: pedida.porPagina, pular }),
     db.select().from(classificacoes).orderBy(classificacoes.ordem),
-    codigosDeItens(),
     listarLocais(),
   ]);
 
@@ -97,11 +94,7 @@ export default async function PaginaItens({
         }
       />
 
-      <FiltrosItens
-        classificacoes={listaClassificacoes}
-        itens={cadastro}
-        locais={listaLocais}
-      />
+      <FiltrosItens classificacoes={listaClassificacoes} locais={listaLocais} />
 
       <Cartao className="overflow-hidden">
         <RolagemTabela>

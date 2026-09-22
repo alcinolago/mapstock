@@ -158,19 +158,13 @@ export type FiltrosItens = {
   classificacaoId?: string;
   situacao?: SituacaoItem;
   incluirInativos?: boolean;
-  /** Um item so, escolhido pelo codigo no seletor. */
-  itemId?: string;
   localId?: string;
 };
 
 function condicoesDeItens(filtros?: FiltrosItens): SQL[] {
   const condicoes: SQL[] = [];
 
-  /* O item escolhido no seletor aparece mesmo inativo: quem o escolheu pelo
-     codigo ja sabe qual quer, e sumir seria a tela discordar do proprio
-     seletor. */
-  if (filtros?.itemId) condicoes.push(eq(itens.id, filtros.itemId));
-  else if (!filtros?.incluirInativos) condicoes.push(eq(itens.ativo, true));
+  if (!filtros?.incluirInativos) condicoes.push(eq(itens.ativo, true));
 
   if (filtros?.classificacaoId) {
     condicoes.push(eq(itens.classificacaoId, filtros.classificacaoId));
@@ -729,19 +723,6 @@ export function recorteEntre(
 /** Os locais cadastrados, para os seletores e o filtro. */
 export async function listarLocais() {
   return db.select().from(locais).orderBy(asc(locais.nome));
-}
-
-/**
- * O codigo de todo item cadastrado, para o seletor da tela de itens. Vem
- * completa e nao filtrada: e ela que deixa escolher o item sem digitar,
- * entao encolher conforme os outros filtros tiraria justamente a opcao que a
- * pessoa esta procurando.
- */
-export async function codigosDeItens() {
-  return db
-    .select({ id: itens.id, codigo: itens.codigo, ativo: itens.ativo })
-    .from(itens)
-    .orderBy(asc(itens.codigo));
 }
 
 /**

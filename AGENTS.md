@@ -72,13 +72,22 @@ listagem, é bug.
   contagem antes de confirmar (`components/exclusao/botao-excluir.tsx`).
 - **Custo unitário do item não é digitado**: vem do recebimento do pedido
   (`acoes/compras.ts`). O cadastro de item não tem esse campo.
-- **Código de item também não é digitado.** Quem cadastra escreve a descrição
-  e escolhe a classificação; `gerarCodigo` (`acoes/itens.ts`) monta o código
-  a partir disso e resolve colisão com sufixo. O campo existiu na tela, com
-  sugestão automática e um botão de regerar, e o resultado foi confusão: três
-  padrões convivendo para o mesmo tipo de peça. **E o código não se regera na
-  edição** — ele já saiu em pedido, em PDF e na etiqueta da gaveta, então
-  corrigir a descrição não pode trocar a identidade da peça.
+- **Código de item é prefixo da classificação mais um sequencial** —
+  `FIX-0001`, `AUT-0003` —, montado por `gerarCodigo` (`acoes/itens.ts`) e
+  sem nenhum campo na tela. Não tente devolver inteligência a ele. Já foi
+  assim duas vezes: um gerador montava o código a partir de palavras da
+  descrição (PARAFUSO → PAR, M6x20 → M6X20) e o campo ficava editável com um
+  botão de regerar. O vocabulário nunca cobria o catálogo real — metade das
+  peças caía no prefixo sozinho —, e entre isso e a edição à mão o cadastro
+  acumulou `FIX-ARR-01`, `FIX-POR-ATM6`, `FIX-PAR-AAB8-0016`, `CON` e
+  `CON-01` lado a lado. Número corrido não tenta dizer o que a peça é; quem
+  diz isso é a descrição, que está ao lado em toda tela.
+- **O sequencial conta a partir do maior em uso, não da quantidade de itens.**
+  Apagar um item não pode fazer o próximo reaproveitar um código que já saiu
+  impresso.
+- **O código não se regera na edição** — ele já saiu em pedido, em PDF e na
+  etiqueta da gaveta, então corrigir a descrição não pode trocar a identidade
+  da peça. Trocar a classificação também não renumera.
 - **O custo exibido é derivado, não lido de `itens.custoUnitario`.** Quem
   manda é o preço do último `entrada_compra` até a data (`custoAte`, em
   `consultas.ts`), seguindo `movimentos.pedidoItemId` até

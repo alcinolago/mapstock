@@ -7,9 +7,13 @@ import { z } from "zod";
 
 import { db } from "@/db";
 import {
+  aquisicoes,
   classificacoes,
   itens,
+  itensParametros3d,
   locais,
+  materiais3d,
+  origensFabricacao,
   regrasClassificacao,
   unidades,
   usuarios,
@@ -181,6 +185,157 @@ export async function removerLocal(id: string): Promise<Resultado> {
   }
   await db.delete(locais).where(eq(locais.id, id));
   revalidatePath("/configuracoes");
+  return { ok: true };
+}
+
+/* ------------------------- Aquisição, origem e material de impressão 3D --- */
+
+/**
+ * As tres listas que eram enum no schema. Viraram cadastro porque toda lista
+ * que o cadastro de item oferece num select precisa ser editavel aqui —
+ * acrescentar "Comodato" em Aquisicao nao pode exigir migracao de banco.
+ *
+ * Todas tem a mesma forma, entao tem o mesmo par de acoes. O que varia e
+ * onde procurar o uso antes de deixar apagar, e isso vem por parametro.
+ */
+export async function salvarAquisicao(dados: {
+  id?: string;
+  nome: string;
+  ativo: boolean;
+}): Promise<Resultado> {
+  await exigirAdmin();
+  const nome = dados.nome.trim();
+  if (!nome) return { erro: "Informe o nome do tipo de aquisição." };
+
+  try {
+    if (dados.id) {
+      await db
+        .update(aquisicoes)
+        .set({ nome, ativo: dados.ativo })
+        .where(eq(aquisicoes.id, dados.id));
+    } else {
+      const [{ proxima }] = await db
+        .select({ proxima: sql<number>`coalesce(max(${aquisicoes.ordem}), 0) + 1` })
+        .from(aquisicoes);
+      await db.insert(aquisicoes).values({ nome, ordem: proxima, ativo: dados.ativo });
+    }
+    revalidatePath("/configuracoes");
+    revalidatePath("/itens");
+    return { ok: true };
+  } catch {
+    return { erro: "Já existe um tipo de aquisição com esse nome." };
+  }
+}
+
+export async function removerAquisicao(id: string): Promise<Resultado> {
+  await exigirAdmin();
+  const emUso = await db
+    .select({ id: itens.id })
+    .from(itens)
+    .where(eq(itens.aquisicaoId, id))
+    .limit(1);
+  if (emUso.length > 0) {
+    return { erro: "Existem itens com esta aquisição. Desative-a em vez de remover." };
+  }
+  await db.delete(aquisicoes).where(eq(aquisicoes.id, id));
+  revalidatePath("/configuracoes");
+  revalidatePath("/itens");
+  return { ok: true };
+}
+
+export async function salvarOrigemFabricacao(dados: {
+  id?: string;
+  nome: string;
+  abreParametros3d: boolean;
+  ativo: boolean;
+}): Promise<Resultado> {
+  await exigirAdmin();
+  const nome = dados.nome.trim();
+  if (!nome) return { erro: "Informe o nome da origem." };
+
+  try {
+    if (dados.id) {
+      await db
+        .update(origensFabricacao)
+        .set({ nome, abreParametros3d: dados.abreParametros3d, ativo: dados.ativo })
+        .where(eq(origensFabricacao.id, dados.id));
+    } else {
+      const [{ proxima }] = await db
+        .select({ proxima: sql<number>`coalesce(max(${origensFabricacao.ordem}), 0) + 1` })
+        .from(origensFabricacao);
+      await db.insert(origensFabricacao).values({
+        nome,
+        abreParametros3d: dados.abreParametros3d,
+        ordem: proxima,
+        ativo: dados.ativo,
+      });
+    }
+    revalidatePath("/configuracoes");
+    revalidatePath("/itens");
+    return { ok: true };
+  } catch {
+    return { erro: "Já existe uma origem de fabricação com esse nome." };
+  }
+}
+
+export async function removerOrigemFabricacao(id: string): Promise<Resultado> {
+  await exigirAdmin();
+  const emUso = await db
+    .select({ id: itens.id })
+    .from(itens)
+    .where(eq(itens.origemFabricacaoId, id))
+    .limit(1);
+  if (emUso.length > 0) {
+    return { erro: "Existem itens com esta origem. Desative-a em vez de remover." };
+  }
+  await db.delete(origensFabricacao).where(eq(origensFabricacao.id, id));
+  revalidatePath("/configuracoes");
+  revalidatePath("/itens");
+  return { ok: true };
+}
+
+export async function salvarMaterial3d(dados: {
+  id?: string;
+  nome: string;
+  ativo: boolean;
+}): Promise<Resultado> {
+  await exigirAdmin();
+  const nome = dados.nome.trim();
+  if (!nome) return { erro: "Informe o nome do material." };
+
+  try {
+    if (dados.id) {
+      await db
+        .update(materiais3d)
+        .set({ nome, ativo: dados.ativo })
+        .where(eq(materiais3d.id, dados.id));
+    } else {
+      const [{ proxima }] = await db
+        .select({ proxima: sql<number>`coalesce(max(${materiais3d.ordem}), 0) + 1` })
+        .from(materiais3d);
+      await db.insert(materiais3d).values({ nome, ordem: proxima, ativo: dados.ativo });
+    }
+    revalidatePath("/configuracoes");
+    revalidatePath("/itens");
+    return { ok: true };
+  } catch {
+    return { erro: "Já existe um material com esse nome." };
+  }
+}
+
+export async function removerMaterial3d(id: string): Promise<Resultado> {
+  await exigirAdmin();
+  const emUso = await db
+    .select({ itemId: itensParametros3d.itemId })
+    .from(itensParametros3d)
+    .where(eq(itensParametros3d.materialId, id))
+    .limit(1);
+  if (emUso.length > 0) {
+    return { erro: "Existem itens impressos neste material. Desative-o em vez de remover." };
+  }
+  await db.delete(materiais3d).where(eq(materiais3d.id, id));
+  revalidatePath("/configuracoes");
+  revalidatePath("/itens");
   return { ok: true };
 }
 

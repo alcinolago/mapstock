@@ -1,8 +1,11 @@
 import { asc } from "drizzle-orm";
 
 import {
+  PainelAquisicoes,
   PainelClassificacoes,
   PainelLocais,
+  PainelMateriais3d,
+  PainelOrigens,
   PainelUnidades,
   type Classificacao,
 } from "@/components/configuracoes/painel-listas";
@@ -11,7 +14,16 @@ import { Abas } from "@/components/ui/abas";
 import { CabecalhoPagina } from "@/components/ui/cabecalho-pagina";
 import { Cartao, CorpoCartao } from "@/components/ui/cartao";
 import { db } from "@/db";
-import { classificacoes, locais, regrasClassificacao, unidades, usuarios } from "@/db/schema";
+import {
+  aquisicoes,
+  classificacoes,
+  locais,
+  materiais3d,
+  origensFabricacao,
+  regrasClassificacao,
+  unidades,
+  usuarios,
+} from "@/db/schema";
 import { exigirAdmin } from "@/lib/auth";
 
 export const metadata = { title: "Configurações" };
@@ -19,23 +31,34 @@ export const metadata = { title: "Configurações" };
 export default async function PaginaConfiguracoes() {
   await exigirAdmin();
 
-  const [listaClassificacoes, regras, listaUnidades, listaLocais, listaUsuarios] =
-    await Promise.all([
-      db.select().from(classificacoes).orderBy(asc(classificacoes.ordem)),
-      db.select().from(regrasClassificacao).orderBy(asc(regrasClassificacao.ordem)),
-      db.select().from(unidades).orderBy(asc(unidades.sigla)),
-      db.select().from(locais).orderBy(asc(locais.nome)),
-      db
-        .select({
-          id: usuarios.id,
-          nome: usuarios.nome,
-          email: usuarios.email,
-          papel: usuarios.papel,
-          ativo: usuarios.ativo,
-        })
-        .from(usuarios)
-        .orderBy(asc(usuarios.nome)),
-    ]);
+  const [
+    listaClassificacoes,
+    regras,
+    listaUnidades,
+    listaLocais,
+    listaAquisicoes,
+    listaOrigens,
+    listaMateriais,
+    listaUsuarios,
+  ] = await Promise.all([
+    db.select().from(classificacoes).orderBy(asc(classificacoes.ordem)),
+    db.select().from(regrasClassificacao).orderBy(asc(regrasClassificacao.ordem)),
+    db.select().from(unidades).orderBy(asc(unidades.sigla)),
+    db.select().from(locais).orderBy(asc(locais.nome)),
+    db.select().from(aquisicoes).orderBy(asc(aquisicoes.ordem)),
+    db.select().from(origensFabricacao).orderBy(asc(origensFabricacao.ordem)),
+    db.select().from(materiais3d).orderBy(asc(materiais3d.ordem)),
+    db
+      .select({
+        id: usuarios.id,
+        nome: usuarios.nome,
+        email: usuarios.email,
+        papel: usuarios.papel,
+        ativo: usuarios.ativo,
+      })
+      .from(usuarios)
+      .orderBy(asc(usuarios.nome)),
+  ]);
 
   const comRegras: Classificacao[] = listaClassificacoes.map((c) => ({
     id: c.id,
@@ -51,7 +74,7 @@ export default async function PaginaConfiguracoes() {
     <div className="mx-auto max-w-5xl">
       <CabecalhoPagina
         titulo="Configurações"
-        descricao="As listas que alimentam o cadastro de itens e quem tem acesso ao sistema."
+        descricao="Toda lista que o cadastro de item oferece num select mora aqui, com criar, editar e remover. Quem já está em uso não se remove — desativa."
       />
 
       <Cartao>
@@ -66,6 +89,25 @@ export default async function PaginaConfiguracoes() {
               },
               { id: "unidades", rotulo: "Unidades", conteudo: <PainelUnidades lista={listaUnidades} /> },
               { id: "locais", rotulo: "Locais", conteudo: <PainelLocais lista={listaLocais} /> },
+              {
+                id: "aquisicoes",
+                rotulo: "Aquisição",
+                conteudo: <PainelAquisicoes lista={listaAquisicoes} />,
+              },
+              {
+                id: "origens",
+                rotulo: "Origens de fabricação",
+                conteudo: (
+                  <PainelOrigens
+                    lista={listaOrigens.map((o) => ({ ...o, marca: o.abreParametros3d }))}
+                  />
+                ),
+              },
+              {
+                id: "materiais3d",
+                rotulo: "Materiais 3D",
+                conteudo: <PainelMateriais3d lista={listaMateriais} />,
+              },
             ]}
           />
         </CorpoCartao>

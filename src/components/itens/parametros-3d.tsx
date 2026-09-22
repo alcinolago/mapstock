@@ -2,10 +2,10 @@
 
 import { Entrada, Grupo, Selecao } from "@/components/ui/campo";
 import { CampoNumero } from "@/components/ui/campo-mascarado";
-import { MATERIAIS_3D } from "@/lib/labels";
 
 export type Params3D = {
-  material: string;
+  /** Aponta para a lista de materiais, editável em Configurações. */
+  materialId: string;
   tempBico: string;
   tempMesa: string;
   preenchimento: string;
@@ -17,7 +17,7 @@ export type Params3D = {
 
 /* Mesmos padroes que o formulario do desktop ja trazia preenchidos. */
 export const PARAMS_3D_PADRAO: Params3D = {
-  material: "ABS",
+  materialId: "",
   tempBico: "245",
   tempMesa: "100",
   preenchimento: "20%",
@@ -29,9 +29,11 @@ export const PARAMS_3D_PADRAO: Params3D = {
 
 export function Parametros3D({
   valor,
+  materiais,
   aoMudar,
 }: {
   valor: Params3D;
+  materiais: { id: string; nome: string }[];
   aoMudar: (v: Params3D) => void;
 }) {
   const definir = (campo: keyof Params3D) => (v: string) => aoMudar({ ...valor, [campo]: v });
@@ -40,12 +42,13 @@ export function Parametros3D({
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
       <Grupo rotulo="Material">
         <Selecao
-          value={valor.material}
-          onChange={(e) => definir("material")(e.target.value)}
+          value={valor.materialId}
+          onChange={(e) => definir("materialId")(e.target.value)}
         >
-          {MATERIAIS_3D.map((m) => (
-            <option key={m} value={m}>
-              {m}
+          <option value="">Selecione...</option>
+          {materiais.map((m) => (
+            <option key={m.id} value={m.id}>
+              {m.nome}
             </option>
           ))}
         </Selecao>

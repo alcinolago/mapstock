@@ -17,6 +17,7 @@ import { diaSeguinte, FUSO, limitesDoMes } from "@/lib/periodo";
 
 import { db } from "./index";
 import {
+  aquisicoes,
   classificacoes,
   cotacaoItens,
   cotacoes,
@@ -26,6 +27,8 @@ import {
   itemFotos,
   itens,
   locais,
+  materiais3d,
+  origensFabricacao,
   itensParametros3d,
   moldeNos,
   moldes,
@@ -371,8 +374,10 @@ export async function pedidoCompleto(id: string) {
       descricao: itens.descricao,
       classificacao: classificacoes.nome,
       unidade: unidades.sigla,
-      aquisicao: itens.aquisicao,
-      origemFabricacao: itens.origemFabricacao,
+      /* Nome vindo da lista, nao chave de enum: quem le o PDF quer
+         "Compra importada", e a lista e editavel em Configuracoes. */
+      aquisicao: aquisicoes.nome,
+      origemFabricacao: origensFabricacao.nome,
       linkCompra: itens.linkCompra,
       localizacao: locais.nome,
       estoqueMinimo: itens.estoqueMinimo,
@@ -392,7 +397,7 @@ export async function pedidoCompleto(id: string) {
       prazoFornecedorUnidade: itemFornecedores.prazoUnidade,
       observacoesFornecedor: itemFornecedores.observacoes,
 
-      material3d: itensParametros3d.material,
+      material3d: materiais3d.nome,
       alturaCamada3d: itensParametros3d.alturaCamada,
       preenchimento3d: itensParametros3d.preenchimento,
       pesoEstimado3d: itensParametros3d.pesoEstimado,
@@ -414,6 +419,9 @@ export async function pedidoCompleto(id: string) {
     )
     .leftJoin(unidadeMinima, eq(unidadeMinima.id, itemFornecedores.unidadeMinimaId))
     .leftJoin(itensParametros3d, eq(itensParametros3d.itemId, pedidoItens.itemId))
+    .leftJoin(aquisicoes, eq(aquisicoes.id, itens.aquisicaoId))
+    .leftJoin(origensFabricacao, eq(origensFabricacao.id, itens.origemFabricacaoId))
+    .leftJoin(materiais3d, eq(materiais3d.id, itensParametros3d.materialId))
     .leftJoin(saldos, eq(saldos.itemId, pedidoItens.itemId))
     .where(eq(pedidoItens.pedidoId, id))
     .orderBy(asc(itens.codigo));
@@ -487,7 +495,7 @@ export async function cotacaoParaPdf(id: string) {
       /* Especificacao da peca: e o que deixa o fornecedor cotar a coisa certa
          em vez de perguntar de volta. */
       fichaTecnica: itens.fichaTecnica,
-      material3d: itensParametros3d.material,
+      material3d: materiais3d.nome,
       alturaCamada3d: itensParametros3d.alturaCamada,
       preenchimento3d: itensParametros3d.preenchimento,
       pesoEstimado3d: itensParametros3d.pesoEstimado,
@@ -496,6 +504,7 @@ export async function cotacaoParaPdf(id: string) {
     .innerJoin(itens, eq(itens.id, cotacaoItens.itemId))
     .innerJoin(unidades, eq(unidades.id, itens.unidadeId))
     .leftJoin(itensParametros3d, eq(itensParametros3d.itemId, cotacaoItens.itemId))
+    .leftJoin(materiais3d, eq(materiais3d.id, itensParametros3d.materialId))
     .where(eq(cotacaoItens.cotacaoId, id))
     .orderBy(asc(itens.codigo));
 

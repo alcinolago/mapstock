@@ -23,13 +23,6 @@ import {
   type EstadoItem,
 } from "@/lib/acoes/itens";
 import { classificarPorRegras } from "@/lib/codigo";
-import {
-  AQUISICOES,
-  opcoes,
-  ORIGENS,
-  ORIGENS_3D,
-  type OrigemFabricacao,
-} from "@/lib/labels";
 
 export type DadosItem = {
   id: string;
@@ -37,8 +30,8 @@ export type DadosItem = {
   descricao: string;
   classificacaoId: string;
   unidadeId: string;
-  aquisicao: string | null;
-  origemFabricacao: string | null;
+  aquisicaoId: string | null;
+  origemFabricacaoId: string | null;
   estoqueMinimo: number;
   localId: string | null;
   observacoes: string | null;
@@ -55,6 +48,10 @@ type Props = {
   unidades: { id: string; sigla: string; nome: string }[];
   fornecedores: { id: string; nome: string }[];
   locais: { id: string; nome: string; ativo: boolean }[];
+  /* As tres que eram enum e viraram cadastro. Chegam só com as ativas. */
+  aquisicoes: { id: string; nome: string }[];
+  origens: { id: string; nome: string; abreParametros3d: boolean }[];
+  materiais3d: { id: string; nome: string }[];
   regras: { classificacaoId: string; palavraChave: string }[];
   item?: DadosItem;
   podeExcluir: boolean;
@@ -67,6 +64,9 @@ export function FormularioItem({
   unidades,
   fornecedores,
   locais,
+  aquisicoes,
+  origens,
+  materiais3d,
   regras,
   item,
   podeExcluir,
@@ -78,7 +78,7 @@ export function FormularioItem({
   const [codigo, setCodigo] = useState(item?.codigo ?? "");
   const [descricao, setDescricao] = useState(item?.descricao ?? "");
   const [classificacaoId, setClassificacaoId] = useState(item?.classificacaoId ?? "");
-  const [origem, setOrigem] = useState(item?.origemFabricacao ?? "");
+  const [origem, setOrigem] = useState(item?.origemFabricacaoId ?? "");
   const [vinculos, setVinculos] = useState<VinculoFornecedor[]>(item?.vinculos ?? []);
   const [params3d, setParams3d] = useState<Params3D>(item?.parametros3d ?? PARAMS_3D_PADRAO);
   const [dica, setDica] = useState<string | null>(null);
@@ -89,7 +89,10 @@ export function FormularioItem({
   const classeAuto = useRef(!item);
 
   const editando = Boolean(item);
-  const mostra3d = ORIGENS_3D.includes(origem as OrigemFabricacao);
+  /* Quem manda é a marca da origem escolhida, e não uma lista fixa aqui:
+     cadastrar uma impressora nova em Configurações passa a abrir o bloco
+     sem mexer em código. */
+  const mostra3d = Boolean(origens.find((o) => o.id === origem)?.abreParametros3d);
 
   /* Classificacao sugerida pela descricao. Roda na propria digitacao, nao
      num efeito: e resposta direta a uma acao da pessoa. As regras vem do
@@ -234,28 +237,28 @@ export function FormularioItem({
           </Grupo>
 
 
-          <Grupo rotulo="Aquisição" htmlFor="aquisicao">
-            <Selecao id="aquisicao" name="aquisicao" defaultValue={item?.aquisicao ?? ""}>
+          <Grupo rotulo="Aquisição" htmlFor="aquisicaoId">
+            <Selecao id="aquisicaoId" name="aquisicaoId" defaultValue={item?.aquisicaoId ?? ""}>
               <option value="">Não informado</option>
-              {opcoes(AQUISICOES).map((o) => (
-                <option key={o.valor} value={o.valor}>
-                  {o.rotulo}
+              {aquisicoes.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.nome}
                 </option>
               ))}
             </Selecao>
           </Grupo>
 
-          <Grupo rotulo="Origem de fabricação" htmlFor="origemFabricacao">
+          <Grupo rotulo="Origem de fabricação" htmlFor="origemFabricacaoId">
             <Selecao
-              id="origemFabricacao"
-              name="origemFabricacao"
+              id="origemFabricacaoId"
+              name="origemFabricacaoId"
               value={origem}
               onChange={(e) => setOrigem(e.target.value)}
             >
               <option value="">Não informado</option>
-              {opcoes(ORIGENS).map((o) => (
-                <option key={o.valor} value={o.valor}>
-                  {o.rotulo}
+              {origens.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.nome}
                 </option>
               ))}
             </Selecao>
@@ -342,7 +345,7 @@ export function FormularioItem({
             descricao="Aparece porque a origem de fabricação é impressão 3D."
           />
           <CorpoCartao>
-            <Parametros3D valor={params3d} aoMudar={setParams3d} />
+            <Parametros3D valor={params3d} materiais={materiais3d} aoMudar={setParams3d} />
           </CorpoCartao>
         </Cartao>
       )}

@@ -10,13 +10,11 @@
 
 import type {
   acaoAuditoria,
-  origemFabricacao,
   papelUsuario,
   statusCotacao,
   statusFornecedor,
   statusMontagem,
   statusPedido,
-  tipoAquisicao,
   tipoMovimento,
   unidadePrazo,
 } from "@/db/schema";
@@ -24,8 +22,6 @@ import type {
 type Valor<T extends { enumValues: readonly string[] }> = T["enumValues"][number];
 
 export type TipoMovimento = Valor<typeof tipoMovimento>;
-export type TipoAquisicao = Valor<typeof tipoAquisicao>;
-export type OrigemFabricacao = Valor<typeof origemFabricacao>;
 export type StatusFornecedor = Valor<typeof statusFornecedor>;
 export type StatusCotacao = Valor<typeof statusCotacao>;
 export type StatusPedido = Valor<typeof statusPedido>;
@@ -76,29 +72,9 @@ export const OPOSTO_MOVIMENTO: Record<TipoMovimento, TipoMovimento> = {
   liberacao_reserva: "reserva",
 };
 
-export const AQUISICOES: Record<TipoAquisicao, string> = {
-  compra_nacional: "Compra nacional",
-  compra_importada: "Compra importada",
-  fabricacao_interna: "Fabricação interna",
-  sob_encomenda: "Sob encomenda",
-};
-
-export const ORIGENS: Record<OrigemFabricacao, string> = {
-  interna_impressao_3d: "Interna — Impressão 3D",
-  interna_usinagem: "Interna — Usinagem",
-  interna_montagem: "Interna — Montagem",
-  terceiro_impressao_3d: "Terceiro — Impressão 3D",
-  terceiro_usinagem: "Terceiro — Usinagem",
-  terceiro_corte_dobra: "Terceiro — Corte/Dobra",
-  compra_pronta_nacional: "Compra pronta nacional",
-  compra_importada: "Compra importada",
-};
-
-/** Origens que liberam o bloco de parametros de impressao 3D no formulario. */
-export const ORIGENS_3D: OrigemFabricacao[] = [
-  "interna_impressao_3d",
-  "terceiro_impressao_3d",
-];
+/* Aquisicao, origem de fabricacao e material de impressao nao moram mais
+   aqui: viraram cadastro editavel em Configuracoes, e o rotulo e o proprio
+   `nome` da linha. O ponto de partida delas esta em src/db/seed.ts. */
 
 export const STATUS_FORNECEDOR: Record<StatusFornecedor, string> = {
   preferencial: "Preferencial",
@@ -152,10 +128,3 @@ export function opcoes<T extends string>(mapa: Record<T, string>) {
     rotulo,
   }));
 }
-
-export const MATERIAIS_3D = [
-  "ABS", "PLA", "PETG", "TPU", "TPE", "ASA", "Nylon", "PA", "PA6", "PA12",
-  "PA-GF", "PA-CF", "PC", "PC-ABS", "POM", "PP", "HIPS", "PVA", "BVOH", "PET",
-  "PEEK", "PEI", "ULTEM", "Resina standard", "Resina tough", "Resina flexível",
-  "Resina lavável em água", "Outro",
-];

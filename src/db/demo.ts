@@ -10,6 +10,7 @@ import { eq } from "drizzle-orm";
 
 import { db } from "./index";
 import {
+  aquisicoes,
   divisoes,
   classificacoes,
   cotacaoItens,
@@ -21,8 +22,10 @@ import {
   locais,
   itensParametros3d,
   logAuditoria,
+  materiais3d,
   moldeNos,
   moldes,
+  origensFabricacao,
   montagemNos,
   montagens,
   movimentos,
@@ -59,6 +62,15 @@ async function criar() {
   const classe = (nome: string) => classes.find((c) => c.nome === nome)!.id;
   const unidade = (sigla: string) => uns.find((u) => u.sigla === sigla)!.id;
 
+  /* Aquisicao, origem e material sao cadastro desde que sairam do enum: vem
+     do seed, e o demo so escolhe pelo nome. */
+  const aqs = await db.select().from(aquisicoes);
+  const origs = await db.select().from(origensFabricacao);
+  const mats = await db.select().from(materiais3d);
+  const aquisicao = (nome: string) => aqs.find((a) => a.nome === nome)!.id;
+  const origem = (nome: string) => origs.find((o) => o.nome === nome)!.id;
+  const material = (nome: string) => mats.find((m) => m.nome === nome)!.id;
+
   /* Os lugares do galpao. Cadastro proprio desde que texto livre no item
      virou o mesmo lugar com dois nomes. */
   const locs = await db
@@ -93,28 +105,28 @@ async function criar() {
          vez de comprado. E ele que destrava a bancada — da para fazer seis
          domos na segunda porque chegaram as cameras, sem esperar o
          equipamento inteiro. */
-      { codigo: "DOM-KIT-001", descricao: "Domo montado — 2 câmeras", classificacaoId: classe("Carenagem/Domo"), unidadeId: unidade("un"), aquisicao: "fabricacao_interna", origemFabricacao: "interna_montagem", estoqueMinimo: 1, localId: local("Prateleira C2"), criadoPor: admin.id, atualizadoPor: admin.id },
-      { codigo: "EST-001", descricao: "Estrutura em perfil de alumínio 40x40", classificacaoId: classe("Estrutural"), unidadeId: unidade("conj."), aquisicao: "compra_nacional", origemFabricacao: "terceiro_corte_dobra", custoUnitario: 480, estoqueMinimo: 2, localId: local("Prateleira A1"), prazoValor: 12, criadoPor: admin.id, atualizadoPor: admin.id },
-      { codigo: "FIX-PAR-M6X20", descricao: "Parafuso M6x20 inox allen", classificacaoId: classe("Fixação"), unidadeId: unidade("un"), aquisicao: "compra_nacional", origemFabricacao: "compra_pronta_nacional", custoUnitario: 0.92, estoqueMinimo: 200, localId: local("Gaveta B3"), prazoValor: 5, criadoPor: admin.id, atualizadoPor: admin.id },
-      { codigo: "FIX-POR-M6", descricao: "Porca M6 inox autotravante", classificacaoId: classe("Fixação"), unidadeId: unidade("un"), aquisicao: "compra_nacional", custoUnitario: 0.55, estoqueMinimo: 200, localId: local("Gaveta B3"), prazoValor: 5, criadoPor: admin.id, atualizadoPor: admin.id },
-      { codigo: "DOM-CAR-PETG", descricao: "Carenagem frontal impressa em PETG", classificacaoId: classe("Carenagem/Domo"), unidadeId: unidade("un"), aquisicao: "fabricacao_interna", origemFabricacao: "interna_impressao_3d", custoUnitario: 68, estoqueMinimo: 1, localId: local("Prateleira C2"), prazoValor: 18, prazoUnidade: "horas", criadoPor: admin.id, atualizadoPor: admin.id },
-      { codigo: "SEN-CAM-001", descricao: "Câmera industrial 5MP USB3", classificacaoId: classe("Sensor"), unidadeId: unidade("un"), aquisicao: "compra_importada", custoUnitario: 2150, estoqueMinimo: 1, localId: local("Armário travado"), prazoValor: 45, criadoPor: admin.id, atualizadoPor: admin.id },
-      { codigo: "AUT-PLACA-001", descricao: "Placa controladora ESP32-S3", classificacaoId: classe("Eletrônica/Automação"), unidadeId: unidade("un"), aquisicao: "compra_nacional", custoUnitario: 89.9, estoqueMinimo: 3, localId: local("Armário travado"), prazoValor: 7, criadoPor: admin.id, atualizadoPor: admin.id },
-      { codigo: "CNS-FIL-PETG", descricao: "Filamento PETG 1,75mm preto 1kg", classificacaoId: classe("Consumível"), unidadeId: unidade("rolo"), aquisicao: "compra_nacional", custoUnitario: 135, estoqueMinimo: 4, localId: local("Sala de impressão"), prazoValor: 6, criadoPor: admin.id, atualizadoPor: admin.id },
+      { codigo: "DOM-KIT-001", descricao: "Domo montado — 2 câmeras", classificacaoId: classe("Carenagem/Domo"), unidadeId: unidade("un"), aquisicaoId: aquisicao("Fabricação interna"), origemFabricacaoId: origem("Interna — Montagem"), estoqueMinimo: 1, localId: local("Prateleira C2"), criadoPor: admin.id, atualizadoPor: admin.id },
+      { codigo: "EST-001", descricao: "Estrutura em perfil de alumínio 40x40", classificacaoId: classe("Estrutural"), unidadeId: unidade("conj."), aquisicaoId: aquisicao("Compra nacional"), origemFabricacaoId: origem("Terceiro — Corte/Dobra"), custoUnitario: 480, estoqueMinimo: 2, localId: local("Prateleira A1"), prazoValor: 12, criadoPor: admin.id, atualizadoPor: admin.id },
+      { codigo: "FIX-PAR-M6X20", descricao: "Parafuso M6x20 inox allen", classificacaoId: classe("Fixação"), unidadeId: unidade("un"), aquisicaoId: aquisicao("Compra nacional"), origemFabricacaoId: origem("Compra pronta nacional"), custoUnitario: 0.92, estoqueMinimo: 200, localId: local("Gaveta B3"), prazoValor: 5, criadoPor: admin.id, atualizadoPor: admin.id },
+      { codigo: "FIX-POR-M6", descricao: "Porca M6 inox autotravante", classificacaoId: classe("Fixação"), unidadeId: unidade("un"), aquisicaoId: aquisicao("Compra nacional"), custoUnitario: 0.55, estoqueMinimo: 200, localId: local("Gaveta B3"), prazoValor: 5, criadoPor: admin.id, atualizadoPor: admin.id },
+      { codigo: "DOM-CAR-PETG", descricao: "Carenagem frontal impressa em PETG", classificacaoId: classe("Carenagem/Domo"), unidadeId: unidade("un"), aquisicaoId: aquisicao("Fabricação interna"), origemFabricacaoId: origem("Interna — Impressão 3D"), custoUnitario: 68, estoqueMinimo: 1, localId: local("Prateleira C2"), prazoValor: 18, prazoUnidade: "horas", criadoPor: admin.id, atualizadoPor: admin.id },
+      { codigo: "SEN-CAM-001", descricao: "Câmera industrial 5MP USB3", classificacaoId: classe("Sensor"), unidadeId: unidade("un"), aquisicaoId: aquisicao("Compra importada"), custoUnitario: 2150, estoqueMinimo: 1, localId: local("Armário travado"), prazoValor: 45, criadoPor: admin.id, atualizadoPor: admin.id },
+      { codigo: "AUT-PLACA-001", descricao: "Placa controladora ESP32-S3", classificacaoId: classe("Eletrônica/Automação"), unidadeId: unidade("un"), aquisicaoId: aquisicao("Compra nacional"), custoUnitario: 89.9, estoqueMinimo: 3, localId: local("Armário travado"), prazoValor: 7, criadoPor: admin.id, atualizadoPor: admin.id },
+      { codigo: "CNS-FIL-PETG", descricao: "Filamento PETG 1,75mm preto 1kg", classificacaoId: classe("Consumível"), unidadeId: unidade("rolo"), aquisicaoId: aquisicao("Compra nacional"), custoUnitario: 135, estoqueMinimo: 4, localId: local("Sala de impressão"), prazoValor: 6, criadoPor: admin.id, atualizadoPor: admin.id },
       /* Daqui para baixo, o que se compra em site: todos com link de compra,
          que e o que o PDF do pedido leva para quem vai comprar. */
-      { codigo: "ELE-FON-24V", descricao: "Fonte chaveada 24V 5A 120W", classificacaoId: classe("Elétrica"), unidadeId: unidade("un"), aquisicao: "compra_importada", origemFabricacao: "compra_importada", linkCompra: "https://pt.aliexpress.com/item/1005006184720341.html", custoUnitario: 96.4, estoqueMinimo: 2, localId: local("Armário travado"), prazoValor: 35, observacoes: "Tem que ser a versão bivolt: a bancada da oficina é 110V e a da montagem é 220V.", criadoPor: admin.id, atualizadoPor: admin.id },
-      { codigo: "AUT-MOT-NEMA17", descricao: "Motor de passo NEMA 17 1,8° 42x48mm", classificacaoId: classe("Eletrônica/Automação"), unidadeId: unidade("un"), aquisicao: "compra_importada", origemFabricacao: "compra_importada", linkCompra: "https://pt.aliexpress.com/item/1005005872109934.html", custoUnitario: 78.5, estoqueMinimo: 4, localId: local("Armário travado"), prazoValor: 40, fichaTecnica: "1,8° por passo · 42x42x48mm · eixo 5mm liso · 1,5A por fase · torque 0,45 N·m", criadoPor: admin.id, atualizadoPor: admin.id },
-      { codigo: "AUT-DIS-OLED", descricao: "Display OLED 0,96\" I2C 128x64", classificacaoId: classe("Eletrônica/Automação"), unidadeId: unidade("un"), aquisicao: "compra_importada", linkCompra: "https://pt.aliexpress.com/item/1005004991237845.html", custoUnitario: 21.9, estoqueMinimo: 5, localId: local("Gaveta B1"), prazoValor: 38, criadoPor: admin.id, atualizadoPor: admin.id },
-      { codigo: "IMP-BIC-06", descricao: "Bico 0,6mm aço endurecido rosca M6 (padrão V6)", classificacaoId: classe("Impressão 3D"), unidadeId: unidade("un"), aquisicao: "compra_importada", linkCompra: "https://pt.aliexpress.com/item/1005003471190028.html", custoUnitario: 34.7, estoqueMinimo: 4, localId: local("Sala de impressão"), prazoValor: 30, criadoPor: admin.id, atualizadoPor: admin.id },
-      { codigo: "CBL-USB-3M", descricao: "Cabo USB 3.0 blindado 3m com trava", classificacaoId: classe("Cabeamento"), unidadeId: unidade("un"), aquisicao: "compra_nacional", linkCompra: "https://produto.mercadolivre.com.br/MLB-3901274655-cabo-usb-30-blindado-3m-com-trava-_JM", custoUnitario: 89, estoqueMinimo: 2, localId: local("Gaveta B1"), prazoValor: 4, criadoPor: admin.id, atualizadoPor: admin.id },
-      { codigo: "FIX-INS-M3", descricao: "Inserto roscado M3 latão para impressão 3D (kit 100)", classificacaoId: classe("Fixação"), unidadeId: unidade("kit"), aquisicao: "compra_nacional", linkCompra: "https://produto.mercadolivre.com.br/MLB-2788341290-inserto-rosca-m3-lato-kit-100-pecas-_JM", custoUnitario: 62, estoqueMinimo: 1, localId: local("Gaveta B3"), prazoValor: 5, criadoPor: admin.id, atualizadoPor: admin.id },
+      { codigo: "ELE-FON-24V", descricao: "Fonte chaveada 24V 5A 120W", classificacaoId: classe("Elétrica"), unidadeId: unidade("un"), aquisicaoId: aquisicao("Compra importada"), origemFabricacaoId: origem("Compra importada"), linkCompra: "https://pt.aliexpress.com/item/1005006184720341.html", custoUnitario: 96.4, estoqueMinimo: 2, localId: local("Armário travado"), prazoValor: 35, observacoes: "Tem que ser a versão bivolt: a bancada da oficina é 110V e a da montagem é 220V.", criadoPor: admin.id, atualizadoPor: admin.id },
+      { codigo: "AUT-MOT-NEMA17", descricao: "Motor de passo NEMA 17 1,8° 42x48mm", classificacaoId: classe("Eletrônica/Automação"), unidadeId: unidade("un"), aquisicaoId: aquisicao("Compra importada"), origemFabricacaoId: origem("Compra importada"), linkCompra: "https://pt.aliexpress.com/item/1005005872109934.html", custoUnitario: 78.5, estoqueMinimo: 4, localId: local("Armário travado"), prazoValor: 40, fichaTecnica: "1,8° por passo · 42x42x48mm · eixo 5mm liso · 1,5A por fase · torque 0,45 N·m", criadoPor: admin.id, atualizadoPor: admin.id },
+      { codigo: "AUT-DIS-OLED", descricao: "Display OLED 0,96\" I2C 128x64", classificacaoId: classe("Eletrônica/Automação"), unidadeId: unidade("un"), aquisicaoId: aquisicao("Compra importada"), linkCompra: "https://pt.aliexpress.com/item/1005004991237845.html", custoUnitario: 21.9, estoqueMinimo: 5, localId: local("Gaveta B1"), prazoValor: 38, criadoPor: admin.id, atualizadoPor: admin.id },
+      { codigo: "IMP-BIC-06", descricao: "Bico 0,6mm aço endurecido rosca M6 (padrão V6)", classificacaoId: classe("Impressão 3D"), unidadeId: unidade("un"), aquisicaoId: aquisicao("Compra importada"), linkCompra: "https://pt.aliexpress.com/item/1005003471190028.html", custoUnitario: 34.7, estoqueMinimo: 4, localId: local("Sala de impressão"), prazoValor: 30, criadoPor: admin.id, atualizadoPor: admin.id },
+      { codigo: "CBL-USB-3M", descricao: "Cabo USB 3.0 blindado 3m com trava", classificacaoId: classe("Cabeamento"), unidadeId: unidade("un"), aquisicaoId: aquisicao("Compra nacional"), linkCompra: "https://produto.mercadolivre.com.br/MLB-3901274655-cabo-usb-30-blindado-3m-com-trava-_JM", custoUnitario: 89, estoqueMinimo: 2, localId: local("Gaveta B1"), prazoValor: 4, criadoPor: admin.id, atualizadoPor: admin.id },
+      { codigo: "FIX-INS-M3", descricao: "Inserto roscado M3 latão para impressão 3D (kit 100)", classificacaoId: classe("Fixação"), unidadeId: unidade("kit"), aquisicaoId: aquisicao("Compra nacional"), linkCompra: "https://produto.mercadolivre.com.br/MLB-2788341290-inserto-rosca-m3-lato-kit-100-pecas-_JM", custoUnitario: 62, estoqueMinimo: 1, localId: local("Gaveta B3"), prazoValor: 5, criadoPor: admin.id, atualizadoPor: admin.id },
     ])
     .returning();
   const i = (codigo: string) => criados.find((x) => x.codigo === codigo)!.id;
   await db.insert(itensParametros3d).values({
     itemId: i("DOM-CAR-PETG"),
-    material: "PETG",
+    materialId: material("PETG"),
     tempBico: "240",
     tempMesa: "80",
     preenchimento: "25%",

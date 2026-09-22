@@ -13,7 +13,7 @@
  */
 
 import type { LinhaPedidoCompleta, PedidoCompleto } from "@/db/consultas";
-import { AQUISICOES, ORIGENS, STATUS_PEDIDO } from "@/lib/labels";
+import { STATUS_PEDIDO } from "@/lib/labels";
 import { linkRota } from "@/lib/mapa";
 import { CORES, Folha, nomeArquivoPdf } from "@/lib/pdf";
 import { data, dataHora, moeda, numero } from "@/lib/utils";
@@ -120,8 +120,8 @@ export async function montarPdfDoPedido({ pedido, linhas, fotos }: PedidoComplet
       ["Prazo de entrega", prazo(linha)],
       ["Preço de tabela do fornecedor", (linha.precoTabela ?? 0) > 0 ? moeda(linha.precoTabela) : null],
       ["Classificação", linha.classificacao],
-      ["Tipo de aquisição", linha.aquisicao ? AQUISICOES[linha.aquisicao] : null],
-      ["Origem", linha.origemFabricacao ? ORIGENS[linha.origemFabricacao] : null],
+      ["Tipo de aquisição", linha.aquisicao],
+      ["Origem", linha.origemFabricacao],
       ["Onde guardar na chegada", linha.localizacao],
       ["Estoque atual", `${numero(linha.fisico - linha.reservado)} ${linha.unidade}`],
       [

@@ -2,19 +2,25 @@
 
 import { Check, Pencil, Plus, Trash2, X } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useState, useTransition, type ReactNode } from "react";
 
 import { Botao } from "@/components/ui/botao";
 import { Entrada } from "@/components/ui/campo";
 import { Selo } from "@/components/ui/selo";
 import {
   adicionarRegra,
+  removerAquisicao,
   removerClassificacao,
   removerLocal,
+  removerMaterial3d,
+  removerOrigemFabricacao,
   removerRegra,
   removerUnidade,
+  salvarAquisicao,
   salvarClassificacao,
   salvarLocal,
+  salvarMaterial3d,
+  salvarOrigemFabricacao,
   salvarUnidade,
 } from "@/lib/acoes/configuracoes";
 
@@ -374,64 +380,112 @@ export function PainelUnidades({
   );
 }
 
-/* --------------------------------------------------------------- Locais --- */
+/* ------------------------------------------------- Listas de nome só --- */
+
+export type LinhaLista = { id: string; nome: string; ativo: boolean; marca?: boolean };
 
 /**
- * Onde a peca fica guardada. Virou cadastro para o item so escolher de uma
- * lista: texto livre fazia "Gaveta B3" e "gaveta b3" virarem dois lugares, e
- * af filtrar por prateleira nao fechava.
+ * Local, aquisição, origem de fabricação, material de impressão: quatro
+ * listas com a mesma forma — um nome e um liga/desliga. Um componente só, em
+ * vez de quatro cópias, para que corrigir o comportamento numa corrija em
+ * todas.
+ *
+ * `marca` é o campo extra que só a origem de fabricação usa: é ele que diz
+ * se aquela origem abre o bloco de parâmetros de impressão 3D no cadastro do
+ * item. Antes isso era uma lista fixa no código, o que obrigava a mexer em
+ * código para cadastrar uma impressora nova.
  */
-export function PainelLocais({
+export function PainelLista({
   lista,
+  ajuda,
+  placeholder,
+  rotuloNovo,
+  vazio,
+  feminino,
+  marca,
+  aoSalvar,
+  aoRemover,
 }: {
-  lista: { id: string; nome: string; ativo: boolean }[];
+  lista: LinhaLista[];
+  ajuda: ReactNode;
+  placeholder: string;
+  rotuloNovo: string;
+  vazio: string;
+  /** Só muda "Ativo/inativo" para "Ativa/inativa". */
+  feminino?: boolean;
+  marca?: { rotulo: string; dica: string };
+  aoSalvar: (d: { id?: string; nome: string; ativo: boolean; marca: boolean }) => Promise<Resultado>;
+  aoRemover: (id: string) => Promise<Resultado>;
 }) {
   const { pendente, erro, executar } = useAcao();
-  const [editando, setEditando] = useState<string | "novo" | null>(null);
-  const [rascunho, setRascunho] = useState({ nome: "", ativo: true });
+  const [editando, setEditando] = useState<string | "nova" | null>(null);
+  const [rascunho, setRascunho] = useState({ nome: "", ativo: true, marca: false });
+
+  const ativo = feminino ? "Ativa" : "Ativo";
+  const inativo = feminino ? "inativa" : "inativo";
+
+  const comecar = (l?: LinhaLista) => {
+    setRascunho({ nome: l?.nome ?? "", ativo: l?.ativo ?? true, marca: l?.marca ?? false });
+    setEditando(l?.id ?? "nova");
+  };
+
+  const campos = (
+    <>
+      <Entrada
+        value={rascunho.nome}
+        onChange={(e) => setRascunho((r) => ({ ...r, nome: e.target.value }))}
+        placeholder={placeholder}
+        required
+        className="h-8 min-w-48 flex-1 text-sm"
+        autoFocus
+      />
+      {marca && (
+        <label
+          className="flex items-center gap-2 text-xs text-texto-suave"
+          title={marca.dica}
+        >
+          <input
+            type="checkbox"
+            checked={rascunho.marca}
+            onChange={(e) => setRascunho((r) => ({ ...r, marca: e.target.checked }))}
+            className="size-4 accent-[var(--marca)]"
+          />
+          {marca.rotulo}
+        </label>
+      )}
+      <label className="flex items-center gap-2 text-xs text-texto-suave">
+        <input
+          type="checkbox"
+          checked={rascunho.ativo}
+          onChange={(e) => setRascunho((r) => ({ ...r, ativo: e.target.checked }))}
+          className="size-4 accent-[var(--marca)]"
+        />
+        {ativo}
+      </label>
+    </>
+  );
 
   return (
     <div className="space-y-3">
-      <p className="text-sm text-texto-fraco">
-        Prateleira, gaveta, armário, sala. O cadastro de item escolhe daqui — não dá para
-        digitar um lugar novo por lá, e é isso que evita o mesmo lugar com dois nomes.
-      </p>
+      <p className="text-sm text-texto-fraco">{ajuda}</p>
 
       <Erro texto={erro} />
 
       <ul className="divide-y divide-borda overflow-hidden rounded-xl border border-borda">
         {lista.length === 0 && (
-          <li className="px-4 py-6 text-center text-sm text-texto-fraco">
-            Nenhum local cadastrado ainda.
-          </li>
+          <li className="px-4 py-6 text-center text-sm text-texto-fraco">{vazio}</li>
         )}
         {lista.map((l) => (
-          <li key={l.id} className="flex items-center gap-3 px-4 py-2.5">
+          <li key={l.id} className="flex flex-wrap items-center gap-3 px-4 py-2.5">
             {editando === l.id ? (
               <>
-                <Entrada
-                  value={rascunho.nome}
-                  onChange={(e) => setRascunho((r) => ({ ...r, nome: e.target.value }))}
-                  placeholder="Nome do local *"
-                  required
-                  className="h-8 flex-1 text-sm"
-                  autoFocus
-                />
-                <label className="flex items-center gap-2 text-xs text-texto-suave">
-                  <input
-                    type="checkbox"
-                    checked={rascunho.ativo}
-                    onChange={(e) => setRascunho((r) => ({ ...r, ativo: e.target.checked }))}
-                    className="size-4 accent-[var(--marca)]"
-                  />
-                  Ativo
-                </label>
+                {campos}
                 <Botao
                   variante="salvar"
                   tamanho="sm"
                   disabled={pendente || !rascunho.nome.trim()}
                   onClick={() =>
-                    executar(() => salvarLocal({ id: l.id, ...rascunho }), () => setEditando(null))
+                    executar(() => aoSalvar({ id: l.id, ...rascunho }), () => setEditando(null))
                   }
                 >
                   <Check className="size-3.5" />
@@ -443,22 +497,16 @@ export function PainelLocais({
             ) : (
               <>
                 <span className="flex-1 text-sm font-medium text-texto">{l.nome}</span>
-                {!l.ativo && <Selo tom="neutro">inativo</Selo>}
-                <Botao
-                  variante="fantasma"
-                  tamanho="sm"
-                  onClick={() => {
-                    setRascunho({ nome: l.nome, ativo: l.ativo });
-                    setEditando(l.id);
-                  }}
-                >
+                {marca && l.marca && <Selo tom="marca">{marca.rotulo}</Selo>}
+                {!l.ativo && <Selo tom="neutro">{inativo}</Selo>}
+                <Botao variante="fantasma" tamanho="sm" onClick={() => comecar(l)}>
                   <Pencil className="size-3.5" />
                 </Botao>
                 <Botao
                   variante="fantasma"
                   tamanho="sm"
                   disabled={pendente}
-                  onClick={() => executar(() => removerLocal(l.id))}
+                  onClick={() => executar(() => aoRemover(l.id))}
                 >
                   <Trash2 className="size-3.5 text-perigo" />
                 </Botao>
@@ -468,20 +516,13 @@ export function PainelLocais({
         ))}
       </ul>
 
-      {editando === "novo" ? (
-        <div className="flex gap-2 rounded-xl border border-marca/40 bg-marca-suave/20 p-3">
-          <Entrada
-            value={rascunho.nome}
-            onChange={(e) => setRascunho((r) => ({ ...r, nome: e.target.value }))}
-            placeholder="Ex.: Prateleira A1 *"
-            required
-            className="max-w-72"
-            autoFocus
-          />
+      {editando === "nova" ? (
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-marca/40 bg-marca-suave/20 p-3">
+          {campos}
           <Botao
             variante="salvar"
             disabled={pendente || !rascunho.nome.trim()}
-            onClick={() => executar(() => salvarLocal(rascunho), () => setEditando(null))}
+            onClick={() => executar(() => aoSalvar(rascunho), () => setEditando(null))}
           >
             <Check className="size-4" />
             Criar
@@ -491,17 +532,96 @@ export function PainelLocais({
           </Botao>
         </div>
       ) : (
-        <Botao
-          variante="contorno"
-          onClick={() => {
-            setRascunho({ nome: "", ativo: true });
-            setEditando("novo");
-          }}
-        >
+        <Botao variante="contorno" onClick={() => comecar()}>
           <Plus className="size-4" />
-          Novo local
+          {rotuloNovo}
         </Botao>
       )}
     </div>
+  );
+}
+
+/* --------------------------------------------------------------- Locais --- */
+
+/**
+ * Onde a peca fica guardada. Virou cadastro para o item so escolher de uma
+ * lista: texto livre fazia "Gaveta B3" e "gaveta b3" virarem dois lugares, e
+ * af filtrar por prateleira nao fechava.
+ */
+export function PainelLocais({ lista }: { lista: LinhaLista[] }) {
+  return (
+    <PainelLista
+      lista={lista}
+      ajuda="Prateleira, gaveta, armário, sala. O cadastro de item escolhe daqui — não dá para digitar um lugar novo por lá, e é isso que evita o mesmo lugar com dois nomes."
+      placeholder="Ex.: Prateleira A1 *"
+      rotuloNovo="Novo local"
+      vazio="Nenhum local cadastrado ainda."
+      aoSalvar={(d) => salvarLocal({ id: d.id, nome: d.nome, ativo: d.ativo })}
+      aoRemover={removerLocal}
+    />
+  );
+}
+
+/* ------------------------------------------- Aquisição, origem, material --- */
+
+export function PainelAquisicoes({ lista }: { lista: LinhaLista[] }) {
+  return (
+    <PainelLista
+      lista={lista}
+      ajuda="Como a peça entra na empresa: comprada aqui, importada, fabricada internamente. Era uma lista fixa no código — agora dá para acrescentar a sua."
+      placeholder="Ex.: Comodato *"
+      rotuloNovo="Novo tipo"
+      vazio="Nenhum tipo de aquisição cadastrado ainda."
+      feminino
+      aoSalvar={(d) => salvarAquisicao({ id: d.id, nome: d.nome, ativo: d.ativo })}
+      aoRemover={removerAquisicao}
+    />
+  );
+}
+
+export function PainelOrigens({ lista }: { lista: LinhaLista[] }) {
+  return (
+    <PainelLista
+      lista={lista}
+      ajuda={
+        <>
+          Como a peça é feita: impressa aqui, usinada por terceiro, comprada pronta. Marcar{" "}
+          <strong className="font-semibold text-texto-suave">abre parâmetros 3D</strong> faz o
+          cadastro do item mostrar o bloco de material, temperatura e camada quando essa origem
+          for escolhida.
+        </>
+      }
+      placeholder="Ex.: Terceiro — Injeção *"
+      rotuloNovo="Nova origem"
+      vazio="Nenhuma origem cadastrada ainda."
+      feminino
+      marca={{
+        rotulo: "abre parâmetros 3D",
+        dica: "O cadastro de item mostra o bloco de impressão quando esta origem for escolhida",
+      }}
+      aoSalvar={(d) =>
+        salvarOrigemFabricacao({
+          id: d.id,
+          nome: d.nome,
+          abreParametros3d: d.marca,
+          ativo: d.ativo,
+        })
+      }
+      aoRemover={removerOrigemFabricacao}
+    />
+  );
+}
+
+export function PainelMateriais3d({ lista }: { lista: LinhaLista[] }) {
+  return (
+    <PainelLista
+      lista={lista}
+      ajuda="O que sai no bloco de parâmetros de impressão 3D do item."
+      placeholder="Ex.: PETG-CF *"
+      rotuloNovo="Novo material"
+      vazio="Nenhum material cadastrado ainda."
+      aoSalvar={(d) => salvarMaterial3d({ id: d.id, nome: d.nome, ativo: d.ativo })}
+      aoRemover={removerMaterial3d}
+    />
   );
 }

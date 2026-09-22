@@ -15,6 +15,11 @@ surgir dúvida sobre regra de negócio.
   rótulo `"Entrada fabricação"` vive em `src/lib/labels.ts`. Isso existe por
   causa de um bug real do sistema antigo, em que comparar string acentuada
   escrita à mão fazia movimentações sumirem do saldo.
+- **Enum é para o que o código decide; lista é para o que o usuário decide.**
+  Tipo de movimento e status de pedido são enum porque existe código que se
+  ramifica em cada valor. Aquisição, origem de fabricação e material de
+  impressão eram enum e viraram tabela: ninguém deve precisar de migração de
+  banco para acrescentar "Comodato".
 
 ## Estrutura
 
@@ -130,6 +135,20 @@ listagem, é bug.
 - **Máximo de 3 fotos, e elas vão no mesmo envio do cadastro.** Por isso
   `serverActions.bodySizeLimit` está em 2 MB no `next.config.ts` — o padrão de
   1 MB estoura com três fotos mais as miniaturas.
+- **Todo select do cadastro de item tem cadastro em Configurações**, com
+  criar, editar e remover: classificação (com as palavras-chave), unidade,
+  local, aquisição, origem de fabricação e material de impressão 3D. Nenhuma
+  delas é lista fixa no código — o que está em `src/db/seed.ts` é só o ponto
+  de partida. Se aparecer um `<Selecao>` novo no cadastro de item alimentado
+  por um array em `.ts`, falta a tela dele.
+- **Remover opção em uso é barrado; o caminho é desativar.** A opção
+  desativada some dos selects e continua valendo no que já foi cadastrado.
+  É por isso que `itens` aponta para essas listas com `restrict`.
+- **Quem abre o bloco de parâmetros 3D é a origem escolhida**
+  (`origens_fabricacao.abreParametros3d`), não uma lista de origens no
+  código. Cadastrar uma impressora nova não pode exigir deploy. A tela e a
+  action `salvarItem` leem a mesma marca — a action confere de novo, porque
+  o formulário pode chegar dizendo outra coisa.
 - **Toda server action que escreve chama `exigirEdicao()`** (ou `exigirAdmin()`)
   e registra em `logAuditoria` via `registrar()`.
 

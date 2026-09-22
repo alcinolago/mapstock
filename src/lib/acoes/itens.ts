@@ -8,6 +8,7 @@ import { db } from "@/db";
 import {
   moldeNos,
   moldes,
+  origensFabricacao,
   classificacoes,
   cotacaoItens,
   itemFornecedores,
@@ -26,7 +27,6 @@ import { ehDuplicado, ehVinculado } from "@/lib/erros";
 import { codigoBase, codigoDisponivel } from "@/lib/codigo";
 import { contagens, emTexto, type Dependencias } from "@/lib/exclusao";
 import { MAX_BYTES_FOTO, MAX_FOTOS } from "@/lib/imagem";
-import { ORIGENS_3D } from "@/lib/labels";
 
 /* ------------------------------------------------------------------------ */
 
@@ -49,7 +49,7 @@ const fornecedorVinculado = z.object({
 });
 
 const parametros3d = z.object({
-  material: z.string().trim().optional(),
+  materialId: z.union([z.literal(""), z.uuid()]).optional(),
   tempBico: z.string().trim().optional(),
   tempMesa: z.string().trim().optional(),
   preenchimento: z.string().trim().optional(),
@@ -78,23 +78,10 @@ const esquemaItem = z.object({
   descricao: z.string().trim().min(1, "Informe a descrição"),
   classificacaoId: z.uuid("Escolha a classificação"),
   unidadeId: z.uuid("Escolha a unidade"),
-  aquisicao: z
-    .enum(["compra_nacional", "compra_importada", "fabricacao_interna", "sob_encomenda"])
-    .nullable()
-    .optional(),
-  origemFabricacao: z
-    .enum([
-      "interna_impressao_3d",
-      "interna_usinagem",
-      "interna_montagem",
-      "terceiro_impressao_3d",
-      "terceiro_usinagem",
-      "terceiro_corte_dobra",
-      "compra_pronta_nacional",
-      "compra_importada",
-    ])
-    .nullable()
-    .optional(),
+  /* Apontam para as listas de Configuracoes. Eram enum, e virar cadastro e o
+     que permite acrescentar um tipo novo sem migracao de banco. */
+  aquisicaoId: z.union([z.literal(""), z.uuid()]).nullable().optional(),
+  origemFabricacaoId: z.union([z.literal(""), z.uuid()]).nullable().optional(),
   estoqueMinimo: numeroTexto,
   /* Vazio significa "sem lugar definido", nao um lugar chamado "". */
   localId: z.union([z.literal(""), z.uuid()]).optional(),
@@ -142,8 +129,8 @@ export async function salvarItem(
   const bruto = {
     ...Object.fromEntries(formulario),
     ativo: formulario.get("ativo") === "on" || formulario.get("ativo") === "true",
-    aquisicao: formulario.get("aquisicao") || null,
-    origemFabricacao: formulario.get("origemFabricacao") || null,
+    aquisicaoId: formulario.get("aquisicaoId") || null,
+    origemFabricacaoId: formulario.get("origemFabricacaoId") || null,
     fornecedores: JSON.parse((formulario.get("fornecedores") as string) || "[]"),
     fotos: JSON.parse((formulario.get("fotos") as string) || "[]"),
     parametros3d: JSON.parse((formulario.get("parametros3d") as string) || "null"),
@@ -166,17 +153,25 @@ export async function salvarItem(
   if (problemaFoto) return { erro: problemaFoto, campo: "fotos" };
 
   /* Parametros 3D so fazem sentido para itens impressos. Guardar o bloco em
-     um item usinado deixaria lixo que reaparece se a origem mudar de volta. */
-  const guarda3d =
-    d.origemFabricacao && ORIGENS_3D.includes(d.origemFabricacao) ? d.parametros3d : null;
+     um item usinado deixaria lixo que reaparece se a origem mudar de volta.
+     Quem diz se a origem e de impressao e a propria linha da lista — a tela
+     usa a mesma marca, e aqui confere de novo porque o formulario pode ter
+     sido enviado com outra coisa. */
+  const [origemEscolhida] = d.origemFabricacaoId
+    ? await db
+        .select({ abre: origensFabricacao.abreParametros3d })
+        .from(origensFabricacao)
+        .where(eq(origensFabricacao.id, d.origemFabricacaoId))
+    : [];
+  const guarda3d = origemEscolhida?.abre ? d.parametros3d : null;
 
   const campos = {
     codigo: d.codigo,
     descricao: d.descricao,
     classificacaoId: d.classificacaoId,
     unidadeId: d.unidadeId,
-    aquisicao: d.aquisicao ?? null,
-    origemFabricacao: d.origemFabricacao ?? null,
+    aquisicaoId: d.aquisicaoId || null,
+    origemFabricacaoId: d.origemFabricacaoId || null,
     estoqueMinimo: d.estoqueMinimo,
     localId: d.localId || null,
     observacoes: d.observacoes || null,

@@ -11,7 +11,15 @@ import bcrypt from "bcryptjs";
 import { eq } from "drizzle-orm";
 
 import { db } from "./index";
-import { classificacoes, regrasClassificacao, unidades, usuarios } from "./schema";
+import {
+  aquisicoes,
+  classificacoes,
+  materiais3d,
+  origensFabricacao,
+  regrasClassificacao,
+  unidades,
+  usuarios,
+} from "./schema";
 
 /* Nome, prefixo do codigo e as palavras que disparam a classificacao
    automatica. Vem da lista CLASSIFICATIONS e das funcoes classify() e
@@ -42,6 +50,33 @@ const UNIDADES = [
   { sigla: "conj.", nome: "Conjunto" },
 ];
 
+/* Estas tres eram enums no schema. Viraram cadastro, e o que sobrou aqui e
+   so o ponto de partida: quem usa acrescenta e desativa em Configuracoes. */
+const AQUISICOES = [
+  "Compra nacional",
+  "Compra importada",
+  "Fabricação interna",
+  "Sob encomenda",
+];
+
+const ORIGENS: { nome: string; abre3d?: boolean }[] = [
+  { nome: "Interna — Impressão 3D", abre3d: true },
+  { nome: "Interna — Usinagem" },
+  { nome: "Interna — Montagem" },
+  { nome: "Terceiro — Impressão 3D", abre3d: true },
+  { nome: "Terceiro — Usinagem" },
+  { nome: "Terceiro — Corte/Dobra" },
+  { nome: "Compra pronta nacional" },
+  { nome: "Compra importada" },
+];
+
+const MATERIAIS_3D = [
+  "ABS", "PLA", "PETG", "TPU", "TPE", "ASA", "Nylon", "PA", "PA6", "PA12",
+  "PA-GF", "PA-CF", "PC", "PC-ABS", "POM", "PP", "HIPS", "PVA", "BVOH", "PET",
+  "PEEK", "PEI", "ULTEM", "Resina standard", "Resina tough", "Resina flexível",
+  "Resina lavável em água", "Outro",
+];
+
 async function main() {
   console.log("Populando o banco...\n");
 
@@ -60,6 +95,30 @@ async function main() {
 
   await db.insert(unidades).values(UNIDADES).onConflictDoNothing();
   console.log(`  unidades: ${UNIDADES.length}`);
+
+  await db
+    .insert(aquisicoes)
+    .values(AQUISICOES.map((nome, ordem) => ({ nome, ordem })))
+    .onConflictDoNothing();
+  console.log(`  tipos de aquisição: ${AQUISICOES.length}`);
+
+  await db
+    .insert(origensFabricacao)
+    .values(
+      ORIGENS.map((o, ordem) => ({
+        nome: o.nome,
+        abreParametros3d: Boolean(o.abre3d),
+        ordem,
+      })),
+    )
+    .onConflictDoNothing();
+  console.log(`  origens de fabricação: ${ORIGENS.length}`);
+
+  await db
+    .insert(materiais3d)
+    .values(MATERIAIS_3D.map((nome, ordem) => ({ nome, ordem })))
+    .onConflictDoNothing();
+  console.log(`  materiais de impressão 3D: ${MATERIAIS_3D.length}`);
 
   /* As regras precisam do id da classificacao, entao vem depois. */
   const salvas = await db.select().from(classificacoes);

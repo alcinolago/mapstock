@@ -40,23 +40,10 @@ export const tipoMovimento = pgEnum("tipo_movimento", [
   "devolucao_compra",
 ]);
 
-export const tipoAquisicao = pgEnum("tipo_aquisicao", [
-  "compra_nacional",
-  "compra_importada",
-  "fabricacao_interna",
-  "sob_encomenda",
-]);
-
-export const origemFabricacao = pgEnum("origem_fabricacao", [
-  "interna_impressao_3d",
-  "interna_usinagem",
-  "interna_montagem",
-  "terceiro_impressao_3d",
-  "terceiro_usinagem",
-  "terceiro_corte_dobra",
-  "compra_pronta_nacional",
-  "compra_importada",
-]);
+/* Aquisicao, origem de fabricacao e material 3D eram enums aqui. Viraram
+   cadastro (tabelas mais abaixo) porque toda lista que o cadastro de item
+   oferece num select tem de ser editavel em Configuracoes — acrescentar
+   "Comodato" nao pode exigir migracao de banco. */
 
 export const statusFornecedor = pgEnum("status_fornecedor", [
   "preferencial",
@@ -167,6 +154,39 @@ export const locais = pgTable("locais", {
   ativo: boolean("ativo").notNull().default(true),
 });
 
+/**
+ * As listas que o cadastro de item oferece nos selects.
+ *
+ * Todas com a mesma forma — nome, ordem, ativo — e todas editaveis em
+ * Configuracoes. Item aponta para a linha; apagar linha em uso e barrado, e
+ * o caminho e desativar, que a tira dos selects sem mexer no que ja foi
+ * cadastrado.
+ */
+export const aquisicoes = pgTable("aquisicoes", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  nome: text("nome").notNull().unique(),
+  ordem: integer("ordem").notNull().default(0),
+  ativo: boolean("ativo").notNull().default(true),
+});
+
+export const origensFabricacao = pgTable("origens_fabricacao", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  nome: text("nome").notNull().unique(),
+  /* Substitui a lista ORIGENS_3D, que era fixa no codigo: e esta marca que
+     abre o bloco de parametros de impressao no cadastro do item. Sem ela,
+     criar uma origem nova de impressao exigiria mexer em codigo. */
+  abreParametros3d: boolean("abre_parametros_3d").notNull().default(false),
+  ordem: integer("ordem").notNull().default(0),
+  ativo: boolean("ativo").notNull().default(true),
+});
+
+export const materiais3d = pgTable("materiais_3d", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  nome: text("nome").notNull().unique(),
+  ordem: integer("ordem").notNull().default(0),
+  ativo: boolean("ativo").notNull().default(true),
+});
+
 /* As 10 regras de classify(): palavra na descricao -> classificacao. */
 export const regrasClassificacao = pgTable(
   "regras_classificacao",
@@ -195,8 +215,10 @@ export const itens = pgTable("itens", {
   unidadeId: uuid("unidade_id")
     .notNull()
     .references(() => unidades.id, { onDelete: "restrict" }),
-  aquisicao: tipoAquisicao("aquisicao"),
-  origemFabricacao: origemFabricacao("origem_fabricacao"),
+  aquisicaoId: uuid("aquisicao_id").references(() => aquisicoes.id, { onDelete: "restrict" }),
+  origemFabricacaoId: uuid("origem_fabricacao_id").references(() => origensFabricacao.id, {
+    onDelete: "restrict",
+  }),
   linkCompra: text("link_compra"),
   prazoValor: quantidade("prazo_valor"),
   prazoUnidade: unidadePrazo("prazo_unidade").notNull().default("dias"),
@@ -248,7 +270,7 @@ export const itensParametros3d = pgTable("itens_parametros_3d", {
   itemId: uuid("item_id")
     .primaryKey()
     .references(() => itens.id, { onDelete: "cascade" }),
-  material: text("material"),
+  materialId: uuid("material_id").references(() => materiais3d.id, { onDelete: "restrict" }),
   tempBico: text("temp_bico"),
   tempMesa: text("temp_mesa"),
   preenchimento: text("preenchimento"),

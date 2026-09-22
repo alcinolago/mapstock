@@ -2,6 +2,7 @@ import { asc, eq } from "drizzle-orm";
 
 import { db } from "@/db";
 import {
+  aquisicoes,
   classificacoes,
   fornecedores,
   itemFornecedores,
@@ -9,16 +10,25 @@ import {
   itens,
   itensParametros3d,
   locais,
+  materiais3d,
+  origensFabricacao,
   regrasClassificacao,
   unidades,
 } from "@/db/schema";
 import type { DadosItem } from "./formulario-item";
-import { PARAMS_3D_PADRAO } from "./parametros-3d";
 
 /** Tudo que o formulario de item precisa para montar seus seletores. */
 export async function opcoesFormulario() {
-  const [listaClassificacoes, listaUnidades, listaFornecedores, listaLocais, regras] =
-    await Promise.all([
+  const [
+    listaClassificacoes,
+    listaUnidades,
+    listaFornecedores,
+    listaLocais,
+    listaAquisicoes,
+    listaOrigens,
+    listaMateriais,
+    regras,
+  ] = await Promise.all([
       db
         .select({ id: classificacoes.id, nome: classificacoes.nome, prefixoCodigo: classificacoes.prefixoCodigo })
         .from(classificacoes)
@@ -35,6 +45,27 @@ export async function opcoesFormulario() {
         .where(eq(fornecedores.ativo, true))
         .orderBy(asc(fornecedores.nome)),
       db.select().from(locais).orderBy(asc(locais.nome)),
+      /* As tres listas que eram enum. So as ativas: desativar em
+         Configuracoes tira dos selects sem mexer no que ja foi cadastrado. */
+      db
+        .select({ id: aquisicoes.id, nome: aquisicoes.nome })
+        .from(aquisicoes)
+        .where(eq(aquisicoes.ativo, true))
+        .orderBy(asc(aquisicoes.ordem)),
+      db
+        .select({
+          id: origensFabricacao.id,
+          nome: origensFabricacao.nome,
+          abreParametros3d: origensFabricacao.abreParametros3d,
+        })
+        .from(origensFabricacao)
+        .where(eq(origensFabricacao.ativo, true))
+        .orderBy(asc(origensFabricacao.ordem)),
+      db
+        .select({ id: materiais3d.id, nome: materiais3d.nome })
+        .from(materiais3d)
+        .where(eq(materiais3d.ativo, true))
+        .orderBy(asc(materiais3d.ordem)),
       db
         .select({
           classificacaoId: regrasClassificacao.classificacaoId,
@@ -49,6 +80,9 @@ export async function opcoesFormulario() {
     unidades: listaUnidades,
     fornecedores: listaFornecedores,
     locais: listaLocais,
+    aquisicoes: listaAquisicoes,
+    origens: listaOrigens,
+    materiais3d: listaMateriais,
     regras,
   };
 }
@@ -80,8 +114,8 @@ export async function carregarItem(id: string): Promise<DadosItem | null> {
     descricao: item.descricao,
     classificacaoId: item.classificacaoId,
     unidadeId: item.unidadeId,
-    aquisicao: item.aquisicao,
-    origemFabricacao: item.origemFabricacao,
+    aquisicaoId: item.aquisicaoId,
+    origemFabricacaoId: item.origemFabricacaoId,
     estoqueMinimo: item.estoqueMinimo,
     localId: item.localId,
     observacoes: item.observacoes,
@@ -101,7 +135,7 @@ export async function carregarItem(id: string): Promise<DadosItem | null> {
     })),
     parametros3d: params
       ? {
-          material: params.material ?? PARAMS_3D_PADRAO.material,
+          materialId: params.materialId ?? "",
           tempBico: params.tempBico ?? "",
           tempMesa: params.tempMesa ?? "",
           preenchimento: params.preenchimento ?? "",

@@ -115,6 +115,16 @@ listagem, é bug.
   na Estrutura é a soma da árvore, e nada é gravado em `itens.custoUnitario`
   do item produzido. Cotar um domo é cotar as peças do domo (`explodirMolde`,
   origem `estrutura` em `criarCotacao`).
+- **O manual abre os kits que usa, e não deixa editá-los ali.** Quando uma
+  peça do equipamento tem estrutura própria, a árvore dela aparece embaixo
+  marcada com `doKit` — sem adicionar, remover ou reordenar. O equipamento
+  aponta para o domo; quem define o domo é a estrutura do domo. Editar pelos
+  dois lados é como um deles fica errado. Vale em qualquer lugar onde um kit
+  entre como peça, inclusive kit dentro de kit.
+- **A árvore aberta mostra a receita, não o total.** Dois domos no equipamento
+  continuam mostrando 4 câmeras, que é o que entra em *um* domo — o bloco é
+  cópia fiel do que está na seção Itens, que é para onde a pessoa vai quando
+  quiser mudar. Multiplicar faria os dois discordarem na cara dela.
 - **Estrutura é planejamento; montagem é execução.** Criar estrutura,
   acrescentar divisão, mudar quantidade — nada disso confere saldo nem pode
   ser barrado por falta. Quem confere estoque é `montarMontagem`, e só ele.

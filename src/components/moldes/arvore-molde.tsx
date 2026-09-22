@@ -27,6 +27,10 @@ export type NoMolde = {
   disponivel: number;
   /** Custo somado de tudo que está abaixo deste nó, já multiplicado. */
   custoTotal: number;
+  /** Este item tem estrutura própria: os filhos abaixo vieram dela. */
+  ehKit: boolean;
+  /** Veio de dentro de um kit — mostra, não edita. */
+  doKit: boolean;
   filhos: NoMolde[];
 };
 
@@ -115,6 +119,11 @@ function No({
   const ehDivisao = !no.itemId;
   const temFilhos = no.filhos.length > 0;
 
+  /* O que veio de dentro de um kit não se edita aqui. O equipamento aponta
+     para o domo; quem define o domo é a estrutura do domo, lá embaixo na
+     seção Itens — e editar por dois lugares é como um deles fica errado. */
+  const editavel = podeEditar && !no.doKit;
+
   function mover(direcao: "cima" | "baixo") {
     iniciar(async () => {
       const r = await moverNo(no.id, direcao);
@@ -172,6 +181,12 @@ function No({
             </span>
           )}
 
+          {no.ehKit && (
+            <Selo tom="marca" title="Montado a partir da estrutura deste item, na seção Itens">
+              kit
+            </Selo>
+          )}
+
           {no.localMontagem && (
             <span className="hidden shrink-0 text-xs text-texto-fraco xl:inline">
               {no.localMontagem}
@@ -196,8 +211,13 @@ function No({
           {no.custoTotal > 0 ? moeda(no.custoTotal) : "—"}
         </span>
 
+        {/* A coluna fica reservada mesmo sem botão: linha de kit não edita,
+            e sem a largura as quantidades desalinhariam entre um nível e o
+            outro justamente onde a leitura importa. */}
         {podeEditar && (
           <div className="flex w-28 shrink-0 items-center justify-end">
+            {editavel && (
+              <>
             {ehDivisao ? (
               <AdicionarNo
                 moldeId={moldeId}
@@ -259,6 +279,8 @@ function No({
                 seguem com a cópia delas.
               </p>
             </BotaoConfirmar>
+              </>
+            )}
           </div>
         )}
       </div>

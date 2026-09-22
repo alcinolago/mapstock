@@ -17,20 +17,50 @@ import { exigirSessao } from "@/lib/auth";
 export const metadata = { title: "Estrutura" };
 
 /**
- * Monta a arvore a partir da lista plana, e ja soma o custo subindo: o custo
- * de uma divisao e o que esta abaixo dela, multiplicado pela quantidade que
- * ela aparece. E o "quanto vai custar montar" pedido, nivel a nivel.
+ * Monta a arvore de um molde, abrindo os kits que aparecem dentro dela.
  *
- * O custo e sempre das pecas. O kit nao tem preco proprio — o domo nao se
- * compra, entao nao existe preco de domo; existe a soma do que entra nele.
+ * O equipamento e um manual: ele aponta para o item "Domo", e quem diz o que
+ * tem dentro de um domo e a estrutura do domo, na secao Itens. Sem abrir essa
+ * arvore, o manual mostra uma linha unica e nao serve para quem esta na
+ * bancada querendo ver o equipamento inteiro ate o ultimo parafuso.
+ *
+ * O que vem de dentro do kit vai marcado com `doKit`, e a tela nao oferece
+ * botao nenhum nessas linhas. A alteracao e sempre na estrutura do proprio
+ * item — editar por dois lugares e como um deles fica errado.
+ *
+ * As quantidades sao as da receita do kit, sem multiplicar pela quantidade do
+ * pai: o bloco e copia fiel do que esta na secao Itens, que e para onde a
+ * pessoa vai quando quiser mudar. Multiplicar faria os dois discordarem.
+ *
+ * O custo sobe junto: um kit nunca foi comprado, entao o preco dele e zero e
+ * o equipamento somaria o domo como nada. Com a arvore aberta, o no do kit
+ * passa a valer a soma do que entra nele.
  */
-function emArvore(plana: NoDoMolde[], paiId: string | null): NoMolde[] {
-  return plana
+function emArvore(
+  moldeId: string,
+  paiId: string | null,
+  planas: Map<string, NoDoMolde[]>,
+  kits: Map<string, string>,
+  doKit: boolean,
+  /* Kit dentro de kit e normal; kit dentro de si mesmo nao deveria existir,
+     mas dado antigo nao pode travar a tela num laco infinito. */
+  visitados: Set<string>,
+): NoMolde[] {
+  return (planas.get(moldeId) ?? [])
     .filter((n) => n.paiId === paiId)
     .map((n) => {
-      const filhos = emArvore(plana, n.id);
-      const proprio = n.itemId ? n.custo * n.quantidade : 0;
+      const moldeDoKit = n.itemId ? kits.get(n.itemId) : undefined;
+      const abreKit = Boolean(moldeDoKit && !visitados.has(moldeDoKit));
+
+      const filhos = abreKit
+        ? emArvore(moldeDoKit!, null, planas, kits, true, new Set(visitados).add(moldeDoKit!))
+        : emArvore(moldeId, n.id, planas, kits, doKit, visitados);
+
+      /* Peca folha vale o proprio custo; divisao e kit valem o que esta
+         dentro deles. */
+      const proprio = n.itemId && filhos.length === 0 ? n.custo * n.quantidade : 0;
       const dosFilhos = filhos.reduce((t, f) => t + f.custoTotal, 0);
+
       return {
         id: n.id,
         nome: n.nome,
@@ -42,6 +72,8 @@ function emArvore(plana: NoDoMolde[], paiId: string | null): NoMolde[] {
         localMontagem: n.localMontagem,
         disponivel: n.disponivel,
         custoTotal: proprio + dosFilhos * n.quantidade,
+        ehKit: Boolean(moldeDoKit),
+        doKit,
         filhos,
       };
     });
@@ -57,9 +89,22 @@ export default async function PaginaEstrutura() {
     listarItensComSaldo(),
   ]);
 
+  /* Todas as arvores de uma vez: a expansao de um kit precisa da arvore de
+     outro molde, entao buscar sob demanda dentro da recursao viraria uma ida
+     ao banco por no. Sao poucos moldes. */
+  const planas = new Map<string, NoDoMolde[]>(
+    await Promise.all(lista.map(async (m) => [m.id, await nosDoMolde(m.id)] as const)),
+  );
+
+  /* item -> estrutura que o produz. E este mapa que faz o manual reconhecer
+     que aquela linha nao e uma peca qualquer, e sim um kit com receita. */
+  const kits = new Map(
+    lista.filter((m) => m.itemId).map((m) => [m.itemId!, m.id] as const),
+  );
+
   const comArvore: MoldeNaTela[] = await Promise.all(
     lista.map(async (m) => {
-      const nos = emArvore(await nosDoMolde(m.id), null);
+      const nos = emArvore(m.id, null, planas, kits, false, new Set([m.id]));
       return {
         id: m.id,
         nome: m.nome,

@@ -26,7 +26,7 @@ export default async function PaginaDivisoes() {
   const dados: Divisao[] = lista;
 
   return (
-    <div className="mx-auto max-w-4xl">
+    <>
       <CabecalhoPagina
         titulo="Divisões"
         descricao="As partes em que um equipamento se divide — Domo, Estrutura, Fiação, Fixação."
@@ -44,6 +44,6 @@ export default async function PaginaDivisoes() {
         )}
         <PainelDivisoes divisoes={dados} podeEditar={podeEditar} />
       </Cartao>
-    </div>
+    </>
   );
 }

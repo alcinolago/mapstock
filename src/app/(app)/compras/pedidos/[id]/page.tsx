@@ -30,7 +30,7 @@ export default async function PaginaPedido({
   const fotos = await fotosDosItens(linhas.map((l) => l.itemId));
 
   return (
-    <div className="mx-auto max-w-5xl">
+    <>
       <Link
         href="/compras/pedidos"
         className="mb-3 inline-flex items-center gap-1.5 text-xs font-semibold text-texto-fraco transition-colors hover:text-marca"
@@ -84,6 +84,6 @@ export default async function PaginaPedido({
         podeEditar={sessao.papel !== "leitura"}
         status={pedido.status}
       />
-    </div>
+    </>
   );
 }

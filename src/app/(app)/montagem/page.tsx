@@ -100,7 +100,7 @@ export default async function PaginaMontagem() {
     .map((m) => ({ id: m.id, nome: m.nome, item: `${m.codigo} — ${m.itemDescricao}` }));
 
   return (
-    <div className="mx-auto max-w-[100rem]">
+    <>
       <CabecalhoPagina
         titulo="Montagem"
         descricao={
@@ -112,6 +112,6 @@ export default async function PaginaMontagem() {
       />
 
       <PainelMontagem montagens={comArvore} podeEditar={podeEditar} />
-    </div>
+    </>
   );
 }

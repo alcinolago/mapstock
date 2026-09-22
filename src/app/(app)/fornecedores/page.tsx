@@ -100,7 +100,7 @@ export default async function PaginaFornecedores({
     .offset((pagina - 1) * pedida.porPagina);
 
   return (
-    <div className="mx-auto max-w-7xl">
+    <>
       <CabecalhoPagina
         titulo="Fornecedores"
         descricao="Cadastro único — cada fornecedor pode atender vários itens."
@@ -225,6 +225,6 @@ export default async function PaginaFornecedores({
           oQue="fornecedores"
         />
       </Cartao>
-    </div>
+    </>
   );
 }

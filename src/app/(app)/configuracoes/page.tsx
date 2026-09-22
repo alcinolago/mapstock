@@ -71,7 +71,7 @@ export default async function PaginaConfiguracoes() {
   }));
 
   return (
-    <div className="mx-auto max-w-5xl">
+    <>
       <CabecalhoPagina titulo="Configurações" />
 
       <Cartao>
@@ -109,6 +109,6 @@ export default async function PaginaConfiguracoes() {
           />
         </CorpoCartao>
       </Cartao>
-    </div>
+    </>
   );
 }

@@ -118,7 +118,7 @@ export default async function PaginaPedidos({
   const temFiltro = Boolean(mes || busca || item || fornecedor || status);
 
   return (
-    <div className="mx-auto max-w-7xl">
+    <>
       <CabecalhoPagina
         titulo="Compras"
         descricao="Pedidos gerados a partir das cotações. Receber dá entrada no estoque."
@@ -207,6 +207,6 @@ export default async function PaginaPedidos({
           oQue="pedidos"
         />
       </Cartao>
-    </div>
+    </>
   );
 }

@@ -78,7 +78,7 @@ export default async function PaginaItens({
   const podeEditar = sessao.papel !== "leitura";
 
   return (
-    <div className="mx-auto max-w-[100rem]">
+    <>
       <CabecalhoPagina
         titulo="Itens"
         descricao={`${total} ${total === 1 ? "item" : "itens"} em estoque — saldo, custo e situação de cada um`}
@@ -179,6 +179,6 @@ export default async function PaginaItens({
           oQue="itens"
         />
       </Cartao>
-    </div>
+    </>
   );
 }

@@ -20,7 +20,7 @@ export default async function PaginaConta() {
   const sessao = await exigirSessao();
 
   return (
-    <div className="mx-auto max-w-2xl">
+    <div className="mx-auto max-w-5xl">
       <CabecalhoPagina titulo="Minha conta" descricao="Seus dados de acesso ao MapStock." />
 
       <div className="space-y-5">

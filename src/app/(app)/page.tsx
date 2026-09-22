@@ -36,7 +36,7 @@ export default async function Painel() {
   const primeiroNome = sessao.nome.split(" ")[0];
 
   return (
-    <div className="mx-auto max-w-7xl">
+    <>
       <CabecalhoPagina
         titulo={`Olá, ${primeiroNome}`}
         descricao="Situação do estoque e das compras agora."
@@ -194,7 +194,7 @@ export default async function Painel() {
           </RolagemTabela>
         </Cartao>
       </div>
-    </div>
+    </>
   );
 }
 

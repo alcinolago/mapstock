@@ -188,6 +188,19 @@ Sempre `<CampoSenha>` de `components/ui/campo-senha.tsx`, nunca um
 `<Entrada type="password">` solto — é ele que traz o olhinho de mostrar e
 ocultar, igual nas três telas que pedem senha.
 
+## Largura das telas
+
+**A página não escolhe a própria largura.** Quem define é o `<main>` da
+`Casca` (`components/layout/casca.tsx`): `max-w-[100rem]`, e toda tela ocupa
+isso. Antes cada página trazia o seu `max-w-*` — 7xl aqui, 4xl ali, 3xl
+acolá — e o sistema parecia feito por três pessoas: a lista de itens ia de
+ponta a ponta e a de fornecedores ficava numa ilha no meio do monitor.
+
+A única exceção é **formulário**, que se estreita por dentro com
+`mx-auto max-w-5xl`: campo de texto de 1600px não se lê. São as telas de
+novo/editar item, novo/editar fornecedor, nova cotação e a conta. Lista,
+tabela, árvore e painel nunca estreitam.
+
 ## Cores
 
 Nunca use cor literal nem classe `slate-*`/`sky-*` do Tailwind. Use os tokens

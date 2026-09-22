@@ -59,7 +59,14 @@ export function Casca({
           <MenuUsuario nome={sessao.nome} email={sessao.email} papel={sessao.papel} />
         </header>
 
-        <main className="flex-1 px-4 py-6 sm:px-6 sm:py-8">{children}</main>
+        {/* A largura das telas mora aqui, e não em cada página: antes cada
+            uma escolhia a sua e o sistema parecia feito por três pessoas
+            diferentes — a lista de itens ocupava a tela inteira e a de
+            fornecedores ficava numa ilha no meio. O padrão é ocupar tudo;
+            quem precisa de menos é o formulário, que se estreita por dentro. */}
+        <main className="mx-auto w-full max-w-[100rem] flex-1 px-4 py-6 sm:px-6 sm:py-8">
+          {children}
+        </main>
       </div>
     </div>
   );

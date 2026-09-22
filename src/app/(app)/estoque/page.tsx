@@ -109,7 +109,7 @@ export default async function PaginaEstoque({
   }));
 
   return (
-    <div className="mx-auto max-w-[100rem]">
+    <>
       <CabecalhoPagina
         titulo="Movimentações"
         descricao="O histórico do estoque: entradas, saídas, reservas e ajustes. O saldo de cada item é sempre a soma disto."
@@ -136,6 +136,6 @@ export default async function PaginaEstoque({
           total={total}
         />
       </div>
-    </div>
+    </>
   );
 }

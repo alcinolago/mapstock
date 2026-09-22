@@ -130,7 +130,7 @@ export default async function PaginaCotacao({
     cotacao.status !== "cancelada";
 
   return (
-    <div className="mx-auto max-w-[100rem]">
+    <>
       <Link
         href="/compras/cotacoes"
         className="mb-3 inline-flex items-center gap-1.5 text-xs font-semibold text-texto-fraco transition-colors hover:text-marca"
@@ -191,6 +191,6 @@ export default async function PaginaCotacao({
         }))}
         editavel={editavel}
       />
-    </div>
+    </>
   );
 }

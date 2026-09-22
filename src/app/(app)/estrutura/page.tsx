@@ -92,7 +92,7 @@ export default async function PaginaEstrutura() {
   const comEstrutura = new Set(lista.map((m) => m.itemId).filter(Boolean) as string[]);
 
   return (
-    <div className="mx-auto max-w-[100rem]">
+    <>
       <CabecalhoPagina
         titulo="Estrutura"
         descricao="Em cima, o manual do equipamento completo. Embaixo, os itens que são montados a partir de outros — esses vão para a Montagem."
@@ -105,6 +105,6 @@ export default async function PaginaEstrutura() {
         itensSemEstrutura={selecionaveis.filter((i) => !comEstrutura.has(i.id))}
         podeEditar={podeEditar}
       />
-    </div>
+    </>
   );
 }

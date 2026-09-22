@@ -114,7 +114,7 @@ export default async function PaginaCotacoes({
   const temFiltro = Boolean(mes || busca || item || status);
 
   return (
-    <div className="mx-auto max-w-7xl">
+    <>
       <CabecalhoPagina
         titulo="Compras"
         descricao="Cote o mesmo item com vários fornecedores, escolha o melhor e gere o pedido."
@@ -202,6 +202,6 @@ export default async function PaginaCotacoes({
           oQue="cotações"
         />
       </Cartao>
-    </div>
+    </>
   );
 }

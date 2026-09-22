@@ -72,10 +72,7 @@ export default async function PaginaConfiguracoes() {
 
   return (
     <div className="mx-auto max-w-5xl">
-      <CabecalhoPagina
-        titulo="Configurações"
-        descricao="Toda lista que o cadastro de item oferece num select mora aqui, com criar, editar e remover. Quem já está em uso não se remove — desativa."
-      />
+      <CabecalhoPagina titulo="Configurações" />
 
       <Cartao>
         <CorpoCartao>

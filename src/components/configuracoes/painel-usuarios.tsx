@@ -75,9 +75,6 @@ export function PainelUsuarios({ usuarios }: { usuarios: Usuario[] }) {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <p className="text-sm text-texto-fraco">
-          Quem pode entrar no sistema e o que cada um pode fazer.
-        </p>
         {editando === null && (
           <Botao tamanho="sm" onClick={abrirNovo}>
             <Plus className="size-4" />

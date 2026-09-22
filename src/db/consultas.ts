@@ -157,14 +157,18 @@ export type FiltrosItens = {
   busca?: string;
   classificacaoId?: string;
   situacao?: SituacaoItem;
-  incluirInativos?: boolean;
+  /* Vazio mostra só o que está ativo, que é o caso de quase toda visita. Um
+     item desativado continua existindo e ainda segura a classificação dele
+     contra exclusão, então precisa haver como enxergá-lo. */
+  cadastro?: "todos" | "inativos";
   localId?: string;
 };
 
 function condicoesDeItens(filtros?: FiltrosItens): SQL[] {
   const condicoes: SQL[] = [];
 
-  if (!filtros?.incluirInativos) condicoes.push(eq(itens.ativo, true));
+  if (filtros?.cadastro === "inativos") condicoes.push(eq(itens.ativo, false));
+  else if (filtros?.cadastro !== "todos") condicoes.push(eq(itens.ativo, true));
 
   if (filtros?.classificacaoId) {
     condicoes.push(eq(itens.classificacaoId, filtros.classificacaoId));

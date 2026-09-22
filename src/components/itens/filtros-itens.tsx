@@ -9,7 +9,7 @@ import {
   useFiltrosUrl,
 } from "@/components/ui/filtros";
 
-const CHAVES = ["busca", "classificacao", "situacao", "local"];
+const CHAVES = ["busca", "classificacao", "situacao", "cadastro", "local"];
 
 export function FiltrosItens({
   classificacoes,
@@ -59,6 +59,20 @@ export function FiltrosItens({
             {l.nome}
           </option>
         ))}
+      </Selecao>
+
+      {/* Sem isto não havia como ver um item desativado: ele sumia da lista
+          e ainda assim continuava segurando a classificação contra exclusão,
+          o que fazia a tela parecer estar mentindo. */}
+      <Selecao
+        aria-label="Situação do cadastro"
+        value={params.get("cadastro") ?? ""}
+        onChange={(e) => aplicar({ cadastro: e.target.value })}
+        className="w-auto min-w-36"
+      >
+        <option value="">Só ativos</option>
+        <option value="todos">Ativos e inativos</option>
+        <option value="inativos">Só inativos</option>
       </Selecao>
 
       <Selecao

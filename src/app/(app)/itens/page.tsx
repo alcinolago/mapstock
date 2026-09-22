@@ -52,7 +52,7 @@ export default async function PaginaItens({
     busca: p.busca,
     classificacaoId: p.classificacao,
     situacao,
-    incluirInativos: p.inativos === "1",
+    cadastro: p.cadastro === "todos" || p.cadastro === "inativos" ? p.cadastro : undefined,
     localId: p.local?.trim() || undefined,
   };
 

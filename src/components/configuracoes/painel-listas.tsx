@@ -2,7 +2,7 @@
 
 import { Check, Pencil, Plus, Trash2, X } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState, useTransition, type ReactNode } from "react";
+import { useState, useTransition } from "react";
 
 import { Botao } from "@/components/ui/botao";
 import { Entrada } from "@/components/ui/campo";
@@ -81,12 +81,6 @@ export function PainelClassificacoes({ lista }: { lista: Classificacao[] }) {
 
   return (
     <div className="space-y-3">
-      <p className="text-sm text-texto-fraco">
-        O prefixo entra no código sugerido (<span className="codigo">FIX</span> vira{" "}
-        <span className="codigo">FIX-PAR-M6X20</span>). As palavras-chave são o que faz a
-        classificação se preencher sozinha a partir da descrição.
-      </p>
-
       <Erro texto={erro} />
 
       <div className="space-y-2">
@@ -268,8 +262,6 @@ export function PainelUnidades({
 
   return (
     <div className="space-y-3">
-      <p className="text-sm text-texto-fraco">Como cada item é contado: unidade, quilo, metro, rolo.</p>
-
       <Erro texto={erro} />
 
       <ul className="divide-y divide-borda overflow-hidden rounded-xl border border-borda">
@@ -397,7 +389,6 @@ export type LinhaLista = { id: string; nome: string; ativo: boolean; marca?: boo
  */
 export function PainelLista({
   lista,
-  ajuda,
   placeholder,
   rotuloNovo,
   vazio,
@@ -407,7 +398,6 @@ export function PainelLista({
   aoRemover,
 }: {
   lista: LinhaLista[];
-  ajuda: ReactNode;
   placeholder: string;
   rotuloNovo: string;
   vazio: string;
@@ -467,8 +457,6 @@ export function PainelLista({
 
   return (
     <div className="space-y-3">
-      <p className="text-sm text-texto-fraco">{ajuda}</p>
-
       <Erro texto={erro} />
 
       <ul className="divide-y divide-borda overflow-hidden rounded-xl border border-borda">
@@ -552,7 +540,6 @@ export function PainelLocais({ lista }: { lista: LinhaLista[] }) {
   return (
     <PainelLista
       lista={lista}
-      ajuda="Prateleira, gaveta, armário, sala. O cadastro de item escolhe daqui — não dá para digitar um lugar novo por lá, e é isso que evita o mesmo lugar com dois nomes."
       placeholder="Ex.: Prateleira A1 *"
       rotuloNovo="Novo local"
       vazio="Nenhum local cadastrado ainda."
@@ -568,7 +555,6 @@ export function PainelAquisicoes({ lista }: { lista: LinhaLista[] }) {
   return (
     <PainelLista
       lista={lista}
-      ajuda="Como a peça entra na empresa: comprada aqui, importada, fabricada internamente. Era uma lista fixa no código — agora dá para acrescentar a sua."
       placeholder="Ex.: Comodato *"
       rotuloNovo="Novo tipo"
       vazio="Nenhum tipo de aquisição cadastrado ainda."
@@ -583,14 +569,6 @@ export function PainelOrigens({ lista }: { lista: LinhaLista[] }) {
   return (
     <PainelLista
       lista={lista}
-      ajuda={
-        <>
-          Como a peça é feita: impressa aqui, usinada por terceiro, comprada pronta. Marcar{" "}
-          <strong className="font-semibold text-texto-suave">abre parâmetros 3D</strong> faz o
-          cadastro do item mostrar o bloco de material, temperatura e camada quando essa origem
-          for escolhida.
-        </>
-      }
       placeholder="Ex.: Terceiro — Injeção *"
       rotuloNovo="Nova origem"
       vazio="Nenhuma origem cadastrada ainda."
@@ -616,7 +594,6 @@ export function PainelMateriais3d({ lista }: { lista: LinhaLista[] }) {
   return (
     <PainelLista
       lista={lista}
-      ajuda="O que sai no bloco de parâmetros de impressão 3D do item."
       placeholder="Ex.: PETG-CF *"
       rotuloNovo="Novo material"
       vazio="Nenhum material cadastrado ainda."

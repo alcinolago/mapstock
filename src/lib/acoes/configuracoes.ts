@@ -2,6 +2,7 @@
 
 import bcrypt from "bcryptjs";
 import { eq, sql } from "drizzle-orm";
+import type { PgColumn } from "drizzle-orm/pg-core";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
@@ -22,6 +23,45 @@ import { exigirAdmin, sessaoAtual } from "@/lib/auth";
 import { registrar } from "@/lib/auditoria";
 
 type Resultado = { erro?: string; ok?: boolean };
+
+/**
+ * Quantos itens seguram uma opcao desta tela, contando os desativados.
+ *
+ * O recado precisa dizer quantos sao e quantos estao desativados. A tela de
+ * Itens mostra so os ativos por padrao, entao "existem itens nesta
+ * classificacao" mandava a pessoa procurar, nao achar nada e concluir que o
+ * sistema estava inventando — foi o que aconteceu com a classificacao AUT,
+ * cujos tres itens estavam todos desativados.
+ */
+async function itensQueUsam(coluna: PgColumn, id: string) {
+  const [l] = await db
+    .select({
+      total: sql<number>`count(*)::int`,
+      inativos: sql<number>`(count(*) filter (where ${itens.ativo} = false))::int`,
+    })
+    .from(itens)
+    .where(eq(coluna, id));
+  return l;
+}
+
+/** "3 itens usam esta classificação — todos desativados. Veja em Itens..." */
+function recadoEmUso(
+  uso: { total: number; inativos: number },
+  oQue: string,
+  desative: string,
+): string {
+  const plural = uso.total > 1;
+  const quantos = `${uso.total} ${plural ? "itens usam" : "item usa"} ${oQue}`;
+
+  const escondidos =
+    uso.inativos === 0
+      ? ""
+      : uso.inativos === uso.total
+        ? ` — ${plural ? "todos desativados" : "desativado"}, então não aparece${plural ? "m" : ""} na lista de Itens. Para ver, escolha "Ativos e inativos" lá.`
+        : ` — ${uso.inativos} desativado${uso.inativos > 1 ? "s" : ""}, que só aparece${uso.inativos > 1 ? "m" : ""} em Itens com o filtro "Ativos e inativos".`;
+
+  return `${quantos}${escondidos || "."} ${desative}`;
+}
 
 /* ------------------------------------------------------- Classificações --- */
 
@@ -64,15 +104,9 @@ export async function salvarClassificacao(dados: {
 
 export async function removerClassificacao(id: string): Promise<Resultado> {
   await exigirAdmin();
-  const emUso = await db
-    .select({ id: itens.id })
-    .from(itens)
-    .where(eq(itens.classificacaoId, id))
-    .limit(1);
-  if (emUso.length > 0) {
-    return {
-      erro: "Existem itens nesta classificação. Desative-a em vez de remover.",
-    };
+  const uso = await itensQueUsam(itens.classificacaoId, id);
+  if (uso.total > 0) {
+    return { erro: recadoEmUso(uso, "esta classificação", "Desative-a em vez de remover.") };
   }
   await db.delete(classificacoes).where(eq(classificacoes.id, id));
   revalidatePath("/configuracoes");
@@ -138,9 +172,9 @@ export async function salvarUnidade(dados: {
 
 export async function removerUnidade(id: string): Promise<Resultado> {
   await exigirAdmin();
-  const emUso = await db.select({ id: itens.id }).from(itens).where(eq(itens.unidadeId, id)).limit(1);
-  if (emUso.length > 0) {
-    return { erro: "Existem itens com esta unidade. Desative-a em vez de remover." };
+  const uso = await itensQueUsam(itens.unidadeId, id);
+  if (uso.total > 0) {
+    return { erro: recadoEmUso(uso, "esta unidade", "Desative-a em vez de remover.") };
   }
   await db.delete(unidades).where(eq(unidades.id, id));
   revalidatePath("/configuracoes");
@@ -179,9 +213,9 @@ export async function salvarLocal(dados: {
 
 export async function removerLocal(id: string): Promise<Resultado> {
   await exigirAdmin();
-  const emUso = await db.select({ id: itens.id }).from(itens).where(eq(itens.localId, id)).limit(1);
-  if (emUso.length > 0) {
-    return { erro: "Existem itens guardados neste local. Desative-o em vez de remover." };
+  const uso = await itensQueUsam(itens.localId, id);
+  if (uso.total > 0) {
+    return { erro: recadoEmUso(uso, "este local", "Desative-o em vez de remover.") };
   }
   await db.delete(locais).where(eq(locais.id, id));
   revalidatePath("/configuracoes");
@@ -229,13 +263,9 @@ export async function salvarAquisicao(dados: {
 
 export async function removerAquisicao(id: string): Promise<Resultado> {
   await exigirAdmin();
-  const emUso = await db
-    .select({ id: itens.id })
-    .from(itens)
-    .where(eq(itens.aquisicaoId, id))
-    .limit(1);
-  if (emUso.length > 0) {
-    return { erro: "Existem itens com esta aquisição. Desative-a em vez de remover." };
+  const uso = await itensQueUsam(itens.aquisicaoId, id);
+  if (uso.total > 0) {
+    return { erro: recadoEmUso(uso, "esta aquisição", "Desative-a em vez de remover.") };
   }
   await db.delete(aquisicoes).where(eq(aquisicoes.id, id));
   revalidatePath("/configuracoes");
@@ -280,13 +310,9 @@ export async function salvarOrigemFabricacao(dados: {
 
 export async function removerOrigemFabricacao(id: string): Promise<Resultado> {
   await exigirAdmin();
-  const emUso = await db
-    .select({ id: itens.id })
-    .from(itens)
-    .where(eq(itens.origemFabricacaoId, id))
-    .limit(1);
-  if (emUso.length > 0) {
-    return { erro: "Existem itens com esta origem. Desative-a em vez de remover." };
+  const uso = await itensQueUsam(itens.origemFabricacaoId, id);
+  if (uso.total > 0) {
+    return { erro: recadoEmUso(uso, "esta origem", "Desative-a em vez de remover.") };
   }
   await db.delete(origensFabricacao).where(eq(origensFabricacao.id, id));
   revalidatePath("/configuracoes");

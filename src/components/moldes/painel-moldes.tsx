@@ -22,7 +22,7 @@ export type MoldeNaTela = {
   nome: string;
   descricao: string | null;
   ativo: boolean;
-  montagens: number;
+  emMontagem: number;
   custoTotal: number;
   /** Conjunto: o item do estoque que esta estrutura produz. Manual: nulo. */
   itemId: string | null;
@@ -193,9 +193,9 @@ function CartaoMolde({
 
             {!molde.ativo && <Selo tom="alerta">inativo</Selo>}
 
-            {molde.montagens > 0 && (
-              <Selo tom="marca">
-                {molde.montagens} {molde.montagens === 1 ? "montagem" : "montagens"}
+            {molde.emMontagem > 0 && (
+              <Selo tom="alerta" title="Unidades abertas na tela de Montagem">
+                {molde.emMontagem} em montagem
               </Selo>
             )}
 

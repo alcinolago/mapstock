@@ -148,6 +148,14 @@ listagem, é bug.
 - **Montar é o único caminho entre esta tela e o estoque, e ele anda nos dois
   sentidos**: `saida_producao` de cada peça da árvore (quantidade multiplicada
   nível a nível) e `entrada_fabricacao` de uma unidade do item produzido.
+- **Montada sai da tela de Montagem e vai para o histórico**
+  (`/montagem/historico`). Montada não tem ação nenhuma, então misturada com
+  as abertas ela só empurrava para baixo o que ainda tem trabalho — e a tela
+  crescia uma linha por unidade feita desde sempre. `/montagem` é lista de
+  trabalho pendente; o histórico é consulta, com recorte por período.
+- **A árvore do cartão de montagem vem recolhida.** Com meia dúzia de
+  unidades abertas, seis árvores inteiras empilhadas viram uma parede e some
+  a informação que importa: qual delas dá para montar agora.
 - **Montagem montada não volta atrás.** Não existe desmontar: enquanto está
   aberta ela se exclui; depois de montada virou movimento, e movimento não se
   apaga.

@@ -587,7 +587,11 @@ export async function listarMoldes() {
       itemDescricao: itens.descricao,
       unidade: unidades.sigla,
       nos: sql<number>`(select count(*)::int from molde_nos n where n.molde_id = ${ref(moldes.id)})`,
-      montagens: sql<number>`(select count(*)::int from montagens m where m.molde_id = ${ref(moldes.id)})`,
+      /* So as abertas: o total de todas as vezes que este conjunto ja foi
+         montado e historia, e historia mora no historico. Aqui a pergunta e
+         "tem gente montando isso agora?". */
+      emMontagem: sql<number>`(select count(*)::int from montagens m
+        where m.molde_id = ${ref(moldes.id)} and m.status = 'em_montagem')`,
       /* Saldo do proprio item produzido: "tenho 6 domos prontos" e a primeira
          pergunta de quem abre esta tela. */
       emEstoque: sql<number>`coalesce(${saldos.fisico}, 0) - coalesce(${saldos.reservado}, 0)`,
@@ -652,14 +656,30 @@ export async function nosDaMontagem(montagemId: string): Promise<NoDaMontagem[]>
 }
 
 /**
- * As montagens abertas e as ja fechadas, com o item que cada uma produz.
+ * As montagens, filtradas por estado.
+ *
+ * Sao duas telas, e a separacao e o que impede a de trabalho de crescer sem
+ * fim: `/montagem` lista so o que esta aberto — o que ainda tem o que fazer —
+ * e o historico guarda o que ja foi montado, que nao tem mais acao nenhuma
+ * porque virou movimento no estoque.
  *
  * Nao existe progresso parcial para mostrar: a montagem fecha inteira de uma
  * vez. O que a tela precisa e o que sai pronto e o que a arvore consome, e o
  * segundo vem de `nosDaMontagem`.
  */
-export async function listarMontagens() {
-  return db
+export async function listarMontagens(filtros?: {
+  status?: "em_montagem" | "montada";
+  de?: string;
+  ate?: string;
+  porPagina?: number;
+  pular?: number;
+}) {
+  const condicoes = [
+    filtros?.status ? eq(montagens.status, filtros.status) : undefined,
+    recorteEntre(montagens.montadaEm, filtros?.de, filtros?.ate),
+  ].filter(Boolean) as SQL[];
+
+  const consulta = db
     .select({
       id: montagens.id,
       numero: montagens.numero,
@@ -680,10 +700,48 @@ export async function listarMontagens() {
     .leftJoin(usuarios, eq(usuarios.id, montagens.montadaPor))
     .leftJoin(itens, eq(itens.id, montagens.itemId))
     .leftJoin(unidades, eq(unidades.id, itens.unidadeId))
-    .orderBy(desc(montagens.iniciadaEm));
+    .where(condicoes.length ? and(...condicoes) : undefined)
+    /* Aberta ordena pela abertura (a mais antiga cobra atencao primeiro);
+       montada, pela conclusao, que e o que o historico pergunta. */
+    .orderBy(
+      filtros?.status === "montada" ? desc(montagens.montadaEm) : desc(montagens.iniciadaEm),
+    );
+
+  return filtros?.porPagina
+    ? consulta.limit(filtros.porPagina).offset(filtros.pular ?? 0)
+    : consulta;
+}
+
+/** Quantas montagens o filtro alcanca, para o rodape de paginacao. */
+export async function contarMontagens(filtros?: {
+  status?: "em_montagem" | "montada";
+  de?: string;
+  ate?: string;
+}): Promise<number> {
+  const condicoes = [
+    filtros?.status ? eq(montagens.status, filtros.status) : undefined,
+    recorteEntre(montagens.montadaEm, filtros?.de, filtros?.ate),
+  ].filter(Boolean) as SQL[];
+
+  const [l] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(montagens)
+    .where(condicoes.length ? and(...condicoes) : undefined);
+  return l?.n ?? 0;
 }
 
 export type Montagem = Awaited<ReturnType<typeof listarMontagens>>[number];
+
+/** A primeira montagem concluída, para o seletor de período do histórico. */
+export async function primeiraMontagem(): Promise<Date | null> {
+  const [l] = await db
+    .select({ quando: montagens.montadaEm })
+    .from(montagens)
+    .where(sql`${montagens.montadaEm} is not null`)
+    .orderBy(asc(montagens.montadaEm))
+    .limit(1);
+  return l?.quando ?? null;
+}
 
 /**
  * Recorte de um mes sobre uma coluna de instante.

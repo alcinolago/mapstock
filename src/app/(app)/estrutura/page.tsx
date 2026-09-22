@@ -110,7 +110,7 @@ export default async function PaginaEstrutura() {
         nome: m.nome,
         descricao: m.descricao,
         ativo: m.ativo,
-        montagens: m.montagens,
+        emMontagem: m.emMontagem,
         itemId: m.itemId,
         codigo: m.codigo,
         itemDescricao: m.itemDescricao,

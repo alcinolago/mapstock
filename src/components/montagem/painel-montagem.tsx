@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertCircle, LoaderCircle, Plus, Trash2 } from "lucide-react";
+import { AlertCircle, ChevronRight, LoaderCircle, Plus, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
@@ -14,7 +14,7 @@ import { ArvoreMontagem, type NoMontagem } from "./arvore-montagem";
 import { MontarMontagem } from "./montar";
 import { abrirMontagem, excluirMontagem } from "@/lib/acoes/montagem";
 import { STATUS_MONTAGEM } from "@/lib/labels";
-import { data } from "@/lib/utils";
+import { cn, data } from "@/lib/utils";
 import type { TomSelo } from "@/components/ui/selo";
 
 const TOM: Record<string, TomSelo> = {
@@ -43,29 +43,32 @@ export type OpcaoConjunto = { id: string; nome: string; item: string };
 export function PainelMontagem({
   montagens,
   podeEditar,
+  vazio,
 }: {
   montagens: MontagemNaTela[];
   podeEditar: boolean;
+  vazio: React.ReactNode;
 }) {
   if (montagens.length === 0) {
     return (
       <Cartao>
-        <p className="px-4 py-14 text-center text-sm text-texto-fraco">
-          Nenhuma montagem ainda. Escolha um item em{" "}
-          <strong className="font-semibold text-texto-suave">Nova montagem</strong> — cada uma
-          vale por uma unidade.
-        </p>
+        <p className="px-4 py-14 text-center text-sm text-texto-fraco">{vazio}</p>
       </Cartao>
     );
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       {montagens.map((m) => (
         <CartaoMontagem key={m.id} montagem={m} podeEditar={podeEditar} />
       ))}
     </div>
   );
+}
+
+/** Quantas peças a árvore inteira tem, para o botão dizer o que esconde. */
+function contarPecas(nos: NoMontagem[]): number {
+  return nos.reduce((t, n) => t + (n.itemId ? 1 : 0) + contarPecas(n.filhos), 0);
 }
 
 function CartaoMontagem({
@@ -76,8 +79,13 @@ function CartaoMontagem({
   podeEditar: boolean;
 }) {
   const router = useRouter();
+  /* Recolhida por padrão: com meia dúzia de unidades abertas, seis árvores
+     inteiras empilhadas viram uma parede e some a informação que importa —
+     qual delas dá para montar agora. */
+  const [aberta, setAberta] = useState(false);
 
   const montada = m.status === "montada";
+  const pecas = contarPecas(m.nos);
 
   return (
     <Cartao className="overflow-hidden">
@@ -130,7 +138,19 @@ function CartaoMontagem({
         }
       />
 
-      <ArvoreMontagem nos={m.nos} montada={montada} />
+      {pecas > 0 && (
+        <button
+          type="button"
+          onClick={() => setAberta((a) => !a)}
+          aria-expanded={aberta}
+          className="flex w-full items-center gap-1.5 border-t border-borda px-4 py-2 text-xs font-semibold text-texto-fraco transition-colors hover:bg-superficie-2 hover:text-texto"
+        >
+          <ChevronRight className={cn("size-3.5 transition-transform", aberta && "rotate-90")} />
+          {aberta ? "Ocultar" : `Ver ${pecas} ${pecas === 1 ? "peça" : "peças"}`}
+        </button>
+      )}
+
+      {aberta && <ArvoreMontagem nos={m.nos} montada={montada} />}
     </Cartao>
   );
 }

@@ -3,6 +3,7 @@ import {
   ClipboardList,
   Factory,
   Hammer,
+  History,
   Layers,
   LayoutDashboard,
   Network,
@@ -51,7 +52,10 @@ export const NAVEGACAO = [
     filhos: [
       { href: "/divisoes", rotulo: "Divisões", Icone: Layers },
       { href: "/estrutura", rotulo: "Estrutura", Icone: Network },
-      { href: "/montagem", rotulo: "Montagem", Icone: Hammer },
+      /* `exato` porque o histórico mora abaixo dela: sem isso as duas
+         acendiam juntas na barra. */
+      { href: "/montagem", rotulo: "Montagem", Icone: Hammer, exato: true },
+      { href: "/montagem/historico", rotulo: "Histórico", Icone: History },
     ],
   },
   { href: "/compras", rotulo: "Compras", Icone: ShoppingCart },

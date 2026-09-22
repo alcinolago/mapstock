@@ -1,66 +1,29 @@
+import { History } from "lucide-react";
+import Link from "next/link";
+
 import {
   NovaMontagem,
   PainelMontagem,
   type MontagemNaTela,
 } from "@/components/montagem/painel-montagem";
-import type { NoMontagem } from "@/components/montagem/arvore-montagem";
+import { botao } from "@/components/ui/botao";
 import { CabecalhoPagina } from "@/components/ui/cabecalho-pagina";
-import { listarMoldes, listarMontagens, nosDaMontagem, type NoDaMontagem } from "@/db/consultas";
+import { listarMoldes, listarMontagens, nosDaMontagem } from "@/db/consultas";
+import { emArvore, porItem } from "./arvore";
 import { exigirSessao } from "@/lib/auth";
 
 export const metadata = { title: "Montagem" };
-
-/**
- * Quanto cada item a montagem inteira consome.
- *
- * A quantidade multiplica descendo: uma divisão que aparece duas vezes leva o
- * dobro de tudo que tem dentro. O mesmo item pode estar em duas divisões, e
- * aí o que vale é a soma — é contra ela que o saldo é comparado, e não contra
- * a quantidade escrita numa linha só.
- */
-function porItem(plana: NoDaMontagem[]): Map<string, number> {
-  const filhosDe = new Map<string | null, NoDaMontagem[]>();
-  for (const n of plana) filhosDe.set(n.paiId, [...(filhosDe.get(n.paiId) ?? []), n]);
-
-  const total = new Map<string, number>();
-  function descer(paiId: string | null, fator: number) {
-    for (const no of filhosDe.get(paiId) ?? []) {
-      const q = no.quantidade * fator;
-      if (no.itemId) total.set(no.itemId, (total.get(no.itemId) ?? 0) + q);
-      else descer(no.id, q);
-    }
-  }
-  descer(null, 1);
-  return total;
-}
-
-function emArvore(
-  plana: NoDaMontagem[],
-  paiId: string | null,
-  necessario: Map<string, number>,
-): NoMontagem[] {
-  return plana
-    .filter((n) => n.paiId === paiId)
-    .map((n) => ({
-      id: n.id,
-      nome: n.nome,
-      itemId: n.itemId,
-      codigo: n.codigo,
-      descricao: n.descricao,
-      unidade: n.unidade,
-      quantidade: n.quantidade,
-      necessario: n.itemId ? (necessario.get(n.itemId) ?? n.quantidade) : 0,
-      localMontagem: n.localMontagem,
-      disponivel: n.disponivel,
-      filhos: emArvore(plana, n.id, necessario),
-    }));
-}
 
 export default async function PaginaMontagem() {
   const sessao = await exigirSessao();
   const podeEditar = sessao.papel !== "leitura";
 
-  const [lista, moldes] = await Promise.all([listarMontagens(), listarMoldes()]);
+  /* Só o que está aberto: montada não tem mais ação nenhuma e vai para o
+     histórico, senão esta tela cresce para sempre. */
+  const [lista, moldes] = await Promise.all([
+    listarMontagens({ status: "em_montagem" }),
+    listarMoldes(),
+  ]);
 
   const comArvore: MontagemNaTela[] = await Promise.all(
     lista.map(async (m) => {
@@ -91,8 +54,6 @@ export default async function PaginaMontagem() {
     }),
   );
 
-  const abertas = comArvore.filter((m) => m.status === "em_montagem").length;
-
   /* So conjunto se monta: o manual do equipamento completo nao produz item nenhum
      e nao aparece aqui. */
   const conjuntos = moldes
@@ -103,15 +64,31 @@ export default async function PaginaMontagem() {
     <>
       <CabecalhoPagina
         titulo="Montagem"
-        descricao={
-          abertas > 0
-            ? `${abertas} ${abertas === 1 ? "unidade aberta" : "unidades abertas"}. Montar dá baixa nas peças e coloca a unidade pronta no estoque.`
-            : "Cada montagem é uma unidade. Montar dá baixa nas peças e coloca a unidade pronta no estoque."
+        acao={
+          <div className="flex items-center gap-2">
+            <Link
+              href="/montagem/historico"
+              className={botao({ variante: "contorno", tamanho: "md" })}
+            >
+              <History className="size-4" />
+              Histórico
+            </Link>
+            {podeEditar && <NovaMontagem conjuntos={conjuntos} />}
+          </div>
         }
-        acao={podeEditar ? <NovaMontagem conjuntos={conjuntos} /> : undefined}
       />
 
-      <PainelMontagem montagens={comArvore} podeEditar={podeEditar} />
+      <PainelMontagem
+        montagens={comArvore}
+        podeEditar={podeEditar}
+        vazio={
+          <>
+            Nada em montagem. Escolha um item em{" "}
+            <strong className="font-semibold text-texto-suave">Nova montagem</strong> — cada uma
+            vale por uma unidade.
+          </>
+        }
+      />
     </>
   );
 }

@@ -7,6 +7,7 @@ import { z } from "zod";
 import { db } from "@/db";
 import {
   moldeNos,
+  moldes,
   classificacoes,
   cotacaoItens,
   itemFornecedores,
@@ -14,6 +15,7 @@ import {
   itens,
   itensParametros3d,
   montagemNos,
+  montagens,
   movimentos,
   pedidoItens,
   regrasClassificacao,
@@ -373,26 +375,44 @@ export async function alternarAtivoItem(id: string, ativo: boolean) {
 export async function dependenciasItem(id: string): Promise<Dependencias> {
   await exigirEdicao();
 
-  const [emCotacoes, emPedidos, emMontagens, naEstrutura, comMovimentos, comFornecedores, comFotos] =
-    await Promise.all([
-      db.select({ n: count() }).from(cotacaoItens).where(eq(cotacaoItens.itemId, id)),
-      db.select({ n: count() }).from(pedidoItens).where(eq(pedidoItens.itemId, id)),
-      db.select({ n: count() }).from(montagemNos).where(eq(montagemNos.itemId, id)),
-      db.select({ n: count() }).from(moldeNos).where(eq(moldeNos.itemId, id)),
-      db.select({ n: count() }).from(movimentos).where(eq(movimentos.itemId, id)),
-      db.select({ n: count() }).from(itemFornecedores).where(eq(itemFornecedores.itemId, id)),
-      db.select({ n: count() }).from(itemFotos).where(eq(itemFotos.itemId, id)),
-    ]);
+  /* O item aparece nos dois lados da estrutura: como peca dentro de uma
+     arvore, e como o produto de um kit. Os dois seguram a exclusao — apagar o
+     item que um kit produz deixaria a montagem sem saber o que ela faz. */
+  const [
+    emCotacoes,
+    emPedidos,
+    comoPeca,
+    comoProduto,
+    naEstrutura,
+    produzidoPor,
+    comMovimentos,
+    comFornecedores,
+    comFotos,
+  ] = await Promise.all([
+    db.select({ n: count() }).from(cotacaoItens).where(eq(cotacaoItens.itemId, id)),
+    db.select({ n: count() }).from(pedidoItens).where(eq(pedidoItens.itemId, id)),
+    db.select({ n: count() }).from(montagemNos).where(eq(montagemNos.itemId, id)),
+    db.select({ n: count() }).from(montagens).where(eq(montagens.itemId, id)),
+    db.select({ n: count() }).from(moldeNos).where(eq(moldeNos.itemId, id)),
+    db.select({ n: count() }).from(moldes).where(eq(moldes.itemId, id)),
+    db.select({ n: count() }).from(movimentos).where(eq(movimentos.itemId, id)),
+    db.select({ n: count() }).from(itemFornecedores).where(eq(itemFornecedores.itemId, id)),
+    db.select({ n: count() }).from(itemFotos).where(eq(itemFotos.itemId, id)),
+  ]);
 
   return {
     bloqueios: contagens([
       { quantidade: emCotacoes[0].n, singular: "cotação", plural: "cotações" },
       { quantidade: emPedidos[0].n, singular: "pedido de compra", plural: "pedidos de compra" },
-      { quantidade: emMontagens[0].n, singular: "montagem", plural: "montagens" },
       {
-        quantidade: naEstrutura[0].n,
-        singular: "lugar em algum molde",
-        plural: "lugares em moldes",
+        quantidade: comoPeca[0].n + comoProduto[0].n,
+        singular: "montagem",
+        plural: "montagens",
+      },
+      {
+        quantidade: naEstrutura[0].n + produzidoPor[0].n,
+        singular: "lugar na estrutura",
+        plural: "lugares na estrutura",
       },
     ]),
     junto: contagens([

@@ -7,16 +7,28 @@ import { exigirEdicao } from "@/lib/auth";
 
 export const metadata = { title: "Nova cotação" };
 
-export default async function NovaCotacao() {
+export default async function NovaCotacao({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | undefined>>;
+}) {
   await exigirEdicao();
 
+  const p = await searchParams;
   const [lista, moldes] = await Promise.all([listarItensComSaldo(), listarMoldes()]);
 
-  /* Cotar "tudo que entra num equipamento" agora parte do molde: e nele que
-     mora a receita desde que equipamento deixou de ser item de estoque. */
-  const equipamentos = moldes
+  /* Cotar "tudo que entra em X" parte da estrutura — tanto do manual de um
+     equipamento quanto do kit de um item. No kit, as pecas cotadas sao as que
+     compoem o item: o domo em si nunca e comprado, ele nasce da montagem. */
+  const estruturas = moldes
     .filter((m) => m.ativo && m.nos > 0)
-    .map((m) => ({ id: m.id, codigo: m.nome, descricao: m.descricao ?? "" }));
+    .map((m) => ({
+      id: m.id,
+      nome: m.nome,
+      detalhe: m.itemId ? `${m.codigo}` : "equipamento",
+    }));
+
+  const escolhida = estruturas.find((e) => e.id === p.estrutura)?.id;
 
   const qtdEmFalta = lista.filter(
     (i) => i.situacao === "falta" || i.situacao === "abaixo_minimo",
@@ -32,7 +44,7 @@ export default async function NovaCotacao() {
         Voltar para cotações
       </Link>
 
-      <FormularioCotacao equipamentos={equipamentos} qtdEmFalta={qtdEmFalta} />
+      <FormularioCotacao estruturas={estruturas} inicial={escolhida} qtdEmFalta={qtdEmFalta} />
     </div>
   );
 }

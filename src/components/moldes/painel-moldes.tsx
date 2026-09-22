@@ -1,11 +1,12 @@
 "use client";
 
-import { AlertCircle, LoaderCircle, Plus, Eye, EyeOff, Trash2 } from "lucide-react";
+import { AlertCircle, Eye, EyeOff, LoaderCircle, Plus, ShoppingCart, Trash2 } from "lucide-react";
+import Link from "next/link";
 import { useActionState, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
-import type { ItemBusca } from "@/components/estoque/seletor-item";
-import { Botao } from "@/components/ui/botao";
+import { SeletorItem, type ItemBusca } from "@/components/estoque/seletor-item";
+import { Botao, botao } from "@/components/ui/botao";
 import { AreaTexto, Entrada, Grupo } from "@/components/ui/campo";
 import { CabecalhoCartao, Cartao } from "@/components/ui/cartao";
 import { BotaoConfirmar } from "@/components/ui/confirmar";
@@ -14,7 +15,7 @@ import { Selo } from "@/components/ui/selo";
 import { AdicionarNo, type OpcaoDivisao } from "./adicionar-no";
 import { ArvoreMolde, type NoMolde } from "./arvore-molde";
 import { alternarMolde, excluirMolde, salvarMolde, type EstadoMolde } from "@/lib/acoes/moldes";
-import { moeda } from "@/lib/utils";
+import { moeda, numero } from "@/lib/utils";
 
 export type MoldeNaTela = {
   id: string;
@@ -23,48 +24,131 @@ export type MoldeNaTela = {
   ativo: boolean;
   montagens: number;
   custoTotal: number;
+  /** Kit: o item do estoque que esta estrutura produz. Manual: nulo. */
+  itemId: string | null;
+  codigo: string | null;
+  itemDescricao: string | null;
+  unidade: string | null;
+  emEstoque: number;
   nos: NoMolde[];
 };
 
 /**
- * Os moldes, um cartao cada. Criar quantos quiser, a hora que quiser: aqui
- * e planejamento puro, e nao depende de ter peca nenhuma no estoque.
+ * A tela de Estrutura, em duas metades separadas por uma linha.
+ *
+ * Em cima, os **equipamentos**: o manual do que vai montado num veículo
+ * inteiro. Não produz nada e não passa pela Montagem — serve para quem está
+ * na bancada saber o que entra e onde cada coisa vai.
+ *
+ * Embaixo, os **itens**: cada um amarrado a um item do estoque. É o domo,
+ * que tem quatro câmeras e um GPS dentro e vira uma unidade na prateleira.
+ * Esses sim se montam, e é o que destrava a bancada — dá para fazer seis
+ * domos na segunda porque chegaram as câmeras, sem esperar o equipamento
+ * inteiro estar comprado.
+ *
+ * A divisão, nos dois casos, é só agrupamento de leitura.
  */
 export function PainelMoldes({
   moldes,
   divisoes,
   itens,
+  itensSemEstrutura,
   podeEditar,
 }: {
   moldes: MoldeNaTela[];
   divisoes: OpcaoDivisao[];
   itens: ItemBusca[];
+  /** Só estes podem virar kit: um item tem uma receita só. */
+  itensSemEstrutura: ItemBusca[];
   podeEditar: boolean;
 }) {
-  if (moldes.length === 0) {
-    return (
-      <Cartao>
-        <p className="px-4 py-14 text-center text-sm text-texto-fraco">
-          Nenhum equipamento ainda. Clique em{" "}
-          <strong className="font-semibold text-texto-suave">Novo equipamento</strong> para criar
-          o primeiro molde.
-        </p>
-      </Cartao>
-    );
-  }
+  const equipamentos = moldes.filter((m) => !m.itemId);
+  const kits = moldes.filter((m) => m.itemId);
 
   return (
-    <div className="space-y-5">
-      {moldes.map((m) => (
-        <CartaoMolde
-          key={m.id}
-          molde={m}
-          divisoes={divisoes}
-          itens={itens}
-          podeEditar={podeEditar}
-        />
-      ))}
+    <div className="space-y-8">
+      <Secao
+        titulo="Equipamentos"
+        descricao="O manual do equipamento completo. Não vira item, não tem saldo e não passa pela montagem."
+        acao={podeEditar ? <NovoMolde tipo="equipamento" /> : undefined}
+        vazio="Nenhum equipamento documentado ainda."
+        moldes={equipamentos}
+        divisoes={divisoes}
+        itens={itens}
+        podeEditar={podeEditar}
+      />
+
+      <Secao
+        separada
+        titulo="Itens"
+        descricao="A receita de um item do estoque. Montar consome as peças e coloca uma unidade do item na prateleira."
+        acao={
+          podeEditar ? <NovoMolde tipo="kit" itensSemEstrutura={itensSemEstrutura} /> : undefined
+        }
+        vazio="Nenhum item com estrutura ainda. É aqui que o domo vira um kit."
+        moldes={kits}
+        divisoes={divisoes}
+        itens={itens}
+        podeEditar={podeEditar}
+      />
     </div>
+  );
+}
+
+function Secao({
+  titulo,
+  descricao,
+  acao,
+  vazio,
+  moldes,
+  divisoes,
+  itens,
+  podeEditar,
+  separada,
+}: {
+  titulo: string;
+  descricao: string;
+  acao?: React.ReactNode;
+  vazio: string;
+  moldes: MoldeNaTela[];
+  divisoes: OpcaoDivisao[];
+  itens: ItemBusca[];
+  podeEditar: boolean;
+  /* A linha é o que diz que são dois mundos: em cima o que se consulta,
+     embaixo o que se monta. */
+  separada?: boolean;
+}) {
+  return (
+    <section className={separada ? "border-t border-borda pt-8" : undefined}>
+      <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-semibold text-texto">
+            {titulo}
+            <span className="ml-2 text-sm font-normal text-texto-fraco">{moldes.length}</span>
+          </h2>
+          <p className="mt-0.5 max-w-2xl text-xs text-texto-fraco">{descricao}</p>
+        </div>
+        {acao}
+      </div>
+
+      {moldes.length === 0 ? (
+        <Cartao>
+          <p className="px-4 py-10 text-center text-sm text-texto-fraco">{vazio}</p>
+        </Cartao>
+      ) : (
+        <div className="space-y-5">
+          {moldes.map((m) => (
+            <CartaoMolde
+              key={m.id}
+              molde={m}
+              divisoes={divisoes}
+              itens={itens}
+              podeEditar={podeEditar}
+            />
+          ))}
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -83,30 +167,58 @@ function CartaoMolde({
   const [pendente, iniciar] = useTransition();
 
   const pecas = contar(molde.nos);
+  const ehKit = Boolean(molde.itemId);
 
   return (
     <Cartao className="overflow-hidden">
       <CabecalhoCartao
         titulo={molde.nome}
         descricao={
-          molde.descricao ??
-          `${pecas.divisoes} ${pecas.divisoes === 1 ? "divisão" : "divisões"} · ${pecas.pecas} ${pecas.pecas === 1 ? "peça" : "peças"}`
+          ehKit
+            ? `${molde.codigo} — ${molde.itemDescricao}`
+            : (molde.descricao ??
+              `${pecas.divisoes} ${pecas.divisoes === 1 ? "divisão" : "divisões"} · ${pecas.pecas} ${pecas.pecas === 1 ? "peça" : "peças"}`)
         }
         acao={
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            {ehKit && (
+              <Selo
+                tom={molde.emEstoque > 0 ? "ok" : "neutro"}
+                title="Unidades prontas no estoque"
+              >
+                {numero(molde.emEstoque)} {molde.unidade ?? "un"} em estoque
+              </Selo>
+            )}
+
             {molde.custoTotal > 0 && (
-              <Selo tom="neutro" title="Custo estimado de uma unidade">
+              <Selo tom="neutro" title="Soma das peças que entram numa unidade">
                 {moeda(molde.custoTotal)}
               </Selo>
             )}
+
             {!molde.ativo && <Selo tom="alerta">inativo</Selo>}
+
             {molde.montagens > 0 && (
               <Selo tom="marca">
                 {molde.montagens} {molde.montagens === 1 ? "montagem" : "montagens"}
               </Selo>
             )}
+
             {podeEditar && (
               <>
+                {/* Cotar um kit é cotar as peças dele: o próprio item nunca é
+                    comprado, ele nasce da montagem. */}
+                {molde.nos.length > 0 && (
+                  <Link
+                    href={`/compras/cotacoes/nova?estrutura=${molde.id}`}
+                    title="Cotar as peças desta estrutura"
+                    aria-label={`Cotar as peças de ${molde.nome}`}
+                    className={botao({ variante: "fantasma", tamanho: "sm" })}
+                  >
+                    <ShoppingCart className="size-3.5" />
+                  </Link>
+                )}
+
                 <AdicionarNo
                   moldeId={molde.id}
                   paiId={null}
@@ -114,6 +226,7 @@ function CartaoMolde({
                   divisoes={divisoes}
                   itens={itens}
                 />
+
                 <Botao
                   variante="fantasma"
                   tamanho="sm"
@@ -128,14 +241,15 @@ function CartaoMolde({
                 >
                   {molde.ativo ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
                 </Botao>
+
                 <BotaoConfirmar
                   rotulo={`Excluir ${molde.nome}`}
                   Icone={Trash2}
                   tamanho="sm"
                   somenteIcone
                   iconeClassName="size-3.5 text-perigo"
-                  dica="Excluir molde"
-                  titulo="Excluir molde"
+                  dica="Excluir estrutura"
+                  titulo="Excluir estrutura"
                   descricao={molde.nome}
                   rotuloConfirmar="Excluir"
                   aoConfirmar={async () => {
@@ -145,8 +259,9 @@ function CartaoMolde({
                   }}
                 >
                   <p>
-                    Sai o molde inteiro, com todas as divisões e peças dele. Nada disso mexe no
-                    estoque. Montagens já abertas guardam a cópia delas e continuam como estão.
+                    Sai a estrutura inteira, com todas as divisões e peças dela. Nada disso mexe
+                    no estoque{ehKit ? ", nem no item que ela produz" : ""}. Montagens já abertas
+                    guardam a cópia delas e continuam como estão.
                   </p>
                 </BotaoConfirmar>
               </>
@@ -178,37 +293,62 @@ function contar(nos: NoMolde[]): { divisoes: number; pecas: number } {
   );
 }
 
-export function NovoMolde() {
+/**
+ * Criar uma estrutura. O tipo não é um campo do formulário: são dois botões,
+ * cada um no seu lado da linha, porque a escolha é sobre em qual das duas
+ * listas aquilo vai morar — e essa pergunta se responde clicando no lugar
+ * certo, não num select.
+ */
+export function NovoMolde({
+  tipo,
+  itensSemEstrutura = [],
+}: {
+  tipo: "equipamento" | "kit";
+  itensSemEstrutura?: ItemBusca[];
+}) {
+  const ehKit = tipo === "kit";
   const [aberto, setAberto] = useState(false);
   const [chave, setChave] = useState(0);
+  const [itemId, setItemId] = useState<string | null>(null);
   const [tratado, setTratado] = useState<EstadoMolde | null>(null);
   const [estado, acao, enviando] = useActionState<EstadoMolde, FormData>(salvarMolde, {});
 
   if (estado.ok && estado !== tratado) {
     setTratado(estado);
     setAberto(false);
+    setItemId(null);
     setChave((k) => k + 1);
   }
 
+  const idFormulario = `novo-molde-${tipo}`;
+
   return (
     <>
-      <Botao onClick={() => setAberto(true)}>
+      <Botao variante={ehKit ? "primario" : "contorno"} onClick={() => setAberto(true)}>
         <Plus className="size-4" />
-        Novo equipamento
+        {ehKit ? "Novo item" : "Novo equipamento"}
       </Botao>
 
       <Modal
         aberto={aberto}
         aoFechar={() => setAberto(false)}
-        titulo="Novo equipamento"
-        descricao="O molde é a receita: divisões e peças. Não mexe no estoque."
+        titulo={ehKit ? "Novo item com estrutura" : "Novo equipamento"}
+        descricao={
+          ehKit
+            ? "Um item do estoque que é montado a partir de outros. Montar consome as peças e coloca uma unidade dele na prateleira."
+            : "O manual de um equipamento completo. Não vira item, não tem saldo e não passa pela montagem."
+        }
         centralizado
         rodape={
           <>
             <Botao variante="suave" onClick={() => setAberto(false)} disabled={enviando}>
               Cancelar
             </Botao>
-            <Botao type="submit" form="novo-molde" disabled={enviando}>
+            <Botao
+              type="submit"
+              form={idFormulario}
+              disabled={enviando || (ehKit && !itemId)}
+            >
               {enviando ? (
                 <LoaderCircle className="size-4 animate-spin" />
               ) : (
@@ -219,23 +359,43 @@ export function NovoMolde() {
           </>
         }
       >
-        <form id="novo-molde" action={acao} key={chave} className="space-y-4">
-          <Grupo rotulo="Nome do equipamento" obrigatorio htmlFor="molde-nome">
+        <form id={idFormulario} action={acao} key={chave} className="space-y-4">
+          {ehKit && <input type="hidden" name="itemId" value={itemId ?? ""} />}
+
+          {ehKit && (
+            <Grupo
+              rotulo="Item do estoque"
+              obrigatorio
+              ajuda="O item que sai pronto. Ele já tem que estar cadastrado, e só aparecem aqui os que ainda não têm estrutura."
+            >
+              <SeletorItem
+                itens={itensSemEstrutura}
+                valor={itemId ?? undefined}
+                aoEscolher={setItemId}
+                nome="itemIdVisual"
+                placeholder="Buscar item por código ou descrição..."
+              />
+            </Grupo>
+          )}
+
+          <Grupo rotulo="Nome" obrigatorio htmlFor={`${idFormulario}-nome`}>
             <Entrada
-              id="molde-nome"
+              id={`${idFormulario}-nome`}
               name="nome"
-              placeholder="Ex.: Equipamento de inspeção XYZ"
+              placeholder={ehKit ? "Ex.: Domo" : "Ex.: Equipamento de inspeção XYZ"}
               required
-              autoFocus
+              autoFocus={!ehKit}
             />
           </Grupo>
-          <Grupo rotulo="Descrição" htmlFor="molde-descricao">
+
+          <Grupo rotulo="Descrição" htmlFor={`${idFormulario}-descricao`}>
             <AreaTexto
-              id="molde-descricao"
+              id={`${idFormulario}-descricao`}
               name="descricao"
               placeholder="O que é, para que serve, particularidades da montagem"
             />
           </Grupo>
+
           {estado.erro && (
             <p
               role="alert"

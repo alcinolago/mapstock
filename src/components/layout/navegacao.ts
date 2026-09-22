@@ -1,6 +1,5 @@
 import {
   Boxes,
-  Car,
   ClipboardList,
   Factory,
   Hammer,
@@ -19,6 +18,10 @@ import {
  * Producao nasceu grupo porque as tres telas sao etapas da mesma coisa —
  * o vocabulario, a receita e a execucao. Soltas no primeiro nivel, pareciam
  * tres modulos sem relacao entre si.
+ *
+ * Carros saiu: rastrear qual equipamento esta em qual veiculo e controle de
+ * ativo instalado, nao de estoque, e estava arrastando o sistema para longe
+ * do que ele serve.
  *
  * Estoque virou grupo por um mal-entendido que custava tempo: quem queria
  * ver o que tem na prateleira clicava em "Estoque" e caia no historico de
@@ -51,7 +54,6 @@ export const NAVEGACAO = [
       { href: "/montagem", rotulo: "Montagem", Icone: Hammer },
     ],
   },
-  { href: "/carros", rotulo: "Carros", Icone: Car },
   { href: "/compras", rotulo: "Compras", Icone: ShoppingCart },
   { href: "/configuracoes", rotulo: "Configurações", Icone: Settings, somenteAdmin: true },
 ] as const;

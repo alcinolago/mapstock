@@ -21,8 +21,9 @@ const ORIGENS: { valor: Origem; titulo: string; descricao: string }[] = [
   },
   {
     valor: "estrutura",
-    titulo: "Montar um equipamento",
-    descricao: "Explode a estrutura e traz todas as peças que entram na montagem.",
+    titulo: "Montar uma estrutura",
+    descricao:
+      "Explode a estrutura e traz as peças que entram nela. Cotar um domo é cotar as peças do domo — ele mesmo nunca é comprado.",
   },
   {
     valor: "vazia",
@@ -32,15 +33,21 @@ const ORIGENS: { valor: Origem; titulo: string; descricao: string }[] = [
 ];
 
 export function FormularioCotacao({
-  equipamentos,
+  estruturas,
+  inicial,
   qtdEmFalta,
 }: {
-  equipamentos: { id: string; codigo: string; descricao: string }[];
+  estruturas: { id: string; nome: string; detalhe: string }[];
+  /* Chegou pelo botão de cotar da tela de Estrutura: já entra com a estrutura
+     escolhida, senão a pessoa teria de achá-la de novo numa lista. */
+  inicial?: string;
   qtdEmFalta: number;
 }) {
   const router = useRouter();
   const [estado, acao, enviando] = useActionState<EstadoCotacao, FormData>(criarCotacao, {});
-  const [origem, setOrigem] = useState<Origem>(qtdEmFalta > 0 ? "abaixo_minimo" : "vazia");
+  const [origem, setOrigem] = useState<Origem>(
+    inicial ? "estrutura" : qtdEmFalta > 0 ? "abaixo_minimo" : "vazia",
+  );
 
   useEffect(() => {
     if (estado.ok && estado.id) router.push(`/compras/cotacoes/${estado.id}`);
@@ -78,7 +85,7 @@ export function FormularioCotacao({
           {ORIGENS.map((o) => {
             const desabilitada =
               (o.valor === "abaixo_minimo" && qtdEmFalta === 0) ||
-              (o.valor === "estrutura" && equipamentos.length === 0);
+              (o.valor === "estrutura" && estruturas.length === 0);
 
             return (
               <label
@@ -115,12 +122,13 @@ export function FormularioCotacao({
 
           {origem === "estrutura" && (
             <div className="grid gap-4 pt-2 sm:grid-cols-[1fr_8rem]">
-              <Grupo rotulo="Equipamento" obrigatorio htmlFor="raizId">
-                <Selecao id="raizId" name="raizId" required>
+              <Grupo rotulo="Estrutura" obrigatorio htmlFor="raizId">
+                <Selecao id="raizId" name="raizId" required defaultValue={inicial ?? ""}>
                   <option value="">Selecione...</option>
-                  {equipamentos.map((e) => (
+                  {estruturas.map((e) => (
                     <option key={e.id} value={e.id}>
-                      {e.codigo} — {e.descricao}
+                      {e.nome}
+                      {e.detalhe ? ` — ${e.detalhe}` : ""}
                     </option>
                   ))}
                 </Selecao>

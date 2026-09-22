@@ -1,24 +1,18 @@
 "use client";
 
-import { AlertCircle, Car, LoaderCircle, Plus, Trash2, Undo2 } from "lucide-react";
+import { AlertCircle, LoaderCircle, Plus, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
 import { Botao } from "@/components/ui/botao";
 import { Grupo, Selecao } from "@/components/ui/campo";
-import { CampoNumero } from "@/components/ui/campo-mascarado";
 import { CabecalhoCartao, Cartao } from "@/components/ui/cartao";
 import { BotaoConfirmar } from "@/components/ui/confirmar";
 import { Modal } from "@/components/ui/modal";
 import { Selo } from "@/components/ui/selo";
 import { ArvoreMontagem, type NoMontagem } from "./arvore-montagem";
-import { MontarNo } from "./montar-no";
-import {
-  abrirMontagens,
-  associarCarro,
-  desmontarMontagem,
-  excluirMontagem,
-} from "@/lib/acoes/montagem";
+import { MontarMontagem } from "./montar";
+import { abrirMontagem, excluirMontagem } from "@/lib/acoes/montagem";
 import { STATUS_MONTAGEM } from "@/lib/labels";
 import { data } from "@/lib/utils";
 import type { TomSelo } from "@/components/ui/selo";
@@ -26,45 +20,40 @@ import type { TomSelo } from "@/components/ui/selo";
 const TOM: Record<string, TomSelo> = {
   em_montagem: "alerta",
   montada: "ok",
-  instalada: "marca",
-  desmontada: "neutro",
 };
 
 export type MontagemNaTela = {
   id: string;
   numero: string;
   nome: string;
+  item: string;
   status: string;
   local: string | null;
   observacoes: string | null;
   iniciadaEm: Date;
   montadaEm: Date | null;
-  placa: string | null;
-  carroId: string | null;
-  etapas: number;
-  etapasFeitas: number;
+  montadaPor: string | null;
+  /** Quantas peças da árvore estão sem saldo suficiente agora. */
+  faltando: number;
   nos: NoMontagem[];
 };
 
-export type OpcaoMolde = { id: string; nome: string; nos: number };
-export type OpcaoCarro = { id: string; placa: string; ocupado: boolean };
+export type OpcaoKit = { id: string; nome: string; item: string };
 
 export function PainelMontagem({
   montagens,
-  carros,
   podeEditar,
 }: {
   montagens: MontagemNaTela[];
-  carros: OpcaoCarro[];
   podeEditar: boolean;
 }) {
   if (montagens.length === 0) {
     return (
       <Cartao>
         <p className="px-4 py-14 text-center text-sm text-texto-fraco">
-          Nenhuma montagem aberta. Escolha um molde em{" "}
-          <strong className="font-semibold text-texto-suave">Abrir montagem</strong> e diga
-          quantos equipamentos.
+          Nenhuma montagem ainda. Escolha um item em{" "}
+          <strong className="font-semibold text-texto-suave">Nova montagem</strong> — cada uma
+          vale por uma unidade.
         </p>
       </Cartao>
     );
@@ -73,7 +62,7 @@ export function PainelMontagem({
   return (
     <div className="space-y-5">
       {montagens.map((m) => (
-        <CartaoMontagem key={m.id} montagem={m} carros={carros} podeEditar={podeEditar} />
+        <CartaoMontagem key={m.id} montagem={m} podeEditar={podeEditar} />
       ))}
     </div>
   );
@@ -81,107 +70,43 @@ export function PainelMontagem({
 
 function CartaoMontagem({
   montagem: m,
-  carros,
   podeEditar,
 }: {
   montagem: MontagemNaTela;
-  carros: OpcaoCarro[];
   podeEditar: boolean;
 }) {
   const router = useRouter();
-  const [pendente, iniciar] = useTransition();
-  const [erro, setErro] = useState<string | null>(null);
 
-  const encerrada = m.status === "desmontada";
-  const completa = m.status === "montada" || m.status === "instalada";
-  const tudoFeito = m.etapas > 0 && m.etapasFeitas === m.etapas;
-
-  function trocarCarro(carroId: string) {
-    iniciar(async () => {
-      const r = await associarCarro(m.id, carroId || null);
-      setErro(r.erro ?? null);
-      if (!r.erro) router.refresh();
-    });
-  }
+  const montada = m.status === "montada";
 
   return (
     <Cartao className="overflow-hidden">
       <CabecalhoCartao
         titulo={`${m.numero} — ${m.nome}`}
-        descricao={`Aberta em ${data(m.iniciadaEm)}${m.montadaEm ? ` · concluída em ${data(m.montadaEm)}` : ""}${m.local ? ` · ${m.local}` : ""}`}
+        descricao={`Produz ${m.item} · aberta em ${data(m.iniciadaEm)}${
+          m.montadaEm ? ` · montada em ${data(m.montadaEm)}` : ""
+        }${m.montadaPor ? ` por ${m.montadaPor}` : ""}${m.local ? ` · ${m.local}` : ""}`}
         acao={
           <div className="flex flex-wrap items-center gap-2">
             <Selo tom={TOM[m.status] ?? "neutro"}>
               {STATUS_MONTAGEM[m.status as keyof typeof STATUS_MONTAGEM] ?? m.status}
             </Selo>
 
-            {m.etapas > 0 && (
-              <Selo tom={tudoFeito ? "ok" : "neutro"}>
-                {m.etapasFeitas} de {m.etapas} {m.etapas === 1 ? "etapa" : "etapas"}
-              </Selo>
-            )}
+            {/* Enquanto aberta, o que interessa é se dá para montar agora.
+                Cada montagem responde por si: o saldo é do momento do clique,
+                e quem clicar primeiro leva as peças. */}
+            {!montada &&
+              (m.faltando > 0 ? (
+                <Selo tom="perigo">
+                  {m.faltando === 1 ? "falta 1 peça" : `faltam ${m.faltando} peças`}
+                </Selo>
+              ) : (
+                <Selo tom="ok">tudo em estoque</Selo>
+              ))}
 
-            {m.placa && (
-              <Selo tom="marca">
-                <Car className="size-3" />
-                {m.placa}
-              </Selo>
-            )}
+            {podeEditar && !montada && <MontarMontagem montagemId={m.id} item={m.item} />}
 
-            {podeEditar && !encerrada && !completa && tudoFeito && (
-              <MontarNo
-                montagemId={m.id}
-                noId={null}
-                rotulo="Concluir equipamento"
-                variante="movimento"
-              />
-            )}
-
-            {podeEditar && completa && (
-              <Selecao
-                aria-label="Carro"
-                value={m.carroId ?? ""}
-                disabled={pendente}
-                onChange={(e) => trocarCarro(e.target.value)}
-                className="h-8 w-auto min-w-40 text-xs"
-              >
-                <option value="">Sem carro</option>
-                {carros
-                  .filter((c) => !c.ocupado || c.id === m.carroId)
-                  .map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.placa}
-                    </option>
-                  ))}
-              </Selecao>
-            )}
-
-            {podeEditar && !encerrada && m.etapasFeitas > 0 && (
-              <BotaoConfirmar
-                rotulo={`Desmontar ${m.numero}`}
-                Icone={Undo2}
-                tamanho="sm"
-                somenteIcone
-                iconeClassName="size-3.5"
-                dica="Desmontar e devolver ao estoque"
-                desabilitado={pendente}
-                titulo="Desmontar"
-                descricao={`${m.numero} — ${m.nome}`}
-                rotuloConfirmar="Desmontar"
-                aoConfirmar={async () => {
-                  const r = await desmontarMontagem(m.id);
-                  if (r.erro) return r;
-                  router.refresh();
-                }}
-              >
-                <p>
-                  Devolve ao estoque tudo que esta montagem consumiu, lançando o oposto de cada
-                  movimento — nada é apagado. As etapas voltam a ficar em aberto.
-                </p>
-              </BotaoConfirmar>
-            )}
-
-            {podeEditar && m.etapasFeitas === 0 && (
+            {podeEditar && !montada && (
               <BotaoConfirmar
                 rotulo={`Excluir ${m.numero}`}
                 Icone={Trash2}
@@ -189,7 +114,6 @@ function CartaoMontagem({
                 somenteIcone
                 iconeClassName="size-3.5 text-perigo"
                 dica="Excluir montagem"
-                desabilitado={pendente}
                 titulo="Excluir montagem"
                 descricao={`${m.numero} — ${m.nome}`}
                 rotuloConfirmar="Excluir"
@@ -206,43 +130,30 @@ function CartaoMontagem({
         }
       />
 
-      {erro && (
-        <p
-          role="alert"
-          className="mx-4 mt-3 rounded-lg bg-perigo-suave px-3 py-2 text-sm font-medium text-perigo"
-        >
-          {erro}
-        </p>
-      )}
-
-      <ArvoreMontagem
-        montagemId={m.id}
-        nos={m.nos}
-        podeEditar={podeEditar}
-        encerrada={encerrada || completa}
-      />
+      <ArvoreMontagem nos={m.nos} montada={montada} />
     </Cartao>
   );
 }
 
-export function AbrirMontagem({ moldes }: { moldes: OpcaoMolde[] }) {
+/**
+ * Abrir uma montagem é sempre uma unidade. Seis domos são seis montagens —
+ * sem campo de quantidade, porque cada uma confere o estoque sozinha no
+ * momento em que for montada.
+ */
+export function NovaMontagem({ kits }: { kits: OpcaoKit[] }) {
   const router = useRouter();
   const [aberto, setAberto] = useState(false);
   const [moldeId, setMoldeId] = useState("");
-  const [quantidade, setQuantidade] = useState("1");
   const [erro, setErro] = useState<string | null>(null);
   const [pendente, iniciar] = useTransition();
 
-  const disponiveis = moldes.filter((m) => m.nos > 0);
-
   function confirmar() {
     iniciar(async () => {
-      const r = await abrirMontagens(moldeId, Number(quantidade.replace(",", ".")));
+      const r = await abrirMontagem(moldeId);
       setErro(r.erro ?? null);
       if (!r.erro) {
         setAberto(false);
         setMoldeId("");
-        setQuantidade("1");
         router.refresh();
       }
     });
@@ -252,14 +163,14 @@ export function AbrirMontagem({ moldes }: { moldes: OpcaoMolde[] }) {
     <>
       <Botao onClick={() => setAberto(true)}>
         <Plus className="size-4" />
-        Abrir montagem
+        Nova montagem
       </Botao>
 
       <Modal
         aberto={aberto}
         aoFechar={() => setAberto(false)}
-        titulo="Abrir montagem"
-        descricao="Cada equipamento vira uma árvore própria, montada no seu ritmo."
+        titulo="Nova montagem"
+        descricao="Uma unidade do item escolhido. Para montar duas, abra duas."
         centralizado
         rodape={
           <>
@@ -278,46 +189,31 @@ export function AbrirMontagem({ moldes }: { moldes: OpcaoMolde[] }) {
         }
       >
         <div className="space-y-4">
-          <Grupo rotulo="Equipamento" obrigatorio htmlFor="abrir-molde">
-            {disponiveis.length === 0 ? (
+          <Grupo rotulo="Item" obrigatorio htmlFor="nova-montagem-kit">
+            {kits.length === 0 ? (
               <p className="rounded-lg bg-superficie-2 px-3 py-2.5 text-sm text-texto-fraco">
-                Nenhum molde com estrutura montada. Crie um em Estrutura e coloque pelo menos uma
-                divisão dentro.
+                Nenhum item com estrutura montada. Crie um em Estrutura, na parte de baixo da
+                tela, e coloque pelo menos uma peça dentro.
               </p>
             ) : (
               <Selecao
-                id="abrir-molde"
+                id="nova-montagem-kit"
                 value={moldeId}
                 onChange={(e) => setMoldeId(e.target.value)}
               >
                 <option value="">Escolha...</option>
-                {disponiveis.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.nome}
+                {kits.map((k) => (
+                  <option key={k.id} value={k.id}>
+                    {k.nome} — {k.item}
                   </option>
                 ))}
               </Selecao>
             )}
           </Grupo>
 
-          <Grupo
-            rotulo="Quantos equipamentos"
-            obrigatorio
-            htmlFor="abrir-qtd"
-            ajuda="Três equipamentos abrem três árvores independentes, uma para cada unidade."
-          >
-            <CampoNumero
-              id="abrir-qtd"
-              inteiro
-              valor={quantidade}
-              aoMudar={setQuantidade}
-              className="w-28"
-            />
-          </Grupo>
-
           <p className="text-xs leading-relaxed text-texto-fraco">
-            Abrir não mexe no estoque e não depende de ter peça: a árvore é uma cópia do molde,
-            congelada agora. Só ao montar cada divisão é que as peças saem.
+            Abrir não mexe no estoque e não depende de ter peça: a árvore é uma cópia da
+            estrutura, congelada agora. As peças só saem quando você clicar em Montar.
           </p>
 
           {erro && (

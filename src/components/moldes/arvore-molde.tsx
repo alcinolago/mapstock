@@ -23,7 +23,6 @@ export type NoMolde = {
   descricao: string | null;
   unidade: string | null;
   quantidade: number;
-  obrigatorio: boolean;
   localMontagem: string | null;
   disponivel: number;
   /** Custo somado de tudo que está abaixo deste nó, já multiplicado. */
@@ -169,8 +168,6 @@ function No({
               {no.filhos.length} {no.filhos.length === 1 ? "item" : "itens"}
             </span>
           )}
-
-          {!no.obrigatorio && <Selo tom="neutro">opcional</Selo>}
 
           {no.localMontagem && (
             <span className="hidden shrink-0 text-xs text-texto-fraco xl:inline">

@@ -14,7 +14,6 @@ import {
   classificacoes,
   cotacaoItens,
   cotacaoPrecos,
-  carros,
   cotacoes,
   fornecedores,
   itemFornecedores,
@@ -31,7 +30,6 @@ import {
   pedidosCompra,
   unidades,
   usuarios,
-  versoes,
 } from "./schema";
 async function limpar() {
   /* Ordem importa: filho antes de pai, senao a FK barra. */
@@ -43,13 +41,11 @@ async function limpar() {
   await db.delete(cotacoes);
   await db.delete(itemFornecedores);
   await db.delete(itensParametros3d);
-  /* Montagem e molde apontam para item com restrict: saem antes dele.
+  /* Montagem e estrutura apontam para item com restrict: saem antes dele.
      Os nos vao junto pelo cascade. */
   await db.delete(montagens);
   await db.delete(moldes);
   await db.delete(divisoes);
-  await db.delete(carros);
-  await db.delete(versoes);
   await db.delete(itens);
   await db.delete(fornecedores);
   await db.delete(logAuditoria);
@@ -93,7 +89,11 @@ async function criar() {
   const criados = await db
     .insert(itens)
     .values([
-      { codigo: "EQP-001", descricao: "Equipamento de inspeção — montado", classificacaoId: classe("Estrutural"), unidadeId: unidade("un"), aquisicao: "fabricacao_interna", origemFabricacao: "interna_montagem", criadoPor: admin.id, atualizadoPor: admin.id },
+      /* O kit: item de estoque como qualquer outro, so que nasce montado em
+         vez de comprado. E ele que destrava a bancada — da para fazer seis
+         domos na segunda porque chegaram as cameras, sem esperar o
+         equipamento inteiro. */
+      { codigo: "DOM-KIT-001", descricao: "Domo montado — 2 câmeras", classificacaoId: classe("Carenagem/Domo"), unidadeId: unidade("un"), aquisicao: "fabricacao_interna", origemFabricacao: "interna_montagem", estoqueMinimo: 1, localId: local("Prateleira C2"), criadoPor: admin.id, atualizadoPor: admin.id },
       { codigo: "EST-001", descricao: "Estrutura em perfil de alumínio 40x40", classificacaoId: classe("Estrutural"), unidadeId: unidade("conj."), aquisicao: "compra_nacional", origemFabricacao: "terceiro_corte_dobra", custoUnitario: 480, estoqueMinimo: 2, localId: local("Prateleira A1"), prazoValor: 12, criadoPor: admin.id, atualizadoPor: admin.id },
       { codigo: "FIX-PAR-M6X20", descricao: "Parafuso M6x20 inox allen", classificacaoId: classe("Fixação"), unidadeId: unidade("un"), aquisicao: "compra_nacional", origemFabricacao: "compra_pronta_nacional", custoUnitario: 0.92, estoqueMinimo: 200, localId: local("Gaveta B3"), prazoValor: 5, criadoPor: admin.id, atualizadoPor: admin.id },
       { codigo: "FIX-POR-M6", descricao: "Porca M6 inox autotravante", classificacaoId: classe("Fixação"), unidadeId: unidade("un"), aquisicao: "compra_nacional", custoUnitario: 0.55, estoqueMinimo: 200, localId: local("Gaveta B3"), prazoValor: 5, criadoPor: admin.id, atualizadoPor: admin.id },
@@ -138,8 +138,11 @@ async function criar() {
     { itemId: i("CBL-USB-3M"), fornecedorId: f("Mercado Livre"), preco: 89, prazoValor: 4, linkItem: "https://produto.mercadolivre.com.br/MLB-3901274655-cabo-usb-30-blindado-3m-com-trava-_JM", observacoes: "Vendedor Loja do Cabo, reputação verde, Full.", principal: true, ordem: 0 },
     { itemId: i("FIX-INS-M3"), fornecedorId: f("Mercado Livre"), preco: 62, prazoValor: 5, skuFornecedor: "INS-M3-100", linkItem: "https://produto.mercadolivre.com.br/MLB-2788341290-inserto-rosca-m3-lato-kit-100-pecas-_JM", principal: true, ordem: 0 },
   ]);
-  /* Molde: a receita do equipamento. Divisao agrupa, peca sai do estoque.
-     Nada aqui e item — divisao e equipamento vivem so nesta parte. */
+  /* Estrutura, nos dois sabores.
+     Em cima o manual do equipamento completo, que nao vira item nenhum; e o
+     que quem esta na bancada consulta. Embaixo o kit: uma receita amarrada a
+     um item do estoque, que se monta e vira unidade na prateleira.
+     Divisao, nos dois, e so agrupamento de leitura. */
   const [divEstrutura, divDomo, divAutomacao] = await db
     .insert(divisoes)
     .values([
@@ -149,70 +152,90 @@ async function criar() {
     ])
     .returning();
 
-  const [molde] = await db
-    .insert(moldes)
-    .values({
-      nome: "Equipamento de inspeção",
-      descricao: "Estrutura em perfil, domo impresso com câmera e a automação embarcada.",
-      criadoPor: admin.id,
-      atualizadoPor: admin.id,
-    })
-    .returning();
+  async function estrutura(nome: string, descricao: string, itemId: string | null) {
+    const [criado] = await db
+      .insert(moldes)
+      .values({ nome, descricao, itemId, criadoPor: admin.id, atualizadoPor: admin.id })
+      .returning();
+    return criado;
+  }
 
-  async function divisao(divisaoId: string, ordem: number) {
+  async function divisao(moldeId: string, divisaoId: string, ordem: number) {
     const [no] = await db
       .insert(moldeNos)
-      .values({ moldeId: molde.id, paiId: null, divisaoId, quantidade: 1, ordem })
+      .values({ moldeId, paiId: null, divisaoId, quantidade: 1, ordem })
       .returning();
     return no.id;
   }
+
   async function peca(
+    moldeId: string,
     paiId: string,
     codigo: string,
     quantidade: number,
     ordem: number,
-    extras: { obrigatorio?: boolean; localMontagem?: string } = {},
+    localMontagem?: string,
   ) {
     await db.insert(moldeNos).values({
-      moldeId: molde.id,
+      moldeId,
       paiId,
       itemId: i(codigo),
       quantidade,
-      obrigatorio: extras.obrigatorio ?? true,
-      localMontagem: extras.localMontagem ?? null,
+      localMontagem: localMontagem ?? null,
       ordem,
     });
   }
 
-  const noEstrutura = await divisao(divEstrutura.id, 1);
-  await peca(noEstrutura, "EST-001", 1, 1, { localMontagem: "Base" });
-  await peca(noEstrutura, "FIX-PAR-M6X20", 24, 2, { localMontagem: "Cantoneiras" });
-  await peca(noEstrutura, "FIX-POR-M6", 24, 3, { localMontagem: "Cantoneiras" });
+  /* O manual. Repare que dentro da divisao Domo entra o ITEM domo, ja
+     pronto — e nao as cameras: quem sabe o que tem dentro do domo e a
+     estrutura do domo, e o equipamento so consome a unidade. */
+  const manual = await estrutura(
+    "Equipamento de inspeção",
+    "Estrutura em perfil, o domo pronto e a automação embarcada.",
+    null,
+  );
 
-  const noDomo = await divisao(divDomo.id, 2);
-  await peca(noDomo, "DOM-CAR-PETG", 1, 1, { localMontagem: "Frente" });
-  await peca(noDomo, "CNS-FIL-PETG", 0.31, 2);
-  await peca(noDomo, "SEN-CAM-001", 2, 3, { localMontagem: "Topo" });
-  await peca(noDomo, "FIX-PAR-M6X20", 6, 4, { obrigatorio: false, localMontagem: "Tampa" });
+  const manEstrutura = await divisao(manual.id, divEstrutura.id, 1);
+  await peca(manual.id, manEstrutura, "EST-001", 1, 1, "Base");
+  await peca(manual.id, manEstrutura, "FIX-PAR-M6X20", 24, 2, "Cantoneiras");
+  await peca(manual.id, manEstrutura, "FIX-POR-M6", 24, 3, "Cantoneiras");
 
-  const noAutomacao = await divisao(divAutomacao.id, 3);
-  await peca(noAutomacao, "AUT-PLACA-001", 1, 1);
-  await peca(noAutomacao, "AUT-DIS-OLED", 1, 2);
-  await peca(noAutomacao, "CBL-USB-3M", 1, 3);
+  const manDomo = await divisao(manual.id, divDomo.id, 2);
+  await peca(manual.id, manDomo, "DOM-KIT-001", 1, 1, "Frente");
+
+  const manAutomacao = await divisao(manual.id, divAutomacao.id, 3);
+  await peca(manual.id, manAutomacao, "AUT-PLACA-001", 1, 1);
+  await peca(manual.id, manAutomacao, "AUT-DIS-OLED", 1, 2);
+  await peca(manual.id, manAutomacao, "CBL-USB-3M", 1, 3);
+
+  /* O kit. Montar uma destas consome tudo que esta aqui dentro e coloca uma
+     unidade de DOM-KIT-001 no estoque. */
+  const kitDomo = await estrutura(
+    "Domo",
+    "Carenagem impressa, duas câmeras e os parafusos da tampa.",
+    i("DOM-KIT-001"),
+  );
+
+  const kitDomoNo = await divisao(kitDomo.id, divDomo.id, 1);
+  await peca(kitDomo.id, kitDomoNo, "DOM-CAR-PETG", 1, 1, "Frente");
+  await peca(kitDomo.id, kitDomoNo, "CNS-FIL-PETG", 0.31, 2);
+  await peca(kitDomo.id, kitDomoNo, "SEN-CAM-001", 2, 3, "Topo");
+  await peca(kitDomo.id, kitDomoNo, "FIX-PAR-M6X20", 6, 4, "Tampa");
+
   await db.insert(movimentos).values([
     { itemId: i("FIX-PAR-M6X20"), tipo: "entrada_compra", quantidade: 500, referencia: "NF 12043", usuarioId: admin.id },
-    { itemId: i("FIX-PAR-M6X20"), tipo: "saida_producao", quantidade: 120, referencia: "EQP-001", usuarioId: admin.id },
-    { itemId: i("FIX-PAR-M6X20"), tipo: "reserva", quantidade: 60, referencia: "EQP-001 lote 2", usuarioId: admin.id },
+    { itemId: i("FIX-PAR-M6X20"), tipo: "saida_producao", quantidade: 120, referencia: "Montagem lote 1", usuarioId: admin.id },
+    { itemId: i("FIX-PAR-M6X20"), tipo: "reserva", quantidade: 60, referencia: "Montagem lote 2", usuarioId: admin.id },
     { itemId: i("FIX-POR-M6"), tipo: "entrada_compra", quantidade: 300, referencia: "NF 12043", usuarioId: admin.id },
-    { itemId: i("FIX-POR-M6"), tipo: "saida_producao", quantidade: 150, referencia: "EQP-001", usuarioId: admin.id },
+    { itemId: i("FIX-POR-M6"), tipo: "saida_producao", quantidade: 150, referencia: "Montagem lote 1", usuarioId: admin.id },
     { itemId: i("EST-001"), tipo: "entrada_compra", quantidade: 3, referencia: "NF 8871", usuarioId: admin.id },
-    { itemId: i("EST-001"), tipo: "saida_producao", quantidade: 2, referencia: "EQP-001", usuarioId: admin.id },
+    { itemId: i("EST-001"), tipo: "saida_producao", quantidade: 2, referencia: "Montagem lote 1", usuarioId: admin.id },
     { itemId: i("DOM-CAR-PETG"), tipo: "entrada_fabricacao", quantidade: 2, referencia: "Impressão lote 7", usuarioId: admin.id },
     { itemId: i("CNS-FIL-PETG"), tipo: "entrada_compra", quantidade: 6, referencia: "NF 9912", usuarioId: admin.id },
     { itemId: i("CNS-FIL-PETG"), tipo: "saida_producao", quantidade: 3, referencia: "Impressão lote 7", usuarioId: admin.id },
     { itemId: i("AUT-PLACA-001"), tipo: "entrada_compra", quantidade: 5, referencia: "NF 7710", usuarioId: admin.id },
-    { itemId: i("AUT-PLACA-001"), tipo: "saida_producao", quantidade: 4, referencia: "SEN-CAM-001", usuarioId: admin.id },
-    /* As duas cameras compradas sao consumidas pela montagem do EQP-001 logo
+    { itemId: i("AUT-PLACA-001"), tipo: "saida_producao", quantidade: 4, referencia: "Montagem lote 1", usuarioId: admin.id },
+    /* As duas cameras compradas sao consumidas pela montagem do domo logo
        abaixo: o saldo volta a zero e SEN-CAM-001 continua sendo o item EM
        FALTA do demo — so que agora com historia, e nao por ausencia. */
     { itemId: i("SEN-CAM-001"), tipo: "entrada_compra", quantidade: 2, referencia: "NF 8123", usuarioId: admin.id },
@@ -351,75 +374,40 @@ async function criar() {
     { pedidoId: pedidoMl.id, itemId: i("FIX-INS-M3"), quantidade: 2, precoUnitario: 62 },
   ]);
 
-  /* ---------------------------------------------------------------- Frota */
-
-  const vers = await db
-    .insert(versoes)
-    .values([
-      { tipo: "sistema", numero: "3.12.0", lancadaEm: `${ano - 1}-11-20`, notas: "Versão que ainda roda nos carros mais antigos." },
-      { tipo: "sistema", numero: "3.14.2", lancadaEm: `${ano}-03-08`, notas: "Leitura de placa funcionando offline." },
-      { tipo: "sistema", numero: "4.0.0", lancadaEm: `${ano}-08-01`, notas: "Reescrita da captura. Exige o PC novo." },
-      { tipo: "tablet", numero: "2.6.1", lancadaEm: `${ano - 1}-12-02` },
-      { tipo: "tablet", numero: "2.8.0", lancadaEm: `${ano}-09-05`, notas: "Fila de envio quando o carro fica sem sinal." },
-    ])
-    .returning();
-  const v = (tipo: string, numero: string) =>
-    vers.find((x) => x.tipo === tipo && x.numero === numero)!.id;
-
-  const frota = await db
-    .insert(carros)
-    .values([
-      { placa: "ABC1D23", fabricante: "Fiat", modelo: "Fiorino", pc: "MPZ-PC-014", versaoSistemaId: v("sistema", "4.0.0"), versaoTabletId: v("tablet", "2.8.0"), criadoPor: admin.id, atualizadoPor: admin.id },
-      { placa: "DEF2G45", fabricante: "Renault", modelo: "Kangoo", pc: "MPZ-PC-022", versaoSistemaId: v("sistema", "3.14.2"), versaoTabletId: v("tablet", "2.8.0"), criadoPor: admin.id, atualizadoPor: admin.id },
-      /* Carro atrasado nas duas versoes: e o que a tela de frota serve para
-         enxergar de relance. */
-      { placa: "GHI3J67", fabricante: "Volkswagen", modelo: "Saveiro", pc: "MPZ-PC-031", versaoSistemaId: v("sistema", "3.12.0"), versaoTabletId: v("tablet", "2.6.1"), criadoPor: admin.id, atualizadoPor: admin.id },
-    ])
-    .returning();
-  const carro = (placa: string) => frota.find((c) => c.placa === placa)!.id;
-
   /* ------------------------------------------------------------ Montagens */
 
   /**
-   * Cada montagem lanca os movimentos dela, do mesmo jeito que a acao faz na
-   * tela: sai cada filho direto, entra uma unidade do equipamento. Sem isso o
-   * demo mostraria equipamento montado com o estoque de pecas intacto.
+   * Abre uma montagem copiando a arvore do kit, do mesmo jeito que a acao
+   * `abrirMontagem` faz. Cada montagem vale por UMA unidade.
+   *
+   * `montar` fecha: lanca a saida de cada peca e a entrada de uma unidade do
+   * item produzido, exatamente como `montarMontagem`. Sem isso o demo
+   * mostraria domo pronto com o estoque de pecas intacto.
    */
-  /**
-   * Abre uma arvore de montagem copiada do molde, do mesmo jeito que a acao
-   * `abrirMontagens` faz. `fecharDivisoes` marca as etapas ja concluidas e
-   * lanca a saida das pecas delas — e so ai o estoque se mexe.
-   */
-  async function abrir(
+  async function abrirMontagem(
     numero: string,
-    extras: {
-      fecharTudo?: boolean;
-      fecharDivisoes?: string[];
-      local?: string;
-      carroId?: string;
-      observacoes?: string;
-    } = {},
+    kit: { id: string; nome: string; itemId: string | null },
+    extras: { montar?: boolean; local?: string; observacoes?: string } = {},
   ) {
-    const receita = await db.select().from(moldeNos).where(eq(moldeNos.moldeId, molde.id));
+    const receita = await db.select().from(moldeNos).where(eq(moldeNos.moldeId, kit.id));
     const nomes = new Map([
       [divEstrutura.id, divEstrutura.nome],
       [divDomo.id, divDomo.nome],
       [divAutomacao.id, divAutomacao.nome],
     ]);
 
-    const completa = extras.fecharTudo || Boolean(extras.carroId);
     const [montagem] = await db
       .insert(montagens)
       .values({
         numero,
-        moldeId: molde.id,
-        nome: molde.nome,
-        status: extras.carroId ? "instalada" : completa ? "montada" : "em_montagem",
+        moldeId: kit.id,
+        itemId: kit.itemId!,
+        nome: kit.nome,
+        status: extras.montar ? "montada" : "em_montagem",
         local: extras.local ?? null,
-        carroId: extras.carroId ?? null,
         observacoes: extras.observacoes ?? null,
-        montadaEm: completa ? new Date() : null,
-        montadaPor: completa ? admin.id : null,
+        montadaEm: extras.montar ? new Date() : null,
+        montadaPor: extras.montar ? admin.id : null,
       })
       .returning();
 
@@ -432,7 +420,6 @@ async function criar() {
           nome: no.divisaoId ? (nomes.get(no.divisaoId) ?? "Divisão") : null,
           itemId: no.itemId,
           quantidade: no.quantidade,
-          obrigatorio: no.obrigatorio,
           localMontagem: no.localMontagem,
           ordem: no.ordem,
         })
@@ -447,56 +434,52 @@ async function criar() {
         .where(eq(montagemNos.id, mapa.get(no.id)!));
     }
 
-    const aFechar = new Set(
-      extras.fecharTudo || extras.carroId
-        ? [divEstrutura.nome, divDomo.nome, divAutomacao.nome]
-        : (extras.fecharDivisoes ?? []),
-    );
+    if (!extras.montar) return montagem;
 
-    for (const no of receita) {
-      if (!no.divisaoId || !aFechar.has(nomes.get(no.divisaoId) ?? "")) continue;
-
-      await db
-        .update(montagemNos)
-        .set({ montadoEm: new Date(), montadoPor: admin.id })
-        .where(eq(montagemNos.id, mapa.get(no.id)!));
-
-      for (const filho of receita.filter((f) => f.paiId === no.id && f.itemId)) {
-        await db.insert(movimentos).values({
-          itemId: filho.itemId!,
-          tipo: "saida_producao",
-          quantidade: filho.quantidade,
-          referencia: numero,
-          usuarioId: admin.id,
-          observacao: `Consumido na montagem ${numero}`,
-          montagemId: montagem.id,
-        });
-      }
+    for (const no of receita.filter((n) => n.itemId)) {
+      await db.insert(movimentos).values({
+        itemId: no.itemId!,
+        tipo: "saida_producao",
+        quantidade: no.quantidade,
+        referencia: numero,
+        usuarioId: admin.id,
+        observacao: `Consumido na montagem ${numero}`,
+        montagemId: montagem.id,
+      });
     }
+
+    await db.insert(movimentos).values({
+      itemId: kit.itemId!,
+      tipo: "entrada_fabricacao",
+      quantidade: 1,
+      referencia: numero,
+      usuarioId: admin.id,
+      observacao: `Montado em ${numero}`,
+      montagemId: montagem.id,
+    });
 
     return montagem;
   }
 
-  await abrir(`MNT-${ano}-0001`, {
-    carroId: carro("ABC1D23"),
-    local: "ABC1D23",
-    observacoes: "Primeiro equipamento da frota. Câmeras apontadas 15° para baixo.",
+  /* Um domo pronto: consumiu as duas cameras e virou uma unidade em estoque. */
+  await abrirMontagem(`MNT-${ano}-0001`, kitDomo, {
+    montar: true,
+    local: "Prateleira C2",
+    observacoes: "Câmeras apontadas 15° para baixo.",
   });
 
-  /* Uma em andamento: a estrutura ja fechou, o domo espera peca chegar. */
-  await abrir(`MNT-${ano}-0002`, {
-    fecharDivisoes: [divEstrutura.nome],
-    local: "Bancada 2",
-  });
+  /* Outro aberto, esperando camera chegar. Duas montagens do mesmo kit,
+     cada uma por si: a segunda so descobre que falta peca quando alguem
+     clicar em Montar. */
+  await abrirMontagem(`MNT-${ano}-0002`, kitDomo, { local: "Bancada 2" });
 
   console.log(`  ${forns.length} fornecedores`);
   console.log(`  ${criados.length} itens`);
   console.log(`  1 cotação com comparativo de preços`);
   console.log(`  1 pedido parcialmente recebido`);
   console.log(`  2 pedidos de site (AliExpress e Mercado Livre) com link e parâmetros de compra`);
-  console.log(`  ${vers.length} versões (sistema e tablet)`);
-  console.log(`  ${frota.length} carros, um deles com equipamento instalado`);
-  console.log(`  3 montagens: uma no carro, uma pronta no estoque, uma virou o equipamento`);
+  console.log(`  2 estruturas: o manual do equipamento e o kit do domo`);
+  console.log(`  2 montagens de domo: uma pronta no estoque, outra esperando câmera`);
   console.log("\nPronto. Entre no sistema para ver.");
 }
 const acao = process.argv[2] === "limpar" ? limpar : criar;

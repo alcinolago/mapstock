@@ -1,18 +1,22 @@
 "use server";
 
-import { and, asc, eq, isNull, sql } from "drizzle-orm";
+import { and, asc, eq, isNotNull, isNull, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { db } from "@/db";
-import { moldeNos, moldes, montagens } from "@/db/schema";
+import { itens, moldeNos, moldes, montagens } from "@/db/schema";
 import { exigirEdicao } from "@/lib/auth";
 import { registrar } from "@/lib/auditoria";
 
 /**
- * O molde e a receita do equipamento: divisoes e pecas com quantidade.
+ * A estrutura: uma arvore de divisoes e pecas, servindo a duas coisas.
  *
- * Nada aqui encosta no estoque. Criar molde, acrescentar divisao, mudar
+ *   sem item  manual do equipamento completo. Documentacao de bancada.
+ *   com item  receita de um item do estoque — o kit. E o que a montagem
+ *             executa, e o que faz o domo existir na prateleira.
+ *
+ * Nada aqui encosta no estoque. Criar, acrescentar divisao, mudar
  * quantidade — tudo isso e planejamento, e vale mesmo sem ter uma peca
  * sequer na prateleira. Quem confere saldo e a montagem.
  */
@@ -27,19 +31,36 @@ export async function salvarMolde(
   const id = (formulario.get("id") as string) || null;
   const nome = ((formulario.get("nome") as string) ?? "").trim();
   const descricao = ((formulario.get("descricao") as string) ?? "").trim() || null;
-  if (!nome) return { erro: "Informe o nome do equipamento." };
+  const itemId = ((formulario.get("itemId") as string) ?? "").trim() || null;
+  if (!nome) return { erro: "Informe o nome." };
 
   const [repetido] = await db
     .select({ id: moldes.id })
     .from(moldes)
     .where(sql`lower(${moldes.nome}) = lower(${nome})`);
   if (repetido && repetido.id !== id) {
-    return { erro: `Já existe um molde chamado "${nome}".` };
+    return { erro: `Já existe uma estrutura chamada "${nome}".` };
+  }
+
+  /* O item so se escolhe na criacao. Trocar depois mudaria o que a estrutura
+     produz sem mexer numa linha da arvore — e o caminho mais curto para um
+     kit que se consome a si mesmo. Errou o item: exclui e cria de novo. */
+  if (!id && itemId) {
+    const [item] = await db.select({ id: itens.id }).from(itens).where(eq(itens.id, itemId));
+    if (!item) return { erro: "Item não encontrado." };
+
+    const [jaTem] = await db
+      .select({ nome: moldes.nome })
+      .from(moldes)
+      .where(eq(moldes.itemId, itemId));
+    if (jaTem) {
+      return { erro: `Este item já tem estrutura: "${jaTem.nome}". Um item tem uma receita só.` };
+    }
   }
 
   if (id) {
     const [antes] = await db.select().from(moldes).where(eq(moldes.id, id));
-    if (!antes) return { erro: "Molde não encontrado." };
+    if (!antes) return { erro: "Estrutura não encontrada." };
     const [depois] = await db
       .update(moldes)
       .set({ nome, descricao, atualizadoEm: new Date(), atualizadoPor: sessao.id })
@@ -59,7 +80,7 @@ export async function salvarMolde(
 
   const [criado] = await db
     .insert(moldes)
-    .values({ nome, descricao, criadoPor: sessao.id, atualizadoPor: sessao.id })
+    .values({ nome, descricao, itemId, criadoPor: sessao.id, atualizadoPor: sessao.id })
     .returning();
   await registrar({
     usuarioId: sessao.id,
@@ -76,17 +97,17 @@ export async function excluirMolde(id: string): Promise<{ erro?: string }> {
   const sessao = await exigirEdicao();
 
   const [antes] = await db.select().from(moldes).where(eq(moldes.id, id));
-  if (!antes) return { erro: "Molde não encontrado." };
+  if (!antes) return { erro: "Estrutura não encontrada." };
 
-  /* Montagem ja aberta segura o molde. Ela guarda a propria copia da arvore,
-     entao nao quebraria — mas perder de onde ela veio apaga o rastro. */
+  /* Montagem ja aberta segura a estrutura. Ela guarda a propria copia da
+     arvore, entao nao quebraria — mas perder de onde ela veio apaga o rastro. */
   const [{ n }] = await db
     .select({ n: sql<number>`count(*)::int` })
     .from(montagens)
     .where(eq(montagens.moldeId, id));
   if (n > 0) {
     return {
-      erro: `Este molde já gerou ${n} ${n === 1 ? "montagem" : "montagens"}. Desative em vez de excluir, para não perder de onde elas vieram.`,
+      erro: `Esta estrutura já gerou ${n} ${n === 1 ? "montagem" : "montagens"}. Desative em vez de excluir, para não perder de onde elas vieram.`,
     };
   }
 
@@ -105,7 +126,7 @@ export async function excluirMolde(id: string): Promise<{ erro?: string }> {
 export async function alternarMolde(id: string): Promise<{ erro?: string }> {
   const sessao = await exigirEdicao();
   const [antes] = await db.select().from(moldes).where(eq(moldes.id, id));
-  if (!antes) return { erro: "Molde não encontrado." };
+  if (!antes) return { erro: "Estrutura não encontrada." };
 
   const [depois] = await db
     .update(moldes)
@@ -124,7 +145,38 @@ export async function alternarMolde(id: string): Promise<{ erro?: string }> {
   return {};
 }
 
-/* ----------------------------------------------------------- Nós do molde */
+/* --------------------------------------------------------- Nós da árvore */
+
+/**
+ * Um kit dentro do outro e normal — a placa montada entra no domo. Um kit
+ * dentro de si mesmo, mesmo com tres niveis no meio, nao: a montagem entraria
+ * em laco infinito na hora de explodir a arvore.
+ *
+ * Desce pela receita de `itemId` procurando `alvo`. Kit sem receita e folha,
+ * que e o caso da esmagadora maioria dos itens.
+ */
+async function kitConsome(
+  itemId: string,
+  alvo: string,
+  visitados = new Set<string>(),
+): Promise<boolean> {
+  if (itemId === alvo) return true;
+  if (visitados.has(itemId)) return false;
+  visitados.add(itemId);
+
+  const [molde] = await db.select({ id: moldes.id }).from(moldes).where(eq(moldes.itemId, itemId));
+  if (!molde) return false;
+
+  const dentro = await db
+    .select({ itemId: moldeNos.itemId })
+    .from(moldeNos)
+    .where(and(eq(moldeNos.moldeId, molde.id), isNotNull(moldeNos.itemId)));
+
+  for (const filho of dentro) {
+    if (await kitConsome(filho.itemId!, alvo, visitados)) return true;
+  }
+  return false;
+}
 
 const esquemaNo = z.object({
   moldeId: z.uuid(),
@@ -136,7 +188,6 @@ const esquemaNo = z.object({
     .trim()
     .transform((v) => Number(v.replace(",", ".")))
     .refine((v) => Number.isFinite(v) && v > 0, "Informe uma quantidade maior que zero"),
-  obrigatorio: z.coerce.boolean().default(true),
   localMontagem: z.string().trim().optional(),
 });
 
@@ -145,10 +196,7 @@ export type EstadoNo = { erro?: string; ok?: boolean };
 export async function adicionarNo(_estado: EstadoNo, formulario: FormData): Promise<EstadoNo> {
   const sessao = await exigirEdicao();
 
-  const dados = esquemaNo.safeParse({
-    ...Object.fromEntries(formulario),
-    obrigatorio: formulario.get("obrigatorio") !== "false",
-  });
+  const dados = esquemaNo.safeParse(Object.fromEntries(formulario));
   if (!dados.success) {
     return { erro: dados.error.issues[0]?.message ?? "Dados inválidos" };
   }
@@ -168,6 +216,18 @@ export async function adicionarNo(_estado: EstadoNo, formulario: FormData): Prom
     if (!pai) return { erro: "Nó pai não encontrado." };
     if (pai.itemId) {
       return { erro: "Peça do estoque não contém nada. Pendure dentro de uma divisão." };
+    }
+  }
+
+  if (itemId) {
+    const [molde] = await db
+      .select({ itemId: moldes.itemId, nome: moldes.nome })
+      .from(moldes)
+      .where(eq(moldes.id, d.moldeId));
+    if (molde?.itemId && (await kitConsome(itemId, molde.itemId))) {
+      return {
+        erro: `Isso faz ${molde.nome} entrar em si mesmo — direto ou por dentro de outro kit.`,
+      };
     }
   }
 
@@ -194,7 +254,6 @@ export async function adicionarNo(_estado: EstadoNo, formulario: FormData): Prom
       divisaoId,
       itemId,
       quantidade: d.quantidade,
-      obrigatorio: d.obrigatorio,
       localMontagem: d.localMontagem || null,
       ordem: irmaos.length + 1,
     })

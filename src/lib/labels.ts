@@ -18,7 +18,6 @@ import type {
   statusPedido,
   tipoAquisicao,
   tipoMovimento,
-  tipoVersao,
   unidadePrazo,
 } from "@/db/schema";
 
@@ -31,7 +30,6 @@ export type StatusFornecedor = Valor<typeof statusFornecedor>;
 export type StatusCotacao = Valor<typeof statusCotacao>;
 export type StatusPedido = Valor<typeof statusPedido>;
 export type StatusMontagem = Valor<typeof statusMontagem>;
-export type TipoVersao = Valor<typeof tipoVersao>;
 export type PapelUsuario = Valor<typeof papelUsuario>;
 export type UnidadePrazo = Valor<typeof unidadePrazo>;
 export type AcaoAuditoria = Valor<typeof acaoAuditoria>;
@@ -64,8 +62,7 @@ export const EFEITO_MOVIMENTO: Record<
 
 /**
  * Movimento nao se apaga: lanca-se o oposto. Mora aqui junto do EFEITO
- * porque quem estorna precisa da mesma regra em mais de um lugar — a tela de
- * estoque e a desmontagem de uma estrutura.
+ * porque quem estorna precisa da mesma regra em mais de um lugar.
  */
 export const OPOSTO_MOVIMENTO: Record<TipoMovimento, TipoMovimento> = {
   entrada_compra: "ajuste_negativo",
@@ -128,14 +125,7 @@ export const STATUS_PEDIDO: Record<StatusPedido, string> = {
 
 export const STATUS_MONTAGEM: Record<StatusMontagem, string> = {
   em_montagem: "Em montagem",
-  montada: "Montada, pronta",
-  instalada: "Instalada em carro",
-  desmontada: "Desmontada",
-};
-
-export const TIPOS_VERSAO: Record<TipoVersao, string> = {
-  sistema: "Sistema do PC",
-  tablet: "App do tablet",
+  montada: "Montada",
 };
 
 export const PAPEIS: Record<PapelUsuario, string> = {

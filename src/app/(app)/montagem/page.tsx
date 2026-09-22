@@ -1,20 +1,44 @@
-import { asc } from "drizzle-orm";
-
 import {
-  AbrirMontagem,
+  NovaMontagem,
   PainelMontagem,
   type MontagemNaTela,
 } from "@/components/montagem/painel-montagem";
 import type { NoMontagem } from "@/components/montagem/arvore-montagem";
 import { CabecalhoPagina } from "@/components/ui/cabecalho-pagina";
-import { db } from "@/db";
 import { listarMoldes, listarMontagens, nosDaMontagem, type NoDaMontagem } from "@/db/consultas";
-import { carros, montagens } from "@/db/schema";
 import { exigirSessao } from "@/lib/auth";
 
 export const metadata = { title: "Montagem" };
 
-function emArvore(plana: NoDaMontagem[], paiId: string | null): NoMontagem[] {
+/**
+ * Quanto cada item a montagem inteira consome.
+ *
+ * A quantidade multiplica descendo: uma divisão que aparece duas vezes leva o
+ * dobro de tudo que tem dentro. O mesmo item pode estar em duas divisões, e
+ * aí o que vale é a soma — é contra ela que o saldo é comparado, e não contra
+ * a quantidade escrita numa linha só.
+ */
+function porItem(plana: NoDaMontagem[]): Map<string, number> {
+  const filhosDe = new Map<string | null, NoDaMontagem[]>();
+  for (const n of plana) filhosDe.set(n.paiId, [...(filhosDe.get(n.paiId) ?? []), n]);
+
+  const total = new Map<string, number>();
+  function descer(paiId: string | null, fator: number) {
+    for (const no of filhosDe.get(paiId) ?? []) {
+      const q = no.quantidade * fator;
+      if (no.itemId) total.set(no.itemId, (total.get(no.itemId) ?? 0) + q);
+      else descer(no.id, q);
+    }
+  }
+  descer(null, 1);
+  return total;
+}
+
+function emArvore(
+  plana: NoDaMontagem[],
+  paiId: string | null,
+  necessario: Map<string, number>,
+): NoMontagem[] {
   return plana
     .filter((n) => n.paiId === paiId)
     .map((n) => ({
@@ -25,12 +49,10 @@ function emArvore(plana: NoDaMontagem[], paiId: string | null): NoMontagem[] {
       descricao: n.descricao,
       unidade: n.unidade,
       quantidade: n.quantidade,
-      obrigatorio: n.obrigatorio,
+      necessario: n.itemId ? (necessario.get(n.itemId) ?? n.quantidade) : 0,
       localMontagem: n.localMontagem,
       disponivel: n.disponivel,
-      montadoEm: n.montadoEm,
-      montadoPor: n.montadoPor,
-      filhos: emArvore(plana, n.id),
+      filhos: emArvore(plana, n.id, necessario),
     }));
 }
 
@@ -38,58 +60,58 @@ export default async function PaginaMontagem() {
   const sessao = await exigirSessao();
   const podeEditar = sessao.papel !== "leitura";
 
-  const [lista, moldes, frota, ocupados] = await Promise.all([
-    listarMontagens({ incluirDesmontadas: true }),
-    listarMoldes(),
-    db.select({ id: carros.id, placa: carros.placa }).from(carros).orderBy(asc(carros.placa)),
-    db.select({ carroId: montagens.carroId }).from(montagens),
-  ]);
-
-  const comCarro = new Set(ocupados.map((o) => o.carroId).filter(Boolean) as string[]);
+  const [lista, moldes] = await Promise.all([listarMontagens(), listarMoldes()]);
 
   const comArvore: MontagemNaTela[] = await Promise.all(
-    lista.map(async (m) => ({
-      id: m.id,
-      numero: m.numero,
-      nome: m.nome,
-      status: m.status,
-      local: m.local,
-      observacoes: m.observacoes,
-      iniciadaEm: m.iniciadaEm,
-      montadaEm: m.montadaEm,
-      placa: m.placa,
-      carroId: m.carroId,
-      etapas: m.etapas,
-      etapasFeitas: m.etapasFeitas,
-      nos: emArvore(await nosDaMontagem(m.id), null),
-    })),
+    lista.map(async (m) => {
+      const plana = await nosDaMontagem(m.id);
+      const necessario = porItem(plana);
+
+      /* O saldo de cada peca ja veio na consulta da arvore; falta so compara
+         com o total que esta montagem consome. */
+      const saldo = new Map(plana.filter((n) => n.itemId).map((n) => [n.itemId!, n.disponivel]));
+      const faltando = [...necessario.entries()].filter(
+        ([itemId, q]) => (saldo.get(itemId) ?? 0) < q,
+      ).length;
+
+      return {
+        id: m.id,
+        numero: m.numero,
+        nome: m.nome,
+        item: `${m.codigo} — ${m.itemDescricao}`,
+        status: m.status,
+        local: m.local,
+        observacoes: m.observacoes,
+        iniciadaEm: m.iniciadaEm,
+        montadaEm: m.montadaEm,
+        montadaPor: m.montadaPor,
+        faltando,
+        nos: emArvore(plana, null, necessario),
+      };
+    }),
   );
 
-  const emAndamento = comArvore.filter((m) => m.status === "em_montagem").length;
+  const abertas = comArvore.filter((m) => m.status === "em_montagem").length;
+
+  /* So kit se monta: o manual do equipamento completo nao produz item nenhum
+     e nao aparece aqui. */
+  const kits = moldes
+    .filter((m) => m.itemId && m.ativo && m.nos > 0)
+    .map((m) => ({ id: m.id, nome: m.nome, item: `${m.codigo} — ${m.itemDescricao}` }));
 
   return (
     <div className="mx-auto max-w-[100rem]">
       <CabecalhoPagina
         titulo="Montagem"
         descricao={
-          emAndamento > 0
-            ? `${emAndamento} ${emAndamento === 1 ? "equipamento" : "equipamentos"} em montagem. Cada árvore é um equipamento.`
-            : "Cada árvore aberta aqui é um equipamento. Montar uma divisão dá baixa nas peças dela."
+          abertas > 0
+            ? `${abertas} ${abertas === 1 ? "unidade aberta" : "unidades abertas"}. Montar dá baixa nas peças e coloca a unidade pronta no estoque.`
+            : "Cada montagem é uma unidade. Montar dá baixa nas peças e coloca a unidade pronta no estoque."
         }
-        acao={
-          podeEditar ? (
-            <AbrirMontagem
-              moldes={moldes.filter((m) => m.ativo).map((m) => ({ id: m.id, nome: m.nome, nos: m.nos }))}
-            />
-          ) : undefined
-        }
+        acao={podeEditar ? <NovaMontagem kits={kits} /> : undefined}
       />
 
-      <PainelMontagem
-        montagens={comArvore}
-        carros={frota.map((c) => ({ id: c.id, placa: c.placa, ocupado: comCarro.has(c.id) }))}
-        podeEditar={podeEditar}
-      />
+      <PainelMontagem montagens={comArvore} podeEditar={podeEditar} />
     </div>
   );
 }

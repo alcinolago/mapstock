@@ -1,32 +1,33 @@
 "use server";
 
-import { asc, desc, eq, sql } from "drizzle-orm";
+import { asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
 import { db } from "@/db";
-import { carros, moldeNos, moldes, montagemNos, montagens, movimentos } from "@/db/schema";
+import { saldos } from "@/db/consultas";
+import { itens, moldeNos, moldes, montagemNos, montagens, movimentos, unidades } from "@/db/schema";
 import { exigirEdicao, exigirSessao } from "@/lib/auth";
 import { registrar } from "@/lib/auditoria";
-import { OPOSTO_MOVIMENTO } from "@/lib/labels";
 
 /**
- * Montagem: o evento que transforma peças em equipamento.
+ * Montagem: o evento que transforma peças num item pronto.
  *
- * Abrir uma montagem copia a árvore do molde para dentro dela. A cópia não é
- * otimização: é o que separa planejar de executar. Editar o molde amanhã não
- * pode reescrever o que já foi montado ontem, e cada equipamento em produção
- * segue a receita que valia quando ele começou.
+ * Só kit se monta — molde com `itemId`. O manual do equipamento completo não
+ * passa por aqui: ele é documentação de bancada, não produz nada e não
+ * encosta no estoque.
  *
- * Pedir três equipamentos abre três árvores independentes. Cada uma no seu
- * quadrado, montada no seu ritmo — sem contador de "2 de 3", sem uma esperar
- * a outra. Foi assim que o pessoal descreveu a bancada.
+ * Cada montagem vale por UMA unidade e fecha de uma vez só. Seis domos são
+ * seis montagens: cada uma confere o estoque no momento do próprio clique, e
+ * quem clicar primeiro leva as peças. Não existe reserva nem fila — foi
+ * decisão explícita de quem monta, que prefere a bancada mandar na ordem.
  *
- * Só divisão se monta. Peça não se monta: ela é consumida quando a divisão
- * que a contém fecha.
+ * Abrir copia a árvore do molde para dentro da montagem. A cópia não é
+ * otimização: editar a receita amanhã não pode reescrever com o que aquela
+ * unidade foi feita ontem.
  */
 
 export type FaltaNaMontagem = {
-  tipo: "peca" | "divisao";
+  itemId: string;
   nome: string;
   necessario: number;
   disponivel: number;
@@ -40,7 +41,7 @@ export type ResultadoMontagem = {
 };
 
 /** Número sequencial por ano, no mesmo formato das cotações e pedidos. */
-async function proximoNumero(sequencia: number): Promise<string> {
+async function proximoNumero(): Promise<string> {
   const inicio = `MNT-${new Date().getFullYear()}-`;
   const [linha] = await db
     .select({ numero: montagens.numero })
@@ -50,25 +51,23 @@ async function proximoNumero(sequencia: number): Promise<string> {
     .limit(1);
 
   const ultimo = linha ? Number(linha.numero.slice(inicio.length)) : 0;
-  return `${inicio}${String(ultimo + sequencia).padStart(4, "0")}`;
+  return `${inicio}${String(ultimo + 1).padStart(4, "0")}`;
 }
 
 /**
- * Abre N árvores a partir de um molde. Não encosta no estoque: abrir é
- * planejar, e vale mesmo sem ter nenhuma peça na prateleira.
+ * Abre uma montagem de um kit. Não encosta no estoque: abrir é planejar, e
+ * vale mesmo sem ter nenhuma peça na prateleira.
  */
-export async function abrirMontagens(
-  moldeId: string,
-  quantidade: number,
-): Promise<{ erro?: string; numeros?: string[] }> {
+export async function abrirMontagem(moldeId: string): Promise<{ erro?: string; numero?: string }> {
   const sessao = await exigirEdicao();
 
-  if (!Number.isInteger(quantidade) || quantidade < 1 || quantidade > 50) {
-    return { erro: "Informe de 1 a 50 equipamentos." };
-  }
-
   const [molde] = await db.select().from(moldes).where(eq(moldes.id, moldeId));
-  if (!molde) return { erro: "Molde não encontrado." };
+  if (!molde) return { erro: "Estrutura não encontrada." };
+  if (!molde.itemId) {
+    return {
+      erro: `${molde.nome} é o manual de um equipamento completo, não um item. Só item se monta.`,
+    };
+  }
 
   const receita = await db
     .select()
@@ -76,185 +75,177 @@ export async function abrirMontagens(
     .where(eq(moldeNos.moldeId, moldeId))
     .orderBy(asc(moldeNos.ordem), asc(moldeNos.id));
   if (receita.length === 0) {
-    return { erro: `${molde.nome} ainda não tem nenhuma divisão ou peça. Monte a estrutura antes.` };
+    return { erro: `${molde.nome} ainda não tem nenhuma peça. Monte a estrutura antes.` };
   }
 
   /* Nome da divisao copiado agora: renomear "Domo" daqui a um mes nao pode
      mudar o que foi montado hoje. */
   const nomes = new Map(
     (
-      await db
-        .select({ id: sql<string>`d.id`, nome: sql<string>`d.nome` })
-        .from(sql`divisoes d`)
+      await db.select({ id: sql<string>`d.id`, nome: sql<string>`d.nome` }).from(sql`divisoes d`)
     ).map((d) => [d.id, d.nome]),
   );
 
-  const numeros: string[] = [];
+  const numero = await proximoNumero();
+  const [montagem] = await db
+    .insert(montagens)
+    .values({
+      numero,
+      moldeId,
+      itemId: molde.itemId,
+      nome: molde.nome,
+      status: "em_montagem",
+    })
+    .returning();
 
-  for (let n = 1; n <= quantidade; n++) {
-    const numero = await proximoNumero(n);
-    const [montagem] = await db
-      .insert(montagens)
+  /* Copia a arvore preservando o desenho: primeiro cria todos os nos, e o
+     mapa de id antigo para novo religa os pais. */
+  const mapa = new Map<string, string>();
+  for (const no of receita) {
+    const [criado] = await db
+      .insert(montagemNos)
       .values({
-        numero,
-        moldeId,
-        nome: molde.nome,
-        status: "em_montagem",
+        montagemId: montagem.id,
+        paiId: null,
+        nome: no.divisaoId ? (nomes.get(no.divisaoId) ?? "Divisão") : null,
+        itemId: no.itemId,
+        quantidade: no.quantidade,
+        localMontagem: no.localMontagem,
+        ordem: no.ordem,
       })
       .returning();
-
-    /* Copia a arvore preservando o desenho: primeiro cria todos os nos, e o
-       mapa de id antigo para novo religa os pais. */
-    const mapa = new Map<string, string>();
-    for (const no of receita) {
-      const [criado] = await db
-        .insert(montagemNos)
-        .values({
-          montagemId: montagem.id,
-          paiId: null,
-          nome: no.divisaoId ? (nomes.get(no.divisaoId) ?? "Divisão") : null,
-          itemId: no.itemId,
-          quantidade: no.quantidade,
-          obrigatorio: no.obrigatorio,
-          localMontagem: no.localMontagem,
-          ordem: no.ordem,
-        })
-        .returning();
-      mapa.set(no.id, criado.id);
-    }
-    for (const no of receita) {
-      if (!no.paiId) continue;
-      await db
-        .update(montagemNos)
-        .set({ paiId: mapa.get(no.paiId) })
-        .where(eq(montagemNos.id, mapa.get(no.id)!));
-    }
-
-    await registrar({
-      usuarioId: sessao.id,
-      tabela: "montagens",
-      registroId: montagem.id,
-      acao: "criar",
-      depois: { ...montagem, nos: receita.length },
-    });
-    numeros.push(numero);
+    mapa.set(no.id, criado.id);
+  }
+  for (const no of receita) {
+    if (!no.paiId) continue;
+    await db
+      .update(montagemNos)
+      .set({ paiId: mapa.get(no.paiId) })
+      .where(eq(montagemNos.id, mapa.get(no.id)!));
   }
 
+  await registrar({
+    usuarioId: sessao.id,
+    tabela: "montagens",
+    registroId: montagem.id,
+    acao: "criar",
+    depois: { ...montagem, nos: receita.length },
+  });
+
   revalidarTudo();
-  return { numeros };
-}
-
-/** Os filhos diretos de um nó (ou da raiz), com o que falta para fechá-lo. */
-export async function conferirNo(
-  montagemId: string,
-  noId: string | null,
-): Promise<{ erro?: string; filhos?: FaltaNaMontagem[]; podeMontar?: boolean }> {
-  await exigirSessao();
-  const filhos = await filhosComEstado(montagemId, noId);
-  if (!filhos) return { erro: "Nó não encontrado." };
-  return {
-    filhos,
-    podeMontar: filhos.every((f) => f.disponivel >= f.necessario),
-  };
-}
-
-async function filhosComEstado(
-  montagemId: string,
-  noId: string | null,
-): Promise<FaltaNaMontagem[] | null> {
-  const linhas = await db
-    .select({
-      id: montagemNos.id,
-      nome: montagemNos.nome,
-      itemId: montagemNos.itemId,
-      quantidade: montagemNos.quantidade,
-      obrigatorio: montagemNos.obrigatorio,
-      montadoEm: montagemNos.montadoEm,
-      codigo: sql<string | null>`i.codigo`,
-      descricao: sql<string | null>`i.descricao`,
-      unidade: sql<string | null>`u.sigla`,
-      disponivel: sql<number>`coalesce(s.fisico, 0) - coalesce(s.reservado, 0)`,
-    })
-    .from(montagemNos)
-    .leftJoin(sql`itens i`, sql`i.id = ${montagemNos.itemId}`)
-    .leftJoin(sql`unidades u`, sql`u.id = i.unidade_id`)
-    .leftJoin(sql`saldos s`, sql`s.item_id = ${montagemNos.itemId}`)
-    .where(
-      noId
-        ? sql`${montagemNos.montagemId} = ${montagemId} and ${montagemNos.paiId} = ${noId}`
-        : sql`${montagemNos.montagemId} = ${montagemId} and ${montagemNos.paiId} is null`,
-    )
-    .orderBy(asc(montagemNos.ordem), asc(montagemNos.id));
-
-  return linhas.map((l) => ({
-    tipo: l.itemId ? ("peca" as const) : ("divisao" as const),
-    nome: l.itemId ? `${l.codigo} — ${l.descricao}` : (l.nome ?? "Divisão"),
-    necessario: l.itemId ? l.quantidade : 1,
-    /* Divisao "disponivel" e binario: montada ou nao. Isso deixa a tela e a
-       checagem falarem a mesma lingua, sem dois caminhos de comparacao. */
-    disponivel: l.itemId ? l.disponivel : l.montadoEm ? 1 : 0,
-    unidade: l.unidade,
-  }));
+  return { numero };
 }
 
 /**
- * Fecha um nó: dá baixa nas peças que ele contém e o congela.
- *
- * `noId` nulo é a raiz — fechar a raiz conclui o equipamento e libera a
- * associação com o carro.
+ * As peças que esta montagem consome, com a quantidade já multiplicada nível
+ * a nível. Divisão não consome nada: ela só agrupa.
  */
-export async function montarNo(
+async function pecasDaMontagem(montagemId: string): Promise<Map<string, number>> {
+  const nos = await db
+    .select({
+      id: montagemNos.id,
+      paiId: montagemNos.paiId,
+      itemId: montagemNos.itemId,
+      quantidade: montagemNos.quantidade,
+    })
+    .from(montagemNos)
+    .where(eq(montagemNos.montagemId, montagemId))
+    .orderBy(asc(montagemNos.ordem), asc(montagemNos.id));
+
+  const filhosDe = new Map<string | null, typeof nos>();
+  for (const n of nos) filhosDe.set(n.paiId, [...(filhosDe.get(n.paiId) ?? []), n]);
+
+  const total = new Map<string, number>();
+
+  function descer(paiId: string | null, fator: number, caminho: Set<string>) {
+    /* Trava de seguranca: a arvore nao deveria ter ciclo, mas um laco vindo
+       de dado antigo nao pode travar a aplicacao. */
+    if (paiId && caminho.has(paiId)) return;
+    const novoCaminho = paiId ? new Set(caminho).add(paiId) : caminho;
+
+    for (const no of filhosDe.get(paiId) ?? []) {
+      const q = no.quantidade * fator;
+      if (no.itemId) total.set(no.itemId, (total.get(no.itemId) ?? 0) + q);
+      else descer(no.id, q, novoCaminho);
+    }
+  }
+
+  descer(null, 1, new Set());
+  return total;
+}
+
+/** Cada peça da montagem com o saldo de hoje ao lado. */
+async function conferir(montagemId: string): Promise<FaltaNaMontagem[]> {
+  const pecas = await pecasDaMontagem(montagemId);
+  if (pecas.size === 0) return [];
+
+  const info = await db
+    .select({
+      id: itens.id,
+      codigo: itens.codigo,
+      descricao: itens.descricao,
+      unidade: unidades.sigla,
+      disponivel: sql<number>`coalesce(${saldos.fisico}, 0) - coalesce(${saldos.reservado}, 0)`,
+    })
+    .from(itens)
+    .leftJoin(unidades, eq(unidades.id, itens.unidadeId))
+    .leftJoin(saldos, eq(saldos.itemId, itens.id))
+    .where(inArray(itens.id, [...pecas.keys()]))
+    .orderBy(asc(itens.codigo));
+
+  return info.map((i) => ({
+    itemId: i.id,
+    nome: `${i.codigo} — ${i.descricao}`,
+    necessario: pecas.get(i.id) ?? 0,
+    disponivel: i.disponivel,
+    unidade: i.unidade,
+  }));
+}
+
+/** O que a tela mostra antes de a pessoa clicar em Montar. */
+export async function conferirMontagem(
   montagemId: string,
-  noId: string | null,
-): Promise<ResultadoMontagem> {
+): Promise<{ pecas: FaltaNaMontagem[]; podeMontar: boolean }> {
+  await exigirSessao();
+  const pecas = await conferir(montagemId);
+  return {
+    pecas,
+    podeMontar: pecas.length > 0 && pecas.every((p) => p.disponivel >= p.necessario),
+  };
+}
+
+/**
+ * Monta: dá baixa em todas as peças da árvore e dá entrada de uma unidade do
+ * item produzido.
+ *
+ * É o único caminho entre esta tela e o estoque, e ele anda nos dois
+ * sentidos: sai o que foi consumido, entra o que ficou pronto.
+ */
+export async function montarMontagem(montagemId: string): Promise<ResultadoMontagem> {
   const sessao = await exigirEdicao();
 
   const [montagem] = await db.select().from(montagens).where(eq(montagens.id, montagemId));
   if (!montagem) return { erro: "Montagem não encontrada." };
-  if (montagem.status === "desmontada") return { erro: "Esta montagem foi desmontada." };
-  if (montagem.status !== "em_montagem") return { erro: "Este equipamento já está montado." };
-
-  if (noId) {
-    const [no] = await db.select().from(montagemNos).where(eq(montagemNos.id, noId));
-    if (!no || no.montagemId !== montagemId) return { erro: "Nó não encontrado." };
-    if (no.itemId) return { erro: "Peça não se monta — ela sai do estoque junto com a divisão." };
-    if (no.montadoEm) return { erro: "Esta divisão já foi montada." };
-  }
+  if (montagem.status !== "em_montagem") return { erro: "Esta montagem já foi montada." };
 
   /* Confere de novo no servidor, e nao no que a tela mandou: entre abrir a
      janela e confirmar, alguem pode ter consumido a ultima peca. */
-  const filhos = await filhosComEstado(montagemId, noId);
-  if (!filhos) return { erro: "Nó não encontrado." };
+  const pecas = await conferir(montagemId);
+  if (pecas.length === 0) return { erro: "Esta montagem não tem nenhuma peça dentro." };
 
-  /* Divisao vazia pode ser fechada: ela nao consome nada, mas marca a etapa
-     como feita. Sem isso, uma divisao sem peca travava a montagem inteira —
-     nunca podia ser montada, e o equipamento nunca chegava ao fim. */
-  if (filhos.length === 0 && !noId) {
-    return { erro: "Esta montagem não tem nada dentro." };
-  }
-
-  const faltando = filhos.filter((f) => f.disponivel < f.necessario);
+  const faltando = pecas.filter((p) => p.disponivel < p.necessario);
   if (faltando.length > 0) return { faltando };
 
   /* Sem transacao no driver HTTP do Neon, a ordem importa: primeiro as
-     saidas, e so depois o congelamento. Se algo falhar no meio, sobra peca
-     consumida sem o no fechado — visivel e corrigivel, ao contrario do
-     inverso, que esconderia consumo que nunca aconteceu. */
-  const pecas = await db
-    .select({ id: montagemNos.id, itemId: montagemNos.itemId, quantidade: montagemNos.quantidade })
-    .from(montagemNos)
-    .where(
-      noId
-        ? sql`${montagemNos.montagemId} = ${montagemId} and ${montagemNos.paiId} = ${noId} and ${montagemNos.itemId} is not null`
-        : sql`${montagemNos.montagemId} = ${montagemId} and ${montagemNos.paiId} is null and ${montagemNos.itemId} is not null`,
-    );
-
-  const agora = new Date();
+     saidas, depois a entrada do item pronto, e so entao o status. Se algo
+     falhar no meio, sobra peca consumida com a montagem ainda aberta —
+     visivel e corrigivel, ao contrario do inverso, que daria entrada num
+     item sem ter consumido nada. */
   for (const peca of pecas) {
     await db.insert(movimentos).values({
-      itemId: peca.itemId!,
+      itemId: peca.itemId,
       tipo: "saida_producao",
-      quantidade: peca.quantidade,
+      quantidade: peca.necessario,
       referencia: montagem.numero,
       usuarioId: sessao.id,
       observacao: `Consumido na montagem ${montagem.numero}`,
@@ -262,57 +253,20 @@ export async function montarNo(
     });
   }
 
-  if (noId) {
-    await db
-      .update(montagemNos)
-      .set({ montadoEm: agora, montadoPor: sessao.id })
-      .where(eq(montagemNos.id, noId));
-  } else {
-    await db
-      .update(montagens)
-      .set({ status: "montada", montadaEm: agora, montadaPor: sessao.id })
-      .where(eq(montagens.id, montagemId));
-  }
-
-  await registrar({
+  await db.insert(movimentos).values({
+    itemId: montagem.itemId,
+    tipo: "entrada_fabricacao",
+    quantidade: 1,
+    referencia: montagem.numero,
     usuarioId: sessao.id,
-    tabela: noId ? "montagem_nos" : "montagens",
-    registroId: noId ?? montagemId,
-    acao: "atualizar",
-    depois: {
-      montadoEm: agora,
-      consumidos: pecas.length,
-      referencia: montagem.numero,
-    },
+    observacao: `Montado em ${montagem.numero}`,
+    montagemId: montagem.id,
   });
 
-  revalidarTudo();
-  return { ok: true };
-}
-
-export async function associarCarro(
-  montagemId: string,
-  carroId: string | null,
-): Promise<{ erro?: string }> {
-  const sessao = await exigirEdicao();
-
-  const [montagem] = await db.select().from(montagens).where(eq(montagens.id, montagemId));
-  if (!montagem) return { erro: "Montagem não encontrada." };
-  if (carroId && montagem.status !== "montada" && montagem.status !== "instalada") {
-    return { erro: "O equipamento precisa estar montado por inteiro antes de ir para um carro." };
-  }
-
-  if (carroId) {
-    const [ocupado] = await db
-      .select({ numero: montagens.numero })
-      .from(montagens)
-      .where(sql`${montagens.carroId} = ${carroId} and ${montagens.id} <> ${montagemId}`);
-    if (ocupado) return { erro: `Esse carro já tem o equipamento ${ocupado.numero}.` };
-  }
-
+  const agora = new Date();
   const [depois] = await db
     .update(montagens)
-    .set({ carroId, status: carroId ? "instalada" : "montada" })
+    .set({ status: "montada", montadaEm: agora, montadaPor: sessao.id })
     .where(eq(montagens.id, montagemId))
     .returning();
 
@@ -322,105 +276,28 @@ export async function associarCarro(
     registroId: montagemId,
     acao: "atualizar",
     antes: montagem,
-    depois,
+    depois: { ...depois, consumidos: pecas.length },
   });
+
   revalidarTudo();
-  return {};
+  return { ok: true };
 }
 
 /**
- * O equipamento de um carro, visto do lado do carro.
- *
- * Nao lanca movimento nenhum: o equipamento montado nao e item de estoque,
- * entao instalar e tirar do carro nao muda saldo de nada. O que saiu do
- * estoque foram as pecas, e isso aconteceu la na montagem.
+ * Excluir só vale enquanto nada foi montado. Depois de montada, a montagem
+ * virou movimento no estoque — e movimento não se apaga.
  */
-export async function definirEquipamentoDoCarro(
-  carroId: string,
-  montagemId: string | null,
-): Promise<{ erro?: string }> {
-  const [atual] = await db.select().from(montagens).where(eq(montagens.carroId, carroId));
-  if (atual?.id === montagemId) return {};
-
-  if (atual) {
-    const r = await associarCarro(atual.id, null);
-    if (r.erro) return r;
-  }
-  if (montagemId) return associarCarro(montagemId, carroId);
-
-  revalidarTudo();
-  return {};
-}
-
-/**
- * Desmontar devolve as peças ao estoque lançando o oposto de cada movimento
- * da montagem — nunca apagando movimento, como manda a regra.
- */
-export async function desmontarMontagem(id: string): Promise<{ erro?: string }> {
-  const sessao = await exigirEdicao();
-
-  const [montagem] = await db.select().from(montagens).where(eq(montagens.id, id));
-  if (!montagem) return { erro: "Montagem não encontrada." };
-  if (montagem.status === "desmontada") return { erro: "Esta montagem já foi desmontada." };
-
-  if (montagem.carroId) {
-    const [carro] = await db.select().from(carros).where(eq(carros.id, montagem.carroId));
-    return {
-      erro:
-        `Esta montagem está instalada no carro ${carro?.placa ?? ""}. ` +
-        "Tire do carro antes de desmontar.",
-    };
-  }
-
-  const originais = await db.select().from(movimentos).where(eq(movimentos.montagemId, id));
-  for (const original of originais) {
-    await db.insert(movimentos).values({
-      itemId: original.itemId,
-      tipo: OPOSTO_MOVIMENTO[original.tipo],
-      quantidade: original.quantidade,
-      referencia: montagem.numero,
-      usuarioId: sessao.id,
-      observacao: `Desmontagem de ${montagem.numero}`,
-      montagemId: montagem.id,
-    });
-  }
-
-  await db
-    .update(montagemNos)
-    .set({ montadoEm: null, montadoPor: null })
-    .where(eq(montagemNos.montagemId, id));
-
-  const [depois] = await db
-    .update(montagens)
-    .set({ status: "desmontada", desmontadaEm: new Date() })
-    .where(eq(montagens.id, id))
-    .returning();
-
-  await registrar({
-    usuarioId: sessao.id,
-    tabela: "montagens",
-    registroId: id,
-    acao: "atualizar",
-    antes: montagem,
-    depois,
-  });
-  revalidarTudo();
-  return {};
-}
-
 export async function excluirMontagem(id: string): Promise<{ erro?: string }> {
   const sessao = await exigirEdicao();
   const [montagem] = await db.select().from(montagens).where(eq(montagens.id, id));
   if (!montagem) return { erro: "Montagem não encontrada." };
 
-  /* Só a que nunca consumiu nada. Qualquer coisa já montada sai por
-     desmontar, que devolve as peças — apagar esconderia o consumo. */
   const [{ n }] = await db
     .select({ n: sql<number>`count(*)::int` })
     .from(movimentos)
     .where(eq(movimentos.montagemId, id));
-  if (n > 0) {
-    return { erro: "Esta montagem já consumiu peças. Use Desmontar, que devolve tudo ao estoque." };
+  if (montagem.status !== "em_montagem" || n > 0) {
+    return { erro: "Esta montagem já foi montada e mexeu no estoque. Ela não pode ser excluída." };
   }
 
   await db.delete(montagens).where(eq(montagens.id, id));
@@ -438,6 +315,6 @@ export async function excluirMontagem(id: string): Promise<{ erro?: string }> {
 function revalidarTudo() {
   revalidatePath("/montagem");
   revalidatePath("/estoque");
-  revalidatePath("/carros");
+  revalidatePath("/itens");
   revalidatePath("/");
 }

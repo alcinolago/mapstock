@@ -6,7 +6,6 @@ import {
   getTableName,
   ilike,
   inArray,
-  isNull,
   not,
   or,
   sql,
@@ -18,7 +17,6 @@ import { diaSeguinte, FUSO, limitesDoMes } from "@/lib/periodo";
 
 import { db } from "./index";
 import {
-  carros,
   classificacoes,
   cotacaoItens,
   cotacoes,
@@ -38,7 +36,6 @@ import {
   pedidosCompra,
   unidades,
   usuarios,
-  versoes,
 } from "./schema";
 
 /**
@@ -529,7 +526,6 @@ export type NoDoMolde = {
   unidade: string | null;
   custo: number;
   quantidade: number;
-  obrigatorio: boolean;
   localMontagem: string | null;
   ordem: number;
   disponivel: number;
@@ -553,7 +549,6 @@ export async function nosDoMolde(moldeId: string): Promise<NoDoMolde[]> {
          e o campo do item so como reserva para o que nunca foi comprado. */
       custo: sql<number>`coalesce(${custo.preco}, ${itens.custoUnitario}, 0)`,
       quantidade: moldeNos.quantidade,
-      obrigatorio: moldeNos.obrigatorio,
       localMontagem: moldeNos.localMontagem,
       ordem: moldeNos.ordem,
       disponivel: sql<number>`coalesce(${saldos.fisico}, 0) - coalesce(${saldos.reservado}, 0)`,
@@ -568,6 +563,11 @@ export async function nosDoMolde(moldeId: string): Promise<NoDoMolde[]> {
     .orderBy(asc(moldeNos.ordem), asc(moldeNos.id));
 }
 
+/**
+ * As estruturas. `itemId` preenchido e kit (receita de um item do estoque);
+ * vazio e manual de equipamento completo. A tela separa as duas listas por
+ * esse campo, e so o kit chega na montagem.
+ */
 export async function listarMoldes() {
   return db
     .select({
@@ -575,10 +575,20 @@ export async function listarMoldes() {
       nome: moldes.nome,
       descricao: moldes.descricao,
       ativo: moldes.ativo,
+      itemId: moldes.itemId,
+      codigo: itens.codigo,
+      itemDescricao: itens.descricao,
+      unidade: unidades.sigla,
       nos: sql<number>`(select count(*)::int from molde_nos n where n.molde_id = ${ref(moldes.id)})`,
       montagens: sql<number>`(select count(*)::int from montagens m where m.molde_id = ${ref(moldes.id)})`,
+      /* Saldo do proprio item produzido: "tenho 6 domos prontos" e a primeira
+         pergunta de quem abre esta tela. */
+      emEstoque: sql<number>`coalesce(${saldos.fisico}, 0) - coalesce(${saldos.reservado}, 0)`,
     })
     .from(moldes)
+    .leftJoin(itens, eq(itens.id, moldes.itemId))
+    .leftJoin(unidades, eq(unidades.id, itens.unidadeId))
+    .leftJoin(saldos, eq(saldos.itemId, moldes.itemId))
     .orderBy(asc(moldes.nome));
 }
 
@@ -593,11 +603,8 @@ export type NoDaMontagem = {
   descricao: string | null;
   unidade: string | null;
   quantidade: number;
-  obrigatorio: boolean;
   localMontagem: string | null;
   ordem: number;
-  montadoEm: Date | null;
-  montadoPor: string | null;
   /** Saldo do item hoje. Zero para divisao, que nao tem saldo nenhum. */
   disponivel: number;
   custo: number;
@@ -623,11 +630,8 @@ export async function nosDaMontagem(montagemId: string): Promise<NoDaMontagem[]>
       descricao: itens.descricao,
       unidade: unidades.sigla,
       quantidade: montagemNos.quantidade,
-      obrigatorio: montagemNos.obrigatorio,
       localMontagem: montagemNos.localMontagem,
       ordem: montagemNos.ordem,
-      montadoEm: montagemNos.montadoEm,
-      montadoPor: usuarios.nome,
       disponivel: sql<number>`coalesce(${saldos.fisico}, 0) - coalesce(${saldos.reservado}, 0)`,
       custo: sql<number>`coalesce(${custo.preco}, ${itens.custoUnitario}, 0)`,
     })
@@ -635,139 +639,44 @@ export async function nosDaMontagem(montagemId: string): Promise<NoDaMontagem[]>
     .leftJoin(itens, eq(itens.id, montagemNos.itemId))
     .leftJoin(unidades, eq(unidades.id, itens.unidadeId))
     .leftJoin(saldos, eq(saldos.itemId, montagemNos.itemId))
-    .leftJoin(usuarios, eq(usuarios.id, montagemNos.montadoPor))
     .leftJoin(custo, eq(custo.itemId, montagemNos.itemId))
     .where(eq(montagemNos.montagemId, montagemId))
     .orderBy(asc(montagemNos.ordem), asc(montagemNos.id));
 }
 
-export async function listarMontagens(filtros?: { incluirDesmontadas?: boolean }) {
-  const condicoes: SQL[] = [];
-  if (!filtros?.incluirDesmontadas) {
-    condicoes.push(sql`${montagens.status} <> 'desmontada'`);
-  }
-
+/**
+ * As montagens abertas e as ja fechadas, com o item que cada uma produz.
+ *
+ * Nao existe progresso parcial para mostrar: a montagem fecha inteira de uma
+ * vez. O que a tela precisa e o que sai pronto e o que a arvore consome, e o
+ * segundo vem de `nosDaMontagem`.
+ */
+export async function listarMontagens() {
   return db
     .select({
       id: montagens.id,
       numero: montagens.numero,
       nome: montagens.nome,
       moldeId: montagens.moldeId,
+      itemId: montagens.itemId,
+      codigo: itens.codigo,
+      itemDescricao: itens.descricao,
+      unidade: unidades.sigla,
       status: montagens.status,
       local: montagens.local,
       observacoes: montagens.observacoes,
       iniciadaEm: montagens.iniciadaEm,
       montadaEm: montagens.montadaEm,
-      desmontadaEm: montagens.desmontadaEm,
       montadaPor: usuarios.nome,
-      carroId: carros.id,
-      placa: carros.placa,
-      /* Progresso: so divisao conta como etapa — peca nao se monta sozinha,
-         ela e consumida quando a divisao que a contem fecha. */
-      etapas: sql<number>`(select count(*)::int from montagem_nos n
-        where n.montagem_id = ${ref(montagens.id)} and n.item_id is null)`,
-      etapasFeitas: sql<number>`(select count(*)::int from montagem_nos n
-        where n.montagem_id = ${ref(montagens.id)} and n.item_id is null
-          and n.montado_em is not null)`,
     })
     .from(montagens)
     .leftJoin(usuarios, eq(usuarios.id, montagens.montadaPor))
-    .leftJoin(carros, eq(carros.id, montagens.carroId))
-    .where(condicoes.length ? and(...condicoes) : undefined)
+    .leftJoin(itens, eq(itens.id, montagens.itemId))
+    .leftJoin(unidades, eq(unidades.id, itens.unidadeId))
     .orderBy(desc(montagens.iniciadaEm));
 }
 
 export type Montagem = Awaited<ReturnType<typeof listarMontagens>>[number];
-
-/* --------------------------------------------------------------- Frota --- */
-
-export async function listarCarros() {
-  const sistema = alias(versoes, "versao_sistema");
-  const tablet = alias(versoes, "versao_tablet");
-
-  return db
-    .select({
-      id: carros.id,
-      placa: carros.placa,
-      fabricante: carros.fabricante,
-      modelo: carros.modelo,
-      pc: carros.pc,
-      versaoSistemaId: carros.versaoSistemaId,
-      versaoSistema: sistema.numero,
-      versaoTabletId: carros.versaoTabletId,
-      versaoTablet: tablet.numero,
-      montagemId: montagens.id,
-      montagemNumero: montagens.numero,
-      equipamento: montagens.nome,
-    })
-    .from(carros)
-    .leftJoin(sistema, eq(sistema.id, carros.versaoSistemaId))
-    .leftJoin(tablet, eq(tablet.id, carros.versaoTabletId))
-    /* O equipamento do carro e a montagem que aponta para ele. */
-    .leftJoin(montagens, eq(montagens.carroId, carros.id))
-    .orderBy(asc(carros.placa));
-}
-
-export type Carro = Awaited<ReturnType<typeof listarCarros>>[number];
-
-export async function listarVersoes() {
-  return db
-    .select({
-      id: versoes.id,
-      tipo: versoes.tipo,
-      numero: versoes.numero,
-      notas: versoes.notas,
-      lancadaEm: versoes.lancadaEm,
-      /* Bug antigo: sem o `ref`, o `${versoes.id}` virava `"id"` e era lido
-         como `carros.id`, entao toda versao aparecia como fora de uso. */
-      emUso: sql<number>`(
-        select count(*)::int from carros c
-        where c.versao_sistema_id = ${ref(versoes.id)}
-           or c.versao_tablet_id = ${ref(versoes.id)}
-      )`,
-    })
-    .from(versoes)
-    .orderBy(asc(versoes.tipo), desc(versoes.lancadaEm), desc(versoes.numero));
-}
-
-export type Versao = Awaited<ReturnType<typeof listarVersoes>>[number];
-
-/**
- * Montagens que podem ser escolhidas como equipamento de um carro: as que
- * estao prontas no estoque, mais a que ja esta neste carro — senao o proprio
- * equipamento instalado sumiria da lista na hora de editar.
- */
-export async function montagensParaCarro(carroId?: string) {
-  return db
-    .select({
-      id: montagens.id,
-      numero: montagens.numero,
-      status: montagens.status,
-      local: montagens.local,
-      montadaEm: montagens.montadaEm,
-      nome: montagens.nome,
-    })
-    .from(montagens)
-    .where(
-      or(
-        and(eq(montagens.status, "montada"), isNull(montagens.carroId)),
-        carroId ? eq(montagens.carroId, carroId) : undefined,
-      ),
-    )
-    .orderBy(desc(montagens.montadaEm));
-}
-
-export async function carroPorId(id: string) {
-  const [carro] = await db.select().from(carros).where(eq(carros.id, id));
-  if (!carro) return null;
-
-  const [equipamento] = await db
-    .select({ id: montagens.id })
-    .from(montagens)
-    .where(eq(montagens.carroId, id));
-
-  return { ...carro, montagemId: equipamento?.id ?? null };
-}
 
 /**
  * Recorte de um mes sobre uma coluna de instante.

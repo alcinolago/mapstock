@@ -29,7 +29,7 @@ const ROTULOS: [RegExp, string][] = [
   [/^\/estoque$/, "Voltar para movimentações"],
   [/^\/fornecedores\/[^/]+$/, "Voltar para o fornecedor"],
   [/^\/montagem$/, "Voltar para montagem"],
-  [/^\/estrutura$/, "Voltar para os moldes"],
+  [/^\/estrutura$/, "Voltar para a estrutura"],
   [/^\/$/, "Voltar para o painel"],
 ];
 

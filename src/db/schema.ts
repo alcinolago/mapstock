@@ -2,7 +2,6 @@ import { sql } from "drizzle-orm";
 import {
   boolean,
   customType,
-  date,
   integer,
   jsonb,
   numeric,
@@ -84,17 +83,10 @@ export const statusPedido = pgEnum("status_pedido", [
 
 export const unidadePrazo = pgEnum("unidade_prazo", ["horas", "dias"]);
 
-/* Versao do sistema que roda no PC do carro e do app que roda no tablet. */
-export const tipoVersao = pgEnum("tipo_versao", ["sistema", "tablet"]);
-
-export const statusMontagem = pgEnum("status_montagem", [
-  "montada",
-  "instalada",
-  "desmontada",
-  /* Arvore aberta e ainda incompleta. Vem por ultimo porque acrescentar valor
-     no meio de um enum do Postgres exige recriar o tipo. */
-  "em_montagem",
-]);
+/* Montagem so tem dois estados: aberta ou fechada. Nao existe desmontar —
+   enquanto nada foi montado a montagem se exclui, e depois de montada ela
+   virou movimento no estoque e nao volta atras. */
+export const statusMontagem = pgEnum("status_montagem", ["montada", "em_montagem"]);
 
 export const acaoAuditoria = pgEnum("acao_auditoria", ["criar", "atualizar", "excluir"]);
 
@@ -320,26 +312,32 @@ export const itemFornecedores = pgTable(
 );
 
 /* -------------------------------------------------------------------------
- * Estrutura (BOM)
- * ---------------------------------------------------------------------- */
-
-/* -------------------------------------------------------------------------
  * Estrutura — molde e montagem
  *
- * Duas coisas separadas de proposito, e a separacao e o coracao do modulo:
+ * O molde e uma arvore de divisoes e pecas. Ele serve a duas coisas, e a
+ * diferenca entre elas e uma coluna so:
  *
- *   o molde  e o que o equipamento E. Divisoes e pecas com quantidade.
- *            estavel, reutilizavel, e nao encosta no estoque nunca.
- *   a montagem  e o que esta sendo feito agora. Nasce como copia do molde,
- *            uma arvore por equipamento, e e ela que da baixa no estoque.
+ *   sem itemId  e o manual do equipamento completo. Documentacao de bancada:
+ *               mostra o que entra num equipamento e onde cada coisa vai.
+ *               Nao monta, nao consome, nao produz nada.
+ *   com itemId  e a receita de um item do estoque — o kit. Montar um kit
+ *               consome as pecas da arvore e da entrada de UMA unidade do
+ *               item apontado.
  *
- * Montar tres equipamentos abre tres arvores independentes — cada uma no seu
- * quadrado, montada no seu ritmo, sem contador de "2 de 3" e sem uma afetar a
- * outra. A copia tambem e o que protege o passado: editar o molde depois nao
- * reescreve o que ja foi montado.
+ * O kit e o que destrava a bancada. O domo e um item como qualquer outro:
+ * quem monta faz seis domos na segunda porque chegaram as cameras, e eles
+ * ficam na prateleira esperando o resto. Sem isso, nada podia ser montado
+ * antes de o equipamento inteiro estar comprado.
  *
- * Divisao e equipamento sao desta tela. Item de estoque e o unico que
- * atravessa a fronteira, e so no momento de montar.
+ * Duas tentativas anteriores de fazer o equipamento completo virar item
+ * quebraram no mesmo ponto: obrigavam a cadastrar "Domo" no estoque. A saida
+ * foi inverter — o domo E um item, porque encosta na prateleira montado; o
+ * equipamento completo nao e, porque so existe instalado.
+ *
+ * A montagem e a execucao: nasce como copia da arvore do molde (editar o
+ * molde amanha nao pode reescrever o que foi montado ontem), vale por UMA
+ * unidade e fecha de uma vez so. Dois domos sao duas montagens, cada uma
+ * conferindo o estoque no momento do proprio clique.
  * ---------------------------------------------------------------------- */
 
 /** Nomes livres de divisao: Domo, Estrutura, Fiacao, Fixacao. */
@@ -355,6 +353,12 @@ export const divisoes = pgTable("divisoes", {
 export const moldes = pgTable("moldes", {
   id: uuid("id").primaryKey().defaultRandom(),
   nome: text("nome").notNull().unique(),
+  /* Preenchido = receita de um item do estoque (kit). Vazio = manual de um
+     equipamento completo, que nao vira item nenhum. Unico porque um item tem
+     uma receita so: mudou o domo, edita a estrutura dele. */
+  itemId: uuid("item_id")
+    .references(() => itens.id, { onDelete: "restrict" })
+    .unique(),
   descricao: text("descricao"),
   ativo: boolean("ativo").notNull().default(true),
   criadoEm,
@@ -377,7 +381,6 @@ export const moldeNos = pgTable("molde_nos", {
   divisaoId: uuid("divisao_id").references(() => divisoes.id, { onDelete: "restrict" }),
   itemId: uuid("item_id").references(() => itens.id, { onDelete: "restrict" }),
   quantidade: quantidade("quantidade"),
-  obrigatorio: boolean("obrigatorio").notNull().default(true),
   localMontagem: text("local_montagem"),
   ordem: integer("ordem").notNull().default(0),
 });
@@ -493,96 +496,50 @@ export const movimentos = pgTable("movimentos", {
   pedidoItemId: uuid("pedido_item_id").references(() => pedidoItens.id, {
     onDelete: "set null",
   }),
-  /* Idem para montagem: uma montagem gera a saida de cada componente e a
-     entrada do equipamento, e e por este campo que o estorno acha todos. */
+  /* Idem para montagem: montar um kit gera a saida de cada peca da arvore e
+     a entrada de uma unidade do item produzido, todas com este campo. */
   montagemId: uuid("montagem_id").references(() => montagens.id, {
     onDelete: "set null",
   }),
   criadoEm,
 });
 
-/* -------------------------------------------------------------------------
- * Frota e montagens
- *
- * A estrutura (bom) e a receita; a montagem e uma unidade que existe de
- * verdade, feita a partir dessa receita. Cada montagem e rastreada uma a uma
- * porque a pergunta que importa e "qual equipamento esta no carro ABC-1234",
- * e nao "quantos equipamentos existem".
- * ---------------------------------------------------------------------- */
-
-export const versoes = pgTable(
-  "versoes",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    tipo: tipoVersao("tipo").notNull(),
-    numero: text("numero").notNull(),
-    notas: text("notas"),
-    lancadaEm: date("lancada_em"),
-    criadoEm,
-  },
-  /* A mesma numeracao pode existir nos dois tipos: o sistema 3.2 e o app do
-     tablet 3.2 sao coisas diferentes. */
-  (t) => [unique("versao_unica").on(t.tipo, t.numero)],
-);
-
-export const carros = pgTable("carros", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  placa: text("placa").notNull().unique(),
-  fabricante: text("fabricante").notNull(),
-  modelo: text("modelo").notNull(),
-  /* Identificacao livre do computador de bordo: nome da maquina, patrimonio
-     ou numero de serie — o que estiver colado nele. */
-  pc: text("pc"),
-  versaoSistemaId: uuid("versao_sistema_id").references(() => versoes.id, {
-    onDelete: "set null",
-  }),
-  versaoTabletId: uuid("versao_tablet_id").references(() => versoes.id, {
-    onDelete: "set null",
-  }),
-  criadoEm,
-  criadoPor: uuid("criado_por").references(() => usuarios.id, { onDelete: "set null" }),
-  atualizadoEm: timestamp("atualizado_em", { withTimezone: true }).notNull().defaultNow(),
-  atualizadoPor: uuid("atualizado_por").references(() => usuarios.id, { onDelete: "set null" }),
-});
-
 /**
- * Uma arvore em montagem: um equipamento, copiado do molde no momento em que
- * a ordem e aberta. Pedir tres equipamentos cria tres linhas destas.
+ * Uma unidade sendo montada: sempre UMA, nunca um lote.
  *
- * `nome` e copia, nao atalho: o molde pode ser renomeado ou apagado depois, e
- * o que foi montado nao muda de nome por causa disso.
+ * `itemId` e o item que sai pronto — e o que diferencia esta tabela de uma
+ * lista de tarefas. `nome` e `montagem_nos.nome` sao copia, nao atalho: o
+ * molde pode ser renomeado ou apagado depois, e o que foi montado nao muda
+ * de nome por causa disso.
+ *
+ * Seis domos sao seis linhas destas. Nao existe contador de "2 de 6": cada
+ * uma confere o estoque no momento do proprio clique, e quem clicar primeiro
+ * leva as pecas.
  */
 export const montagens = pgTable("montagens", {
   id: uuid("id").primaryKey().defaultRandom(),
   numero: text("numero").notNull().unique(),
   moldeId: uuid("molde_id").references(() => moldes.id, { onDelete: "set null" }),
+  /* O item que esta montagem produz. Copiado do molde na abertura. */
+  itemId: uuid("item_id")
+    .notNull()
+    .references(() => itens.id, { onDelete: "restrict" }),
   nome: text("nome").notNull(),
   status: statusMontagem("status").notNull().default("em_montagem"),
-  /* Onde a unidade esta enquanto nao tem carro: prateleira, bancada, ou a
-     placa escrita a mao de um carro que ainda nao foi cadastrado. */
+  /* Onde a unidade esta sendo feita: prateleira, bancada, quem esta com ela. */
   local: text("local"),
-  /* O campo "equipamento" do carro e este vinculo visto do outro lado. Unico
-     porque um carro leva um equipamento; no Postgres varios nulos convivem,
-     entao montagem sem carro nao briga com montagem sem carro. */
-  carroId: uuid("carro_id")
-    .references(() => carros.id, { onDelete: "set null" })
-    .unique(),
   observacoes: text("observacoes"),
   iniciadaEm: timestamp("iniciada_em", { withTimezone: true }).notNull().defaultNow(),
-  /* So existe quando a arvore inteira fecha — e o que libera associar o carro. */
   montadaEm: timestamp("montada_em", { withTimezone: true }),
   montadaPor: uuid("montada_por").references(() => usuarios.id, { onDelete: "set null" }),
-  desmontadaEm: timestamp("desmontada_em", { withTimezone: true }),
 });
 
 /**
- * O no da arvore de uma montagem. Copia do no do molde, com o estado.
+ * O no da arvore de uma montagem. Copia do no do molde.
  *
- * O nome da divisao vem copiado em vez de apontar para `divisoes`: renomear
- * "Domo" amanha nao pode reescrever o que foi montado ontem. A peca continua
- * apontando para o item, porque e do item que sai o saldo.
- *
- * `montadoEm` preenchido e o congelamento: dali em diante o no nao se mexe.
+ * Nao tem estado proprio: a montagem fecha inteira de uma vez, entao nao
+ * existe no meio-montado. O que este no guarda e o registro de com o que
+ * aquela unidade foi feita, congelado na abertura.
  */
 export const montagemNos = pgTable("montagem_nos", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -594,11 +551,8 @@ export const montagemNos = pgTable("montagem_nos", {
   nome: text("nome"),
   itemId: uuid("item_id").references(() => itens.id, { onDelete: "restrict" }),
   quantidade: quantidade("quantidade"),
-  obrigatorio: boolean("obrigatorio").notNull().default(true),
   localMontagem: text("local_montagem"),
   ordem: integer("ordem").notNull().default(0),
-  montadoEm: timestamp("montado_em", { withTimezone: true }),
-  montadoPor: uuid("montado_por").references(() => usuarios.id, { onDelete: "set null" }),
 });
 
 /* -------------------------------------------------------------------------

@@ -1,12 +1,11 @@
 "use client";
 
-import { Check, ChevronRight, Layers, Package } from "lucide-react";
+import { ChevronRight, Layers, Package } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 
 import { Selo } from "@/components/ui/selo";
-import { MontarNo } from "./montar-no";
-import { cn, dataHora, numero } from "@/lib/utils";
+import { cn, numero } from "@/lib/utils";
 import { linkDoItem } from "@/lib/voltar";
 
 export type NoMontagem = {
@@ -17,74 +16,44 @@ export type NoMontagem = {
   descricao: string | null;
   unidade: string | null;
   quantidade: number;
-  obrigatorio: boolean;
+  /** Quanto deste item a montagem inteira consome, já multiplicado. */
+  necessario: number;
   localMontagem: string | null;
   disponivel: number;
-  montadoEm: Date | null;
-  montadoPor: string | null;
   filhos: NoMontagem[];
 };
 
-export function ArvoreMontagem({
-  montagemId,
-  nos,
-  podeEditar,
-  encerrada,
-}: {
-  montagemId: string;
-  nos: NoMontagem[];
-  podeEditar: boolean;
-  /** Montagem concluída ou desmontada: a árvore vira histórico. */
-  encerrada: boolean;
-}) {
+/**
+ * A árvore copiada do molde na abertura. É registro, não formulário: nada
+ * aqui se clica, porque a montagem fecha inteira de uma vez.
+ *
+ * O que muda de linha para linha é o saldo, e ele só aparece enquanto a
+ * montagem está aberta — depois de montada, o saldo de hoje não diz mais
+ * nada sobre o que foi consumido naquele dia.
+ */
+export function ArvoreMontagem({ nos, montada }: { nos: NoMontagem[]; montada: boolean }) {
   if (nos.length === 0) {
     return (
       <p className="px-4 py-8 text-center text-sm text-texto-fraco">
-        Esta montagem nasceu de um molde vazio.
+        Esta montagem nasceu de uma estrutura vazia.
       </p>
     );
   }
 
-  /* Mesma leitura da arvore do molde: coluna fixa a direita, linha entre os
-     irmaos e recuo com fio. As duas telas mostram a mesma arvore, entao
-     mostrar de dois jeitos diferentes so daria trabalho a quem le. */
   return (
     <ul className="divide-y divide-borda">
       {nos.map((no) => (
-        <No
-          key={no.id}
-          no={no}
-          montagemId={montagemId}
-          podeEditar={podeEditar}
-          encerrada={encerrada}
-        />
+        <No key={no.id} no={no} montada={montada} />
       ))}
     </ul>
   );
 }
 
-function No({
-  no,
-  montagemId,
-  podeEditar,
-  encerrada,
-}: {
-  no: NoMontagem;
-  montagemId: string;
-  podeEditar: boolean;
-  encerrada: boolean;
-}) {
-  const [aberto, setAberto] = useState(!no.montadoEm);
+function No({ no, montada }: { no: NoMontagem; montada: boolean }) {
+  const [aberto, setAberto] = useState(true);
 
   const ehDivisao = !no.itemId;
   const temFilhos = no.filhos.length > 0;
-  const montado = Boolean(no.montadoEm);
-
-  /* Só pode fechar quando todos os filhos estão prontos: peça com saldo,
-     divisão já montada. A ação confere de novo no servidor. */
-  const pronto = no.filhos.every((f) =>
-    f.itemId ? f.disponivel >= f.quantidade : Boolean(f.montadoEm),
-  );
 
   return (
     <li className={cn(ehDivisao && "bg-superficie-2/40")}>
@@ -92,7 +61,7 @@ function No({
         className={cn(
           "flex items-center gap-2 px-2 py-2 transition-colors",
           ehDivisao ? "bg-superficie-2" : "hover:bg-superficie-2",
-          montado && "opacity-70",
+          montada && "opacity-70",
         )}
       >
         <button
@@ -110,7 +79,7 @@ function No({
         </button>
 
         {ehDivisao ? (
-          <Layers className={cn("size-4 shrink-0", montado ? "text-ok" : "text-marca")} />
+          <Layers className="size-4 shrink-0 text-marca" />
         ) : (
           <Package className="size-4 shrink-0 text-texto-fraco" />
         )}
@@ -130,31 +99,16 @@ function No({
             </>
           )}
 
-          {!no.obrigatorio && <Selo tom="neutro">opcional</Selo>}
-
           {no.localMontagem && (
             <span className="hidden shrink-0 text-xs text-texto-fraco xl:inline">
               {no.localMontagem}
             </span>
           )}
 
-          {montado ? (
-            <Selo
-              tom="ok"
-              title={`${dataHora(no.montadoEm)}${no.montadoPor ? ` · ${no.montadoPor}` : ""}`}
-            >
-              <Check className="size-3" />
-              montada
+          {!ehDivisao && !montada && no.disponivel < no.necessario && (
+            <Selo tom={no.disponivel <= 0 ? "perigo" : "alerta"}>
+              {no.disponivel <= 0 ? "sem saldo" : `só ${numero(no.disponivel)}`}
             </Selo>
-          ) : (
-            /* Peça dentro de divisão já montada não mostra falta: ela já saiu
-               do estoque, e o saldo de hoje não diz nada sobre ela. */
-            !ehDivisao &&
-            no.disponivel < no.quantidade && (
-              <Selo tom={no.disponivel <= 0 ? "perigo" : "alerta"}>
-                {no.disponivel <= 0 ? "sem saldo" : `só ${numero(no.disponivel)}`}
-              </Selo>
-            )
           )}
         </div>
 
@@ -162,12 +116,6 @@ function No({
           {numero(no.quantidade)}
           <span className="text-texto-fraco">{no.unidade ? ` ${no.unidade}` : " ×"}</span>
         </span>
-
-        <div className="flex w-32 shrink-0 items-center justify-end">
-          {podeEditar && ehDivisao && !montado && !encerrada && pronto && (
-            <MontarNo montagemId={montagemId} noId={no.id} rotulo="Montar" />
-          )}
-        </div>
       </div>
 
       {aberto && ehDivisao && !temFilhos && (
@@ -179,13 +127,7 @@ function No({
       {aberto && temFilhos && (
         <ul className="ml-[1.6rem] divide-y divide-borda border-l border-borda">
           {no.filhos.map((f) => (
-            <No
-              key={f.id}
-              no={f}
-              montagemId={montagemId}
-              podeEditar={podeEditar}
-              encerrada={encerrada || montado}
-            />
+            <No key={f.id} no={f} montada={montada} />
           ))}
         </ul>
       )}

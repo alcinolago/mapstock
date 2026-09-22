@@ -1,6 +1,6 @@
 import { asc, eq } from "drizzle-orm";
 
-import { NovoMolde, PainelMoldes, type MoldeNaTela } from "@/components/moldes/painel-moldes";
+import { PainelMoldes, type MoldeNaTela } from "@/components/moldes/painel-moldes";
 import type { NoMolde } from "@/components/moldes/arvore-molde";
 import { CabecalhoPagina } from "@/components/ui/cabecalho-pagina";
 import { db } from "@/db";
@@ -20,6 +20,9 @@ export const metadata = { title: "Estrutura" };
  * Monta a arvore a partir da lista plana, e ja soma o custo subindo: o custo
  * de uma divisao e o que esta abaixo dela, multiplicado pela quantidade que
  * ela aparece. E o "quanto vai custar montar" pedido, nivel a nivel.
+ *
+ * O custo e sempre das pecas. O kit nao tem preco proprio — o domo nao se
+ * compra, entao nao existe preco de domo; existe a soma do que entra nele.
  */
 function emArvore(plana: NoDoMolde[], paiId: string | null): NoMolde[] {
   return plana
@@ -36,7 +39,6 @@ function emArvore(plana: NoDoMolde[], paiId: string | null): NoMolde[] {
         descricao: n.descricao,
         unidade: n.unidade,
         quantidade: n.quantidade,
-        obrigatorio: n.obrigatorio,
         localMontagem: n.localMontagem,
         disponivel: n.disponivel,
         custoTotal: proprio + dosFilhos * n.quantidade,
@@ -64,6 +66,11 @@ export default async function PaginaEstrutura() {
         descricao: m.descricao,
         ativo: m.ativo,
         montagens: m.montagens,
+        itemId: m.itemId,
+        codigo: m.codigo,
+        itemDescricao: m.itemDescricao,
+        unidade: m.unidade,
+        emEstoque: m.emEstoque,
         custoTotal: nos.reduce((t, n) => t + n.custoTotal, 0),
         nos,
       };
@@ -81,18 +88,21 @@ export default async function PaginaEstrutura() {
     fotoId: fotos.get(i.id),
   }));
 
+  /* Um item tem uma receita so: o que ja virou kit sai da lista de escolha. */
+  const comEstrutura = new Set(lista.map((m) => m.itemId).filter(Boolean) as string[]);
+
   return (
     <div className="mx-auto max-w-[100rem]">
       <CabecalhoPagina
         titulo="Estrutura"
-        descricao="A receita de cada equipamento: as divisões e as peças que entram em cada uma."
-        acao={podeEditar ? <NovoMolde /> : undefined}
+        descricao="Em cima, o manual do equipamento completo. Embaixo, os itens que são montados a partir de outros — esses vão para a Montagem."
       />
 
       <PainelMoldes
         moldes={comArvore}
         divisoes={listaDivisoes.map((d) => ({ id: d.id, nome: d.nome }))}
         itens={selecionaveis}
+        itensSemEstrutura={selecionaveis.filter((i) => !comEstrutura.has(i.id))}
         podeEditar={podeEditar}
       />
     </div>

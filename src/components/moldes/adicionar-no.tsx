@@ -155,17 +155,15 @@ export function AdicionarNo({
             </Grupo>
           )}
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Grupo rotulo="Quantidade" obrigatorio htmlFor={`${idFormulario}-qtd`}>
-              <CampoNumero id={`${idFormulario}-qtd`} name="quantidade" padrao="1" required />
-            </Grupo>
-            <Grupo rotulo="Obrigatório" htmlFor={`${idFormulario}-obr`}>
-              <Selecao id={`${idFormulario}-obr`} name="obrigatorio" defaultValue="true">
-                <option value="true">Sim</option>
-                <option value="false">Opcional</option>
-              </Selecao>
-            </Grupo>
-          </div>
+          <Grupo rotulo="Quantidade" obrigatorio htmlFor={`${idFormulario}-qtd`}>
+            <CampoNumero
+              id={`${idFormulario}-qtd`}
+              name="quantidade"
+              padrao="1"
+              required
+              className="w-32"
+            />
+          </Grupo>
 
           <Grupo rotulo="Local de montagem" htmlFor={`${idFormulario}-local`}>
             <Entrada

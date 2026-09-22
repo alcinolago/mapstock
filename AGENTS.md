@@ -27,8 +27,8 @@ src/lib/labels.ts       chave ASCII → rótulo em português; EFEITO_MOVIMENTO
 src/lib/codigo.ts       sugestão de código e classificação (portado do desktop)
 src/lib/imagem.ts       compactação da foto no navegador (MB → KB)
 src/lib/mapa.ts         endereço do fornecedor → link de rota
-src/lib/acoes/moldes.ts     molde (receita)     src/lib/acoes/montagem.ts  execução
-src/lib/acoes/divisoes.ts   os nomes das divisões, reutilizáveis entre moldes
+src/lib/acoes/moldes.ts     estrutura (manual e kit)  src/lib/acoes/montagem.ts  execução
+src/lib/acoes/divisoes.ts   os nomes das divisões, reutilizáveis entre estruturas
 src/lib/sessao.ts       JWT + cookie          src/lib/auth.ts  guardas de página
 src/lib/acoes/*         server actions, uma por módulo
 src/lib/pdf.ts          montagem de PDF (A4, quebra de linha, link clicável)
@@ -75,34 +75,49 @@ listagem, é bug.
   sem passar por `receberItemDoPedido` o deixava parado no tempo, e a posição
   retroativa ainda valorizava a quantidade de agosto pelo preço de hoje.
   `itens.custoUnitario` continua sendo gravado e vale de reserva para o item
-  que nunca foi comprado (fabricado, impresso, equipamento montado).
-- **Estrutura e estoque são mundos separados, e a fronteira é o item.**
-  `moldes`/`molde_nos` e `montagens`/`montagem_nos` são desta parte do sistema:
-  equipamento e divisão existem só aqui, nunca viram item, nunca têm saldo e
-  nunca aparecem em Estoque ou Itens. O único que atravessa é a **peça**, que
-  é um item de verdade — e ela atravessa num momento só: ao montar.
-  Já houve duas tentativas de fazer o equipamento ser item (`bom`, e depois
-  `itens.papel` com Equipamento/Conjunto/Peça). As duas quebraram no mesmo
-  ponto: obrigavam a cadastrar "Domo" no estoque.
-- **Molde é planejamento; montagem é execução.** Criar molde, acrescentar
-  divisão, mudar quantidade — nada disso confere saldo nem pode ser barrado
-  por falta. Quem confere estoque é `montarNo`, e só ele.
-- **Abrir uma montagem copia a árvore do molde para dentro dela**
-  (`abrirMontagens`). A cópia não é otimização: editar o molde amanhã não
-  pode reescrever o que já foi montado ontem. O nome da divisão vai copiado
-  em `montagem_nos.nome` pelo mesmo motivo. Molde não tem versão — receita
-  nova é molde novo.
-- **Três equipamentos são três árvores independentes**, cada uma com seu
-  número, montada no seu ritmo. Não existe contador de "2 de 3": foi decisão
-  explícita de quem monta.
-- **Só divisão se monta.** Peça não se monta — ela é consumida quando a
-  divisão que a contém fecha. `montadoEm` preenchido congela o nó.
-- **Montar é o único caminho entre esta tela e o estoque**, e ele só lança
-  saída das peças. O equipamento montado **não** dá entrada no estoque:
-  ele não é item. Instalar num carro também não movimenta nada.
-- **Montar uma divisão consome os filhos diretos dela**: as peças saem do
-  estoque, e as sub-divisões precisam já estar montadas. Concluir o
-  equipamento (`montarNo` com nó nulo) fecha a raiz e libera o carro.
+  que nunca foi comprado (fabricado, impresso). O kit não usa nem isso: o
+  custo dele é a soma das peças, calculada na hora de exibir.
+- **A estrutura tem dois sabores, e a diferença é `moldes.itemId`.**
+  Vazio é o **manual** de um equipamento completo: documentação de bancada,
+  não vira item, não tem saldo, não passa pela Montagem. Preenchido é o
+  **kit** — a receita de um item do estoque. A tela de Estrutura mostra os
+  dois separados por uma linha, equipamentos em cima e itens embaixo.
+- **O kit é um item comum**, cadastrado na tela de Itens como qualquer outro.
+  Não existe campo "é kit": o que faz dele um kit é existir uma estrutura
+  apontando para ele, e um item tem uma receita só (`moldes.itemId` é único).
+  Foi isso que destravou a bancada — dá para montar seis domos na segunda
+  porque chegaram as câmeras, sem esperar o equipamento inteiro ser comprado.
+  Houve duas tentativas de fazer o **equipamento completo** virar item
+  (`bom`, e depois `itens.papel`); as duas quebraram por obrigar a cadastrar
+  algo que não encosta na prateleira. O domo encosta, e por isso é item.
+- **O kit não tem preço.** Quem tem preço são as peças. O custo que aparece
+  na Estrutura é a soma da árvore, e nada é gravado em `itens.custoUnitario`
+  do item produzido. Cotar um domo é cotar as peças do domo (`explodirMolde`,
+  origem `estrutura` em `criarCotacao`).
+- **Estrutura é planejamento; montagem é execução.** Criar estrutura,
+  acrescentar divisão, mudar quantidade — nada disso confere saldo nem pode
+  ser barrado por falta. Quem confere estoque é `montarMontagem`, e só ele.
+- **Divisão é só agrupamento de leitura.** Não se monta, não tem estado, não
+  aparece no estoque. Serve para a árvore ser legível.
+- **Abrir uma montagem copia a árvore da estrutura para dentro dela**
+  (`abrirMontagem`). A cópia não é otimização: editar a receita amanhã não
+  pode reescrever com o que aquela unidade foi feita ontem. O nome da divisão
+  vai copiado em `montagem_nos.nome` pelo mesmo motivo. Estrutura não tem
+  versão — receita nova é estrutura nova.
+- **Cada montagem vale por UMA unidade e fecha de uma vez só.** Seis domos
+  são seis montagens; não existe campo de quantidade nem contador de "2 de
+  6". Cada uma confere o saldo no momento do próprio clique, sem reserva e
+  sem repartir estoque entre as abertas: quem clicar primeiro leva as peças,
+  e a seguinte passa a acusar falta. Foi decisão explícita de quem monta.
+- **Montar é o único caminho entre esta tela e o estoque, e ele anda nos dois
+  sentidos**: `saida_producao` de cada peça da árvore (quantidade multiplicada
+  nível a nível) e `entrada_fabricacao` de uma unidade do item produzido.
+- **Montagem montada não volta atrás.** Não existe desmontar: enquanto está
+  aberta ela se exclui; depois de montada virou movimento, e movimento não se
+  apaga.
+- **Não existe frota.** Rastrear qual equipamento está em qual carro é
+  controle de ativo instalado, não de estoque, e foi removido de propósito —
+  com ele saíram `carros`, `versoes` e o vínculo montagem↔carro.
 - **Foto de item é JPEG, e são duas cópias.** O navegador compacta antes de
   enviar (`src/lib/imagem.ts`): sem isso, guardar binário no Postgres não se
   sustentaria — a foto do celular tem 4 MB e chega ao banco com ~200 KB. JPEG

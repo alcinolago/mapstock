@@ -40,8 +40,11 @@ export function ArvoreMontagem({ nos, montada }: { nos: NoMontagem[]; montada: b
     );
   }
 
+  /* `pb-2` nao e enfeite: a arvore e full-bleed, entao sem ele a ultima linha
+     encosta na borda arredondada do cartao e a leitura vira "o conteudo foi
+     cortado aqui" em vez de "acabou aqui". */
   return (
-    <ul className="divide-y divide-borda">
+    <ul className="divide-y divide-borda pb-2">
       {nos.map((no) => (
         <No key={no.id} no={no} montada={montada} />
       ))}

@@ -68,8 +68,11 @@ export function ArvoreMolde({
     );
   }
 
+  /* `pb-2` nao e enfeite: a arvore e full-bleed, entao sem ele a ultima linha
+     encosta na borda arredondada do cartao e a leitura vira "o conteudo foi
+     cortado aqui" em vez de "acabou aqui". */
   return (
-    <ul className="divide-y divide-borda">
+    <ul className="divide-y divide-borda pb-2">
       {nos.map((no, i) => (
         <No
           key={no.id}

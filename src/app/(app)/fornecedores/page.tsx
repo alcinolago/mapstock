@@ -6,6 +6,7 @@ import { FiltrosFornecedores } from "@/components/fornecedores/filtros-fornecedo
 import { Botao } from "@/components/ui/botao";
 import { CabecalhoPagina } from "@/components/ui/cabecalho-pagina";
 import { Cartao } from "@/components/ui/cartao";
+import { Copiavel } from "@/components/ui/copiavel";
 import { Paginacao } from "@/components/ui/paginacao";
 import { Selo, type TomSelo } from "@/components/ui/selo";
 import {
@@ -88,7 +89,6 @@ export default async function PaginaFornecedores({
       endereco: fornecedores.endereco,
       status: fornecedores.status,
       ativo: fornecedores.ativo,
-      condicaoPagamento: fornecedores.condicaoPagamento,
       qtdItens: sql<number>`count(${itemFornecedores.id})::int`,
     })
     .from(fornecedores)
@@ -125,7 +125,8 @@ export default async function PaginaFornecedores({
               <tr>
                 <Coluna>Fornecedor</Coluna>
                 <Coluna>Contato</Coluna>
-                <Coluna>Pagamento</Coluna>
+                <Coluna>E-mail</Coluna>
+                <Coluna>Telefone</Coluna>
                 <Coluna className="text-right">Itens</Coluna>
                 <Coluna>Status</Coluna>
                 <Coluna />
@@ -133,7 +134,7 @@ export default async function PaginaFornecedores({
             </Cabecalho>
             <Corpo>
               {lista.length === 0 ? (
-                <Vazio colSpan={6}>
+                <Vazio colSpan={7}>
                   {busca || status || situacao
                     ? "Nenhum fornecedor com esses filtros."
                     : "Nenhum fornecedor cadastrado. Comece por aqui — os itens se ligam a esta lista."}
@@ -144,26 +145,24 @@ export default async function PaginaFornecedores({
                   return (
                     <Linha key={f.id}>
                       <Celula>
-                        <Link
-                          href={`/fornecedores/${f.id}`}
-                          className="font-semibold text-marca hover:underline"
-                        >
-                          {f.nome}
-                        </Link>
-                        {!f.ativo && (
-                          <span className="ml-2 text-xs text-texto-fraco">inativo</span>
-                        )}
-                        {f.email && (
-                          <span className="block text-xs text-texto-fraco">{f.email}</span>
-                        )}
+                        <div className="flex items-center gap-2">
+                          <Link
+                            href={`/fornecedores/${f.id}`}
+                            className="font-semibold text-marca hover:underline"
+                          >
+                            {f.nome}
+                          </Link>
+                          {/* Mesmo chip do Status, do lado dele: desativado é
+                              informação de situação, não uma observação solta. */}
+                          {!f.ativo && <Selo tom="neutro">inativo</Selo>}
+                        </div>
+                      </Celula>
+                      <Celula className="text-xs text-texto-suave">{f.contato || "—"}</Celula>
+                      <Celula className="max-w-56 text-xs text-texto-suave">
+                        {f.email ? <Copiavel valor={f.email} rotulo="e-mail" /> : "—"}
                       </Celula>
                       <Celula className="text-xs text-texto-suave">
-                        {f.contato && <span className="block">{f.contato}</span>}
-                        {f.telefone && <span className="block">{f.telefone}</span>}
-                        {!f.contato && !f.telefone && "—"}
-                      </Celula>
-                      <Celula className="text-xs text-texto-fraco">
-                        {f.condicaoPagamento ?? "—"}
+                        {f.telefone ? <Copiavel valor={f.telefone} rotulo="telefone" /> : "—"}
                       </Celula>
                       <Celula className="num text-right font-semibold">{f.qtdItens}</Celula>
                       <Celula>

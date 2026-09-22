@@ -18,7 +18,7 @@ export default async function NovaCotacao({
   const [lista, moldes] = await Promise.all([listarItensComSaldo(), listarMoldes()]);
 
   /* Cotar "tudo que entra em X" parte da estrutura — tanto do manual de um
-     equipamento quanto do kit de um item. No kit, as pecas cotadas sao as que
+     equipamento quanto do conjunto de um item. No conjunto, as pecas cotadas sao as que
      compoem o item: o domo em si nunca e comprado, ele nasce da montagem. */
   const estruturas = moldes
     .filter((m) => m.ativo && m.nos > 0)

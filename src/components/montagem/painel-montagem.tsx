@@ -38,7 +38,7 @@ export type MontagemNaTela = {
   nos: NoMontagem[];
 };
 
-export type OpcaoKit = { id: string; nome: string; item: string };
+export type OpcaoConjunto = { id: string; nome: string; item: string };
 
 export function PainelMontagem({
   montagens,
@@ -140,7 +140,7 @@ function CartaoMontagem({
  * sem campo de quantidade, porque cada uma confere o estoque sozinha no
  * momento em que for montada.
  */
-export function NovaMontagem({ kits }: { kits: OpcaoKit[] }) {
+export function NovaMontagem({ conjuntos }: { conjuntos: OpcaoConjunto[] }) {
   const router = useRouter();
   const [aberto, setAberto] = useState(false);
   const [moldeId, setMoldeId] = useState("");
@@ -189,20 +189,20 @@ export function NovaMontagem({ kits }: { kits: OpcaoKit[] }) {
         }
       >
         <div className="space-y-4">
-          <Grupo rotulo="Item" obrigatorio htmlFor="nova-montagem-kit">
-            {kits.length === 0 ? (
+          <Grupo rotulo="Item" obrigatorio htmlFor="nova-montagem-conjunto">
+            {conjuntos.length === 0 ? (
               <p className="rounded-lg bg-superficie-2 px-3 py-2.5 text-sm text-texto-fraco">
                 Nenhum item com estrutura montada. Crie um em Estrutura, na parte de baixo da
                 tela, e coloque pelo menos uma peça dentro.
               </p>
             ) : (
               <Selecao
-                id="nova-montagem-kit"
+                id="nova-montagem-conjunto"
                 value={moldeId}
                 onChange={(e) => setMoldeId(e.target.value)}
               >
                 <option value="">Escolha...</option>
-                {kits.map((k) => (
+                {conjuntos.map((k) => (
                   <option key={k.id} value={k.id}>
                     {k.nome} — {k.item}
                   </option>

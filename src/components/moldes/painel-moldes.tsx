@@ -24,7 +24,7 @@ export type MoldeNaTela = {
   ativo: boolean;
   montagens: number;
   custoTotal: number;
-  /** Kit: o item do estoque que esta estrutura produz. Manual: nulo. */
+  /** Conjunto: o item do estoque que esta estrutura produz. Manual: nulo. */
   itemId: string | null;
   codigo: string | null;
   itemDescricao: string | null;
@@ -58,12 +58,12 @@ export function PainelMoldes({
   moldes: MoldeNaTela[];
   divisoes: OpcaoDivisao[];
   itens: ItemBusca[];
-  /** Só estes podem virar kit: um item tem uma receita só. */
+  /** Só estes podem virar conjunto: um item tem uma receita só. */
   itensSemEstrutura: ItemBusca[];
   podeEditar: boolean;
 }) {
   const equipamentos = moldes.filter((m) => !m.itemId);
-  const kits = moldes.filter((m) => m.itemId);
+  const conjuntos = moldes.filter((m) => m.itemId);
 
   return (
     <div className="space-y-8">
@@ -83,10 +83,10 @@ export function PainelMoldes({
         titulo="Itens"
         descricao="A receita de um item do estoque. Montar consome as peças e coloca uma unidade do item na prateleira."
         acao={
-          podeEditar ? <NovoMolde tipo="kit" itensSemEstrutura={itensSemEstrutura} /> : undefined
+          podeEditar ? <NovoMolde tipo="conjunto" itensSemEstrutura={itensSemEstrutura} /> : undefined
         }
-        vazio="Nenhum item com estrutura ainda. É aqui que o domo vira um kit."
-        moldes={kits}
+        vazio="Nenhum item com estrutura ainda. É aqui que o domo vira um conjunto."
+        moldes={conjuntos}
         divisoes={divisoes}
         itens={itens}
         podeEditar={podeEditar}
@@ -167,21 +167,21 @@ function CartaoMolde({
   const [pendente, iniciar] = useTransition();
 
   const pecas = contar(molde.nos);
-  const ehKit = Boolean(molde.itemId);
+  const ehConjunto = Boolean(molde.itemId);
 
   return (
     <Cartao className="overflow-hidden">
       <CabecalhoCartao
         titulo={molde.nome}
         descricao={
-          ehKit
+          ehConjunto
             ? `${molde.codigo} — ${molde.itemDescricao}`
             : (molde.descricao ??
               `${pecas.divisoes} ${pecas.divisoes === 1 ? "divisão" : "divisões"} · ${pecas.pecas} ${pecas.pecas === 1 ? "peça" : "peças"}`)
         }
         acao={
           <div className="flex flex-wrap items-center gap-2">
-            {ehKit && (
+            {ehConjunto && (
               <Selo
                 tom={molde.emEstoque > 0 ? "ok" : "neutro"}
                 title="Unidades prontas no estoque"
@@ -206,7 +206,7 @@ function CartaoMolde({
 
             {podeEditar && (
               <>
-                {/* Cotar um kit é cotar as peças dele: o próprio item nunca é
+                {/* Cotar um conjunto é cotar as peças dele: o próprio item nunca é
                     comprado, ele nasce da montagem. */}
                 {molde.nos.length > 0 && (
                   <Link
@@ -260,7 +260,7 @@ function CartaoMolde({
                 >
                   <p>
                     Sai a estrutura inteira, com todas as divisões e peças dela. Nada disso mexe
-                    no estoque{ehKit ? ", nem no item que ela produz" : ""}. Montagens já abertas
+                    no estoque{ehConjunto ? ", nem no item que ela produz" : ""}. Montagens já abertas
                     guardam a cópia delas e continuam como estão.
                   </p>
                 </BotaoConfirmar>
@@ -303,10 +303,10 @@ export function NovoMolde({
   tipo,
   itensSemEstrutura = [],
 }: {
-  tipo: "equipamento" | "kit";
+  tipo: "equipamento" | "conjunto";
   itensSemEstrutura?: ItemBusca[];
 }) {
-  const ehKit = tipo === "kit";
+  const ehConjunto = tipo === "conjunto";
   const [aberto, setAberto] = useState(false);
   const [chave, setChave] = useState(0);
   const [itemId, setItemId] = useState<string | null>(null);
@@ -324,17 +324,17 @@ export function NovoMolde({
 
   return (
     <>
-      <Botao variante={ehKit ? "primario" : "contorno"} onClick={() => setAberto(true)}>
+      <Botao variante={ehConjunto ? "primario" : "contorno"} onClick={() => setAberto(true)}>
         <Plus className="size-4" />
-        {ehKit ? "Novo item" : "Novo equipamento"}
+        {ehConjunto ? "Novo item" : "Novo equipamento"}
       </Botao>
 
       <Modal
         aberto={aberto}
         aoFechar={() => setAberto(false)}
-        titulo={ehKit ? "Novo item com estrutura" : "Novo equipamento"}
+        titulo={ehConjunto ? "Novo item com estrutura" : "Novo equipamento"}
         descricao={
-          ehKit
+          ehConjunto
             ? "Um item do estoque que é montado a partir de outros. Montar consome as peças e coloca uma unidade dele na prateleira."
             : "O manual de um equipamento completo. Não vira item, não tem saldo e não passa pela montagem."
         }
@@ -347,7 +347,7 @@ export function NovoMolde({
             <Botao
               type="submit"
               form={idFormulario}
-              disabled={enviando || (ehKit && !itemId)}
+              disabled={enviando || (ehConjunto && !itemId)}
             >
               {enviando ? (
                 <LoaderCircle className="size-4 animate-spin" />
@@ -360,9 +360,9 @@ export function NovoMolde({
         }
       >
         <form id={idFormulario} action={acao} key={chave} className="space-y-4">
-          {ehKit && <input type="hidden" name="itemId" value={itemId ?? ""} />}
+          {ehConjunto && <input type="hidden" name="itemId" value={itemId ?? ""} />}
 
-          {ehKit && (
+          {ehConjunto && (
             <Grupo
               rotulo="Item do estoque"
               obrigatorio
@@ -382,9 +382,9 @@ export function NovoMolde({
             <Entrada
               id={`${idFormulario}-nome`}
               name="nome"
-              placeholder={ehKit ? "Ex.: Domo" : "Ex.: Equipamento de inspeção XYZ"}
+              placeholder={ehConjunto ? "Ex.: Domo" : "Ex.: Equipamento de inspeção XYZ"}
               required
-              autoFocus={!ehKit}
+              autoFocus={!ehConjunto}
             />
           </Grupo>
 

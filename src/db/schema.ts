@@ -81,7 +81,7 @@ export const acaoAuditoria = pgEnum("acao_auditoria", ["criar", "atualizar", "ex
  * Dinheiro e quantidade em numeric (exato no banco) lido como number no TS.
  *
  * O zero vai como SQL literal, e nao como `.default(0)`, por causa do
- * comparador do drizzle-kit: ele le o default de uma coluna numeric do banco
+ * comparador do drizzle-conjunto: ele le o default de uma coluna numeric do banco
  * como a string '0' e comparava contra o numero 0, achando diferenca em 17
  * colunas a cada `db:push`. Statement nenhum resolvia — aplicar nao mudava o
  * banco, que ja guardava 0 —, e essa enxurrada de ruido escondia divergencia
@@ -342,11 +342,11 @@ export const itemFornecedores = pgTable(
  *   sem itemId  e o manual do equipamento completo. Documentacao de bancada:
  *               mostra o que entra num equipamento e onde cada coisa vai.
  *               Nao monta, nao consome, nao produz nada.
- *   com itemId  e a receita de um item do estoque — o kit. Montar um kit
+ *   com itemId  e a receita de um item do estoque — o conjunto. Montar um conjunto
  *               consome as pecas da arvore e da entrada de UMA unidade do
  *               item apontado.
  *
- * O kit e o que destrava a bancada. O domo e um item como qualquer outro:
+ * O conjunto e o que destrava a bancada. O domo e um item como qualquer outro:
  * quem monta faz seis domos na segunda porque chegaram as cameras, e eles
  * ficam na prateleira esperando o resto. Sem isso, nada podia ser montado
  * antes de o equipamento inteiro estar comprado.
@@ -375,7 +375,7 @@ export const divisoes = pgTable("divisoes", {
 export const moldes = pgTable("moldes", {
   id: uuid("id").primaryKey().defaultRandom(),
   nome: text("nome").notNull().unique(),
-  /* Preenchido = receita de um item do estoque (kit). Vazio = manual de um
+  /* Preenchido = receita de um item do estoque (conjunto). Vazio = manual de um
      equipamento completo, que nao vira item nenhum. Unico porque um item tem
      uma receita so: mudou o domo, edita a estrutura dele. */
   itemId: uuid("item_id")
@@ -434,7 +434,7 @@ export const cotacaoItens = pgTable(
     quantidade: quantidade("quantidade"),
   },
   /* Colunas em ordem decrescente de nome, e nao na ordem "natural": e assim
-     que o drizzle-kit le uma unique composta do banco, e declarar diferente
+     que o drizzle-conjunto le uma unique composta do banco, e declarar diferente
      fazia todo `db:push` querer recriar a constraint (oferecendo truncar a
      tabela). Unicidade de um par nao depende de ordem. */
   (t) => [unique("cotacao_item_unico").on(t.itemId, t.cotacaoId)],
@@ -493,7 +493,7 @@ export const pedidoItens = pgTable("pedido_itens", {
      a "aberto" e oferecer receber de novo o que ja voltou. */
   quantidadeDevolvida: quantidade("quantidade_devolvida"),
   /* O que quem compra precisa escolher no site do fornecedor: cor, tamanho,
-     voltagem, o kit com 50 em vez do avulso. Fica na linha do pedido, e nao
+     voltagem, o conjunto com 50 em vez do avulso. Fica na linha do pedido, e nao
      no item, porque muda de compra para compra — e e o campo que sai em
      destaque no PDF mandado para o pessoal de compras. */
   parametrosCompra: text("parametros_compra"),
@@ -518,7 +518,7 @@ export const movimentos = pgTable("movimentos", {
   pedidoItemId: uuid("pedido_item_id").references(() => pedidoItens.id, {
     onDelete: "set null",
   }),
-  /* Idem para montagem: montar um kit gera a saida de cada peca da arvore e
+  /* Idem para montagem: montar um conjunto gera a saida de cada peca da arvore e
      a entrada de uma unidade do item produzido, todas com este campo. */
   montagemId: uuid("montagem_id").references(() => montagens.id, {
     onDelete: "set null",

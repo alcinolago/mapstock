@@ -93,9 +93,9 @@ export default async function PaginaMontagem() {
 
   const abertas = comArvore.filter((m) => m.status === "em_montagem").length;
 
-  /* So kit se monta: o manual do equipamento completo nao produz item nenhum
+  /* So conjunto se monta: o manual do equipamento completo nao produz item nenhum
      e nao aparece aqui. */
-  const kits = moldes
+  const conjuntos = moldes
     .filter((m) => m.itemId && m.ativo && m.nos > 0)
     .map((m) => ({ id: m.id, nome: m.nome, item: `${m.codigo} — ${m.itemDescricao}` }));
 
@@ -108,7 +108,7 @@ export default async function PaginaMontagem() {
             ? `${abertas} ${abertas === 1 ? "unidade aberta" : "unidades abertas"}. Montar dá baixa nas peças e coloca a unidade pronta no estoque.`
             : "Cada montagem é uma unidade. Montar dá baixa nas peças e coloca a unidade pronta no estoque."
         }
-        acao={podeEditar ? <NovaMontagem kits={kits} /> : undefined}
+        acao={podeEditar ? <NovaMontagem conjuntos={conjuntos} /> : undefined}
       />
 
       <PainelMontagem montagens={comArvore} podeEditar={podeEditar} />

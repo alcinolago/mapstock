@@ -291,7 +291,7 @@ function LinkProduto({ url, rotulo }: { url: string; rotulo: string }) {
 
 /**
  * O campo que o pessoal de compras le no site do fornecedor: cor, tamanho,
- * voltagem, o kit de 50 em vez do avulso. Salva so quando a pessoa manda —
+ * voltagem, o conjunto de 50 em vez do avulso. Salva so quando a pessoa manda —
  * gravar sozinho no blur ja fez gente perder texto em rascunho.
  */
 function ParametrosCompra({

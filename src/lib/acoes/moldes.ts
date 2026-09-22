@@ -13,7 +13,7 @@ import { registrar } from "@/lib/auditoria";
  * A estrutura: uma arvore de divisoes e pecas, servindo a duas coisas.
  *
  *   sem item  manual do equipamento completo. Documentacao de bancada.
- *   com item  receita de um item do estoque — o kit. E o que a montagem
+ *   com item  receita de um item do estoque — o conjunto. E o que a montagem
  *             executa, e o que faz o domo existir na prateleira.
  *
  * Nada aqui encosta no estoque. Criar, acrescentar divisao, mudar
@@ -44,7 +44,7 @@ export async function salvarMolde(
 
   /* O item so se escolhe na criacao. Trocar depois mudaria o que a estrutura
      produz sem mexer numa linha da arvore — e o caminho mais curto para um
-     kit que se consome a si mesmo. Errou o item: exclui e cria de novo. */
+     conjunto que se consome a si mesmo. Errou o item: exclui e cria de novo. */
   if (!id && itemId) {
     const [item] = await db.select({ id: itens.id }).from(itens).where(eq(itens.id, itemId));
     if (!item) return { erro: "Item não encontrado." };
@@ -148,14 +148,14 @@ export async function alternarMolde(id: string): Promise<{ erro?: string }> {
 /* --------------------------------------------------------- Nós da árvore */
 
 /**
- * Um kit dentro do outro e normal — a placa montada entra no domo. Um kit
+ * Um conjunto dentro do outro e normal — a placa montada entra no domo. Um conjunto
  * dentro de si mesmo, mesmo com tres niveis no meio, nao: a montagem entraria
  * em laco infinito na hora de explodir a arvore.
  *
- * Desce pela receita de `itemId` procurando `alvo`. Kit sem receita e folha,
+ * Desce pela receita de `itemId` procurando `alvo`. Conjunto sem receita e folha,
  * que e o caso da esmagadora maioria dos itens.
  */
-async function kitConsome(
+async function conjuntoConsome(
   itemId: string,
   alvo: string,
   visitados = new Set<string>(),
@@ -173,7 +173,7 @@ async function kitConsome(
     .where(and(eq(moldeNos.moldeId, molde.id), isNotNull(moldeNos.itemId)));
 
   for (const filho of dentro) {
-    if (await kitConsome(filho.itemId!, alvo, visitados)) return true;
+    if (await conjuntoConsome(filho.itemId!, alvo, visitados)) return true;
   }
   return false;
 }
@@ -224,9 +224,9 @@ export async function adicionarNo(_estado: EstadoNo, formulario: FormData): Prom
       .select({ itemId: moldes.itemId, nome: moldes.nome })
       .from(moldes)
       .where(eq(moldes.id, d.moldeId));
-    if (molde?.itemId && (await kitConsome(itemId, molde.itemId))) {
+    if (molde?.itemId && (await conjuntoConsome(itemId, molde.itemId))) {
       return {
-        erro: `Isso faz ${molde.nome} entrar em si mesmo — direto ou por dentro de outro kit.`,
+        erro: `Isso faz ${molde.nome} entrar em si mesmo — direto ou por dentro de outro conjunto.`,
       };
     }
   }

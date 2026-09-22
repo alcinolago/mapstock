@@ -596,7 +596,7 @@ export async function devolverItemDoPedido(
 
 /**
  * Parâmetros de compra da linha: o texto livre que diz o que escolher no site
- * do fornecedor — cor, tamanho, voltagem, o kit de 50 em vez do avulso.
+ * do fornecedor — cor, tamanho, voltagem, a caixa de 50 em vez do avulso.
  *
  * Fica na linha do pedido, e não no cadastro do item, porque a escolha muda
  * de compra para compra. É o campo que sai em destaque no PDF que vai para

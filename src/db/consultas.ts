@@ -571,9 +571,9 @@ export async function nosDoMolde(moldeId: string): Promise<NoDoMolde[]> {
 }
 
 /**
- * As estruturas. `itemId` preenchido e kit (receita de um item do estoque);
+ * As estruturas. `itemId` preenchido e conjunto (receita de um item do estoque);
  * vazio e manual de equipamento completo. A tela separa as duas listas por
- * esse campo, e so o kit chega na montagem.
+ * esse campo, e so o conjunto chega na montagem.
  */
 export async function listarMoldes() {
   return db

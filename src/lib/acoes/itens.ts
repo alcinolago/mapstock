@@ -391,8 +391,8 @@ export async function dependenciasItem(id: string): Promise<Dependencias> {
   await exigirEdicao();
 
   /* O item aparece nos dois lados da estrutura: como peca dentro de uma
-     arvore, e como o produto de um kit. Os dois seguram a exclusao — apagar o
-     item que um kit produz deixaria a montagem sem saber o que ela faz. */
+     arvore, e como o produto de um conjunto. Os dois seguram a exclusao — apagar o
+     item que um conjunto produz deixaria a montagem sem saber o que ela faz. */
   const [
     emCotacoes,
     emPedidos,

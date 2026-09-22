@@ -44,7 +44,6 @@ const UNIDADES = [
   { sigla: "kg", nome: "Quilograma" },
   { sigla: "g", nome: "Grama" },
   { sigla: "m", nome: "Metro" },
-  { sigla: "kit", nome: "Kit" },
   { sigla: "rolo", nome: "Rolo" },
   { sigla: "caixa", nome: "Caixa" },
   { sigla: "conj.", nome: "Conjunto" },

@@ -32,7 +32,7 @@ src/lib/labels.ts       chave ASCII → rótulo em português; EFEITO_MOVIMENTO
 src/lib/codigo.ts       sugestão de código e classificação (portado do desktop)
 src/lib/imagem.ts       compactação da foto no navegador (MB → KB)
 src/lib/mapa.ts         endereço do fornecedor → link de rota
-src/lib/acoes/moldes.ts     estrutura (manual e kit)  src/lib/acoes/montagem.ts  execução
+src/lib/acoes/moldes.ts     estrutura (manual e conjunto)  src/lib/acoes/montagem.ts  execução
 src/lib/acoes/divisoes.ts   os nomes das divisões, reutilizáveis entre estruturas
 src/lib/sessao.ts       JWT + cookie          src/lib/auth.ts  guardas de página
 src/lib/acoes/*         server actions, uma por módulo
@@ -96,31 +96,36 @@ listagem, é bug.
   sem passar por `receberItemDoPedido` o deixava parado no tempo, e a posição
   retroativa ainda valorizava a quantidade de agosto pelo preço de hoje.
   `itens.custoUnitario` continua sendo gravado e vale de reserva para o item
-  que nunca foi comprado (fabricado, impresso). O kit não usa nem isso: o
+  que nunca foi comprado (fabricado, impresso). O conjunto não usa nem isso: o
   custo dele é a soma das peças, calculada na hora de exibir.
 - **A estrutura tem dois sabores, e a diferença é `moldes.itemId`.**
   Vazio é o **manual** de um equipamento completo: documentação de bancada,
   não vira item, não tem saldo, não passa pela Montagem. Preenchido é o
-  **kit** — a receita de um item do estoque. A tela de Estrutura mostra os
+  **conjunto** — a receita de um item do estoque. A tela de Estrutura mostra os
   dois separados por uma linha, equipamentos em cima e itens embaixo.
-- **O kit é um item comum**, cadastrado na tela de Itens como qualquer outro.
-  Não existe campo "é kit": o que faz dele um kit é existir uma estrutura
+- **Uma palavra só: conjunto.** O item que se monta a partir de outros é
+  *conjunto*, nunca *kit*. Havia os dois no sistema — "kit" era ao mesmo tempo
+  unidade de medida e tipo de item, e na linha do domo apareciam `1 kit` e o
+  selo `kit` dizendo coisas diferentes. A unidade "kit" foi removida e os
+  itens dela passaram para `conj.`.
+- **O conjunto é um item comum**, cadastrado na tela de Itens como qualquer outro.
+  Não existe campo "é conjunto": o que faz dele um conjunto é existir uma estrutura
   apontando para ele, e um item tem uma receita só (`moldes.itemId` é único).
   Foi isso que destravou a bancada — dá para montar seis domos na segunda
   porque chegaram as câmeras, sem esperar o equipamento inteiro ser comprado.
   Houve duas tentativas de fazer o **equipamento completo** virar item
   (`bom`, e depois `itens.papel`); as duas quebraram por obrigar a cadastrar
   algo que não encosta na prateleira. O domo encosta, e por isso é item.
-- **O kit não tem preço.** Quem tem preço são as peças. O custo que aparece
+- **O conjunto não tem preço.** Quem tem preço são as peças. O custo que aparece
   na Estrutura é a soma da árvore, e nada é gravado em `itens.custoUnitario`
   do item produzido. Cotar um domo é cotar as peças do domo (`explodirMolde`,
   origem `estrutura` em `criarCotacao`).
-- **O manual abre os kits que usa, e não deixa editá-los ali.** Quando uma
+- **O manual abre os conjuntos que usa, e não deixa editá-los ali.** Quando uma
   peça do equipamento tem estrutura própria, a árvore dela aparece embaixo
-  marcada com `doKit` — sem adicionar, remover ou reordenar. O equipamento
+  marcada com `doConjunto` — sem adicionar, remover ou reordenar. O equipamento
   aponta para o domo; quem define o domo é a estrutura do domo. Editar pelos
-  dois lados é como um deles fica errado. Vale em qualquer lugar onde um kit
-  entre como peça, inclusive kit dentro de kit.
+  dois lados é como um deles fica errado. Vale em qualquer lugar onde um conjunto
+  entre como peça, inclusive conjunto dentro de conjunto.
 - **A árvore aberta mostra a receita, não o total.** Dois domos no equipamento
   continuam mostrando 4 câmeras, que é o que entra em *um* domo — o bloco é
   cópia fiel do que está na seção Itens, que é para onde a pessoa vai quando
@@ -228,7 +233,7 @@ Duas convenções existem só para o push continuar limpo, e desfazer qualquer
 uma traz o ruído de volta:
 
 - **Unique composta se declara com as colunas em ordem decrescente de nome**
-  (`.on(t.itemId, t.cotacaoId)`), que é a ordem em que o drizzle-kit lê do
+  (`.on(t.itemId, t.cotacaoId)`), que é a ordem em que o drizzle-conjunto lê do
   banco. Unicidade de um par não depende de ordem.
 - **Default numérico vai como `sql`'0'``** (o helper `zero` em schema.ts), e
   não `.default(0)`: o comparador lê o default do banco como string.

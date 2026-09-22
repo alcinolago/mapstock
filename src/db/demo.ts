@@ -101,11 +101,11 @@ async function criar() {
   const criados = await db
     .insert(itens)
     .values([
-      /* O kit: item de estoque como qualquer outro, so que nasce montado em
+      /* O conjunto: item de estoque como qualquer outro, so que nasce montado em
          vez de comprado. E ele que destrava a bancada — da para fazer seis
          domos na segunda porque chegaram as cameras, sem esperar o
          equipamento inteiro. */
-      { codigo: "DOM-KIT-001", descricao: "Domo montado — 2 câmeras", classificacaoId: classe("Carenagem/Domo"), unidadeId: unidade("un"), aquisicaoId: aquisicao("Fabricação interna"), origemFabricacaoId: origem("Interna — Montagem"), estoqueMinimo: 1, localId: local("Prateleira C2"), criadoPor: admin.id, atualizadoPor: admin.id },
+      { codigo: "DOM-CONJUNTO-001", descricao: "Domo montado — 2 câmeras", classificacaoId: classe("Carenagem/Domo"), unidadeId: unidade("un"), aquisicaoId: aquisicao("Fabricação interna"), origemFabricacaoId: origem("Interna — Montagem"), estoqueMinimo: 1, localId: local("Prateleira C2"), criadoPor: admin.id, atualizadoPor: admin.id },
       { codigo: "EST-001", descricao: "Estrutura em perfil de alumínio 40x40", classificacaoId: classe("Estrutural"), unidadeId: unidade("conj."), aquisicaoId: aquisicao("Compra nacional"), origemFabricacaoId: origem("Terceiro — Corte/Dobra"), custoUnitario: 480, estoqueMinimo: 2, localId: local("Prateleira A1"), prazoValor: 12, criadoPor: admin.id, atualizadoPor: admin.id },
       { codigo: "FIX-PAR-M6X20", descricao: "Parafuso M6x20 inox allen", classificacaoId: classe("Fixação"), unidadeId: unidade("un"), aquisicaoId: aquisicao("Compra nacional"), origemFabricacaoId: origem("Compra pronta nacional"), custoUnitario: 0.92, estoqueMinimo: 200, localId: local("Gaveta B3"), prazoValor: 5, criadoPor: admin.id, atualizadoPor: admin.id },
       { codigo: "FIX-POR-M6", descricao: "Porca M6 inox autotravante", classificacaoId: classe("Fixação"), unidadeId: unidade("un"), aquisicaoId: aquisicao("Compra nacional"), custoUnitario: 0.55, estoqueMinimo: 200, localId: local("Gaveta B3"), prazoValor: 5, criadoPor: admin.id, atualizadoPor: admin.id },
@@ -120,7 +120,7 @@ async function criar() {
       { codigo: "AUT-DIS-OLED", descricao: "Display OLED 0,96\" I2C 128x64", classificacaoId: classe("Eletrônica/Automação"), unidadeId: unidade("un"), aquisicaoId: aquisicao("Compra importada"), linkCompra: "https://pt.aliexpress.com/item/1005004991237845.html", custoUnitario: 21.9, estoqueMinimo: 5, localId: local("Gaveta B1"), prazoValor: 38, criadoPor: admin.id, atualizadoPor: admin.id },
       { codigo: "IMP-BIC-06", descricao: "Bico 0,6mm aço endurecido rosca M6 (padrão V6)", classificacaoId: classe("Impressão 3D"), unidadeId: unidade("un"), aquisicaoId: aquisicao("Compra importada"), linkCompra: "https://pt.aliexpress.com/item/1005003471190028.html", custoUnitario: 34.7, estoqueMinimo: 4, localId: local("Sala de impressão"), prazoValor: 30, criadoPor: admin.id, atualizadoPor: admin.id },
       { codigo: "CBL-USB-3M", descricao: "Cabo USB 3.0 blindado 3m com trava", classificacaoId: classe("Cabeamento"), unidadeId: unidade("un"), aquisicaoId: aquisicao("Compra nacional"), linkCompra: "https://produto.mercadolivre.com.br/MLB-3901274655-cabo-usb-30-blindado-3m-com-trava-_JM", custoUnitario: 89, estoqueMinimo: 2, localId: local("Gaveta B1"), prazoValor: 4, criadoPor: admin.id, atualizadoPor: admin.id },
-      { codigo: "FIX-INS-M3", descricao: "Inserto roscado M3 latão para impressão 3D (kit 100)", classificacaoId: classe("Fixação"), unidadeId: unidade("kit"), aquisicaoId: aquisicao("Compra nacional"), linkCompra: "https://produto.mercadolivre.com.br/MLB-2788341290-inserto-rosca-m3-lato-kit-100-pecas-_JM", custoUnitario: 62, estoqueMinimo: 1, localId: local("Gaveta B3"), prazoValor: 5, criadoPor: admin.id, atualizadoPor: admin.id },
+      { codigo: "FIX-INS-M3", descricao: "Inserto roscado M3 latão para impressão 3D (100 peças)", classificacaoId: classe("Fixação"), unidadeId: unidade("conj."), aquisicaoId: aquisicao("Compra nacional"), linkCompra: "https://produto.mercadolivre.com.br/MLB-2788341290-inserto-rosca-m3-lato-kit-100-pecas-_JM", custoUnitario: 62, estoqueMinimo: 1, localId: local("Gaveta B3"), prazoValor: 5, criadoPor: admin.id, atualizadoPor: admin.id },
     ])
     .returning();
   const i = (codigo: string) => criados.find((x) => x.codigo === codigo)!.id;
@@ -144,7 +144,7 @@ async function criar() {
     { itemId: i("CNS-FIL-PETG"), fornecedorId: f("3D Insumos"), preco: 135, prazoValor: 6, qtdMinima: 2, principal: true, ordem: 0 },
     { itemId: i("AUT-PLACA-001"), fornecedorId: f("Ferramentas União"), preco: 89.9, prazoValor: 7, principal: true, ordem: 0 },
     { itemId: i("ELE-FON-24V"), fornecedorId: f("AliExpress"), preco: 96.4, prazoValor: 35, skuFornecedor: "S-350-24 (bivolt)", linkItem: "https://pt.aliexpress.com/item/1005006184720341.html", observacoes: "Loja Mean Well Outlet Store — a que tem NF de importação.", principal: true, ordem: 0 },
-    { itemId: i("AUT-MOT-NEMA17"), fornecedorId: f("AliExpress"), preco: 78.5, prazoValor: 40, qtdMinima: 4, skuFornecedor: "17HS4801-S", linkItem: "https://pt.aliexpress.com/item/1005005872109934.html", observacoes: "O kit com 4 sai mais barato que 4 avulsos.", principal: true, ordem: 0 },
+    { itemId: i("AUT-MOT-NEMA17"), fornecedorId: f("AliExpress"), preco: 78.5, prazoValor: 40, qtdMinima: 4, skuFornecedor: "17HS4801-S", linkItem: "https://pt.aliexpress.com/item/1005005872109934.html", observacoes: "O pacote com 4 sai mais barato que 4 avulsos.", principal: true, ordem: 0 },
     { itemId: i("AUT-DIS-OLED"), fornecedorId: f("AliExpress"), preco: 21.9, prazoValor: 38, qtdMinima: 5, skuFornecedor: "OLED-096-I2C-W", linkItem: "https://pt.aliexpress.com/item/1005004991237845.html", principal: true, ordem: 0 },
     { itemId: i("IMP-BIC-06"), fornecedorId: f("AliExpress"), preco: 34.7, prazoValor: 30, skuFornecedor: "V6-HS-06", linkItem: "https://pt.aliexpress.com/item/1005003471190028.html", principal: true, ordem: 0 },
     { itemId: i("CBL-USB-3M"), fornecedorId: f("Mercado Livre"), preco: 89, prazoValor: 4, linkItem: "https://produto.mercadolivre.com.br/MLB-3901274655-cabo-usb-30-blindado-3m-com-trava-_JM", observacoes: "Vendedor Loja do Cabo, reputação verde, Full.", principal: true, ordem: 0 },
@@ -152,7 +152,7 @@ async function criar() {
   ]);
   /* Estrutura, nos dois sabores.
      Em cima o manual do equipamento completo, que nao vira item nenhum; e o
-     que quem esta na bancada consulta. Embaixo o kit: uma receita amarrada a
+     que quem esta na bancada consulta. Embaixo o conjunto: uma receita amarrada a
      um item do estoque, que se monta e vira unidade na prateleira.
      Divisao, nos dois, e so agrupamento de leitura. */
   const [divEstrutura, divDomo, divAutomacao] = await db
@@ -213,26 +213,26 @@ async function criar() {
   await peca(manual.id, manEstrutura, "FIX-POR-M6", 24, 3, "Cantoneiras");
 
   const manDomo = await divisao(manual.id, divDomo.id, 2);
-  await peca(manual.id, manDomo, "DOM-KIT-001", 1, 1, "Frente");
+  await peca(manual.id, manDomo, "DOM-CONJUNTO-001", 1, 1, "Frente");
 
   const manAutomacao = await divisao(manual.id, divAutomacao.id, 3);
   await peca(manual.id, manAutomacao, "AUT-PLACA-001", 1, 1);
   await peca(manual.id, manAutomacao, "AUT-DIS-OLED", 1, 2);
   await peca(manual.id, manAutomacao, "CBL-USB-3M", 1, 3);
 
-  /* O kit. Montar uma destas consome tudo que esta aqui dentro e coloca uma
-     unidade de DOM-KIT-001 no estoque. */
-  const kitDomo = await estrutura(
+  /* O conjunto. Montar uma destas consome tudo que esta aqui dentro e coloca uma
+     unidade de DOM-CONJUNTO-001 no estoque. */
+  const conjuntoDomo = await estrutura(
     "Domo",
     "Carenagem impressa, duas câmeras e os parafusos da tampa.",
-    i("DOM-KIT-001"),
+    i("DOM-CONJUNTO-001"),
   );
 
-  const kitDomoNo = await divisao(kitDomo.id, divDomo.id, 1);
-  await peca(kitDomo.id, kitDomoNo, "DOM-CAR-PETG", 1, 1, "Frente");
-  await peca(kitDomo.id, kitDomoNo, "CNS-FIL-PETG", 0.31, 2);
-  await peca(kitDomo.id, kitDomoNo, "SEN-CAM-001", 2, 3, "Topo");
-  await peca(kitDomo.id, kitDomoNo, "FIX-PAR-M6X20", 6, 4, "Tampa");
+  const conjuntoDomoNo = await divisao(conjuntoDomo.id, divDomo.id, 1);
+  await peca(conjuntoDomo.id, conjuntoDomoNo, "DOM-CAR-PETG", 1, 1, "Frente");
+  await peca(conjuntoDomo.id, conjuntoDomoNo, "CNS-FIL-PETG", 0.31, 2);
+  await peca(conjuntoDomo.id, conjuntoDomoNo, "SEN-CAM-001", 2, 3, "Topo");
+  await peca(conjuntoDomo.id, conjuntoDomoNo, "FIX-PAR-M6X20", 6, 4, "Tampa");
 
   await db.insert(movimentos).values([
     { itemId: i("FIX-PAR-M6X20"), tipo: "entrada_compra", quantidade: 500, referencia: "NF 12043", usuarioId: admin.id },
@@ -338,7 +338,7 @@ async function criar() {
       precoUnitario: 78.5,
       parametrosCompra:
         'Variação "42x48mm / eixo 5mm liso / com cabo 1m".\n' +
-        "Se aparecer o kit com 4 unidades, comprar o kit: sai mais barato que 4 avulsos.\n" +
+        "Se aparecer o conjunto com 4 unidades, comprar o conjunto: sai mais barato que 4 avulsos.\n" +
         "Eixo liso, sem rosca e sem chaveta.",
     },
     {
@@ -389,7 +389,7 @@ async function criar() {
   /* ------------------------------------------------------------ Montagens */
 
   /**
-   * Abre uma montagem copiando a arvore do kit, do mesmo jeito que a acao
+   * Abre uma montagem copiando a arvore do conjunto, do mesmo jeito que a acao
    * `abrirMontagem` faz. Cada montagem vale por UMA unidade.
    *
    * `montar` fecha: lanca a saida de cada peca e a entrada de uma unidade do
@@ -398,10 +398,10 @@ async function criar() {
    */
   async function abrirMontagem(
     numero: string,
-    kit: { id: string; nome: string; itemId: string | null },
+    conjunto: { id: string; nome: string; itemId: string | null },
     extras: { montar?: boolean; local?: string; observacoes?: string } = {},
   ) {
-    const receita = await db.select().from(moldeNos).where(eq(moldeNos.moldeId, kit.id));
+    const receita = await db.select().from(moldeNos).where(eq(moldeNos.moldeId, conjunto.id));
     const nomes = new Map([
       [divEstrutura.id, divEstrutura.nome],
       [divDomo.id, divDomo.nome],
@@ -412,9 +412,9 @@ async function criar() {
       .insert(montagens)
       .values({
         numero,
-        moldeId: kit.id,
-        itemId: kit.itemId!,
-        nome: kit.nome,
+        moldeId: conjunto.id,
+        itemId: conjunto.itemId!,
+        nome: conjunto.nome,
         status: extras.montar ? "montada" : "em_montagem",
         local: extras.local ?? null,
         observacoes: extras.observacoes ?? null,
@@ -461,7 +461,7 @@ async function criar() {
     }
 
     await db.insert(movimentos).values({
-      itemId: kit.itemId!,
+      itemId: conjunto.itemId!,
       tipo: "entrada_fabricacao",
       quantidade: 1,
       referencia: numero,
@@ -474,23 +474,23 @@ async function criar() {
   }
 
   /* Um domo pronto: consumiu as duas cameras e virou uma unidade em estoque. */
-  await abrirMontagem(`MNT-${ano}-0001`, kitDomo, {
+  await abrirMontagem(`MNT-${ano}-0001`, conjuntoDomo, {
     montar: true,
     local: "Prateleira C2",
     observacoes: "Câmeras apontadas 15° para baixo.",
   });
 
-  /* Outro aberto, esperando camera chegar. Duas montagens do mesmo kit,
+  /* Outro aberto, esperando camera chegar. Duas montagens do mesmo conjunto,
      cada uma por si: a segunda so descobre que falta peca quando alguem
      clicar em Montar. */
-  await abrirMontagem(`MNT-${ano}-0002`, kitDomo, { local: "Bancada 2" });
+  await abrirMontagem(`MNT-${ano}-0002`, conjuntoDomo, { local: "Bancada 2" });
 
   console.log(`  ${forns.length} fornecedores`);
   console.log(`  ${criados.length} itens`);
   console.log(`  1 cotação com comparativo de preços`);
   console.log(`  1 pedido parcialmente recebido`);
   console.log(`  2 pedidos de site (AliExpress e Mercado Livre) com link e parâmetros de compra`);
-  console.log(`  2 estruturas: o manual do equipamento e o kit do domo`);
+  console.log(`  2 estruturas: o manual do equipamento e o conjunto do domo`);
   console.log(`  2 montagens de domo: uma pronta no estoque, outra esperando câmera`);
   console.log("\nPronto. Entre no sistema para ver.");
 }

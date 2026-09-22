@@ -12,7 +12,7 @@ import { registrar } from "@/lib/auditoria";
 /**
  * Montagem: o evento que transforma peças num item pronto.
  *
- * Só kit se monta — molde com `itemId`. O manual do equipamento completo não
+ * Só conjunto se monta — molde com `itemId`. O manual do equipamento completo não
  * passa por aqui: ele é documentação de bancada, não produz nada e não
  * encosta no estoque.
  *
@@ -55,7 +55,7 @@ async function proximoNumero(): Promise<string> {
 }
 
 /**
- * Abre uma montagem de um kit. Não encosta no estoque: abrir é planejar, e
+ * Abre uma montagem de um conjunto. Não encosta no estoque: abrir é planejar, e
  * vale mesmo sem ter nenhuma peça na prateleira.
  */
 export async function abrirMontagem(moldeId: string): Promise<{ erro?: string; numero?: string }> {

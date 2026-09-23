@@ -137,4 +137,5 @@ export async function listarDivisoes() {
 function revalidarTudo() {
   revalidatePath("/divisoes");
   revalidatePath("/estrutura");
+  revalidatePath("/conjuntos");
 }

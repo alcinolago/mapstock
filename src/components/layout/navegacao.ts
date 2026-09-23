@@ -8,6 +8,7 @@ import {
   LayoutDashboard,
   Network,
   Package,
+  Puzzle,
   Settings,
   ShoppingCart,
   Truck,
@@ -52,6 +53,10 @@ export const NAVEGACAO = [
     filhos: [
       { href: "/divisoes", rotulo: "Divisões", Icone: Layers },
       { href: "/estrutura", rotulo: "Estrutura", Icone: Network },
+      /* Conjunto e Estrutura ja dividiram uma tela, uma lista em cima da
+         outra, e ninguem sabia em qual estava. Entre as duas vizinhas porque
+         e o meio do caminho: o manual usa o conjunto, a montagem o executa. */
+      { href: "/conjuntos", rotulo: "Conjuntos", Icone: Puzzle },
       /* `exato` porque o histórico mora abaixo dela: sem isso as duas
          acendiam juntas na barra. */
       { href: "/montagem", rotulo: "Montagem", Icone: Hammer, exato: true },

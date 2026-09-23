@@ -2,7 +2,7 @@
 
 import { ChevronDown, ChevronRight, ChevronUp, Package, Layers, Trash2 } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
 import type { ItemBusca } from "@/components/estoque/seletor-item";
@@ -128,6 +128,9 @@ function No({
   ultimo: boolean;
 }) {
   const router = useRouter();
+  /* A mesma árvore vive em Estrutura e em Conjuntos: o voltar da tela do
+     item tem de cair na que a pessoa estava. */
+  const aqui = usePathname();
   /* Recolhido por padrão: o cartão abre mostrando as divisões, que é o
      desenho do equipamento, e quem quer o detalhe pede. Com um conjunto
      dentro, uma divisão sozinha já traz a árvore inteira de outro item.
@@ -145,8 +148,8 @@ function No({
   const temFilhos = no.filhos.length > 0;
 
   /* O que veio de dentro de um conjunto não se edita aqui. O equipamento aponta
-     para o domo; quem define o domo é a estrutura do domo, lá embaixo na
-     seção Itens — e editar por dois lugares é como um deles fica errado. */
+     para o domo; quem define o domo é a estrutura do domo, na tela de
+     Conjuntos — e editar por dois lugares é como um deles fica errado. */
   const editavel = podeEditar && !no.doConjunto;
 
   function mover(direcao: "cima" | "baixo") {
@@ -191,7 +194,7 @@ function No({
           ) : (
             <>
               <Link
-                href={linkDoItem(no.itemId!, "/estrutura")}
+                href={linkDoItem(no.itemId!, aqui)}
                 className="codigo shrink-0 text-xs font-semibold text-marca hover:underline"
               >
                 {no.codigo}
@@ -207,7 +210,7 @@ function No({
           )}
 
           {no.ehConjunto && (
-            <Selo tom="marca" title="Montado a partir da estrutura deste item, na seção Itens">
+            <Selo tom="marca" title="Montado a partir da receita deste item, na tela de Conjuntos">
               conjunto
             </Selo>
           )}

@@ -1,4 +1,14 @@
-import { listarMoldes, nosDoMolde, type NoDoMolde } from "@/db/consultas";
+import { asc, eq } from "drizzle-orm";
+
+import { db } from "@/db";
+import {
+  fotosPrincipais,
+  listarItensComSaldo,
+  listarMoldes,
+  nosDoMolde,
+  type NoDoMolde,
+} from "@/db/consultas";
+import { divisoes } from "@/db/schema";
 import type { NoMolde } from "@/components/moldes/arvore-molde";
 import type { MoldeNaTela } from "@/components/moldes/painel-moldes";
 
@@ -12,7 +22,7 @@ import type { MoldeNaTela } from "@/components/moldes/painel-moldes";
  * Monta a arvore de um molde, abrindo os conjuntos que aparecem dentro dela.
  *
  * O equipamento e um manual: ele aponta para o item "Domo", e quem diz o que
- * tem dentro de um domo e a estrutura do domo, na secao Itens. Sem abrir essa
+ * tem dentro de um domo e a estrutura do domo, na tela de Conjuntos. Sem abrir essa
  * arvore, o manual mostra uma linha unica e nao serve para quem esta na
  * bancada querendo ver o equipamento inteiro ate o ultimo parafuso.
  *
@@ -21,7 +31,7 @@ import type { MoldeNaTela } from "@/components/moldes/painel-moldes";
  * item — editar por dois lugares e como um deles fica errado.
  *
  * As quantidades sao as da receita do conjunto, sem multiplicar pela quantidade do
- * pai: o bloco e copia fiel do que esta na secao Itens, que e para onde a
+ * pai: o bloco e copia fiel do que esta na tela de Conjuntos, que e para onde a
  * pessoa vai quando quiser mudar. Multiplicar faria os dois discordarem.
  *
  * O custo sobe junto: um conjunto nunca foi comprado, entao o preco dele e zero e
@@ -107,3 +117,37 @@ export async function listarEstruturas(): Promise<MoldeNaTela[]> {
   });
 }
 
+/**
+ * Tudo que as telas de Estrutura e de Conjuntos carregam. As duas sao a
+ * mesma coisa vista de lados diferentes — o equipamento abre os conjuntos que
+ * usa, e o conjunto pode ter conjunto dentro —, entao a arvore sai sempre de
+ * todas as estruturas, e cada tela so escolhe quais cartoes mostrar.
+ */
+export async function carregarTelaEstrutura() {
+  const [estruturas, listaDivisoes, itens] = await Promise.all([
+    listarEstruturas(),
+    db.select().from(divisoes).where(eq(divisoes.ativo, true)).orderBy(asc(divisoes.ordem)),
+    listarItensComSaldo(),
+  ]);
+
+  const fotos = await fotosPrincipais(itens.map((i) => i.id));
+
+  const selecionaveis = itens.map((i) => ({
+    id: i.id,
+    codigo: i.codigo,
+    descricao: i.descricao,
+    unidade: i.unidade,
+    disponivel: i.disponivel,
+    fotoId: fotos.get(i.id),
+  }));
+
+  /* Um item tem uma receita so: o que ja virou conjunto sai da lista de escolha. */
+  const comEstrutura = new Set(estruturas.map((m) => m.itemId).filter(Boolean) as string[]);
+
+  return {
+    estruturas,
+    divisoes: listaDivisoes.map((d) => ({ id: d.id, nome: d.nome })),
+    itens: selecionaveis,
+    itensSemEstrutura: selecionaveis.filter((i) => !comEstrutura.has(i.id)),
+  };
+}

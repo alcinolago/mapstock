@@ -75,6 +75,7 @@ export async function salvarMolde(
       depois,
     });
     revalidatePath("/estrutura");
+    revalidatePath("/conjuntos");
     return { ok: true, id };
   }
 
@@ -90,6 +91,7 @@ export async function salvarMolde(
     depois: criado,
   });
   revalidatePath("/estrutura");
+  revalidatePath("/conjuntos");
   return { ok: true, id: criado.id };
 }
 
@@ -120,6 +122,7 @@ export async function excluirMolde(id: string): Promise<{ erro?: string }> {
     antes,
   });
   revalidatePath("/estrutura");
+  revalidatePath("/conjuntos");
   return {};
 }
 
@@ -142,6 +145,7 @@ export async function alternarMolde(id: string): Promise<{ erro?: string }> {
     depois,
   });
   revalidatePath("/estrutura");
+  revalidatePath("/conjuntos");
   return {};
 }
 
@@ -267,6 +271,7 @@ export async function adicionarNo(_estado: EstadoNo, formulario: FormData): Prom
     depois: criado,
   });
   revalidatePath("/estrutura");
+  revalidatePath("/conjuntos");
   return { ok: true };
 }
 
@@ -291,6 +296,7 @@ export async function removerNo(id: string): Promise<{ erro?: string }> {
     antes: { ...antes, filhosLevadosJunto: filhos },
   });
   revalidatePath("/estrutura");
+  revalidatePath("/conjuntos");
   return {};
 }
 
@@ -311,6 +317,7 @@ export async function atualizarQuantidadeNo(
     depois: { quantidade },
   });
   revalidatePath("/estrutura");
+  revalidatePath("/conjuntos");
   return {};
 }
 
@@ -356,6 +363,7 @@ export async function moverNo(id: string, direcao: "cima" | "baixo"): Promise<{ 
     depois: { ordem: destino + 1 },
   });
   revalidatePath("/estrutura");
+  revalidatePath("/conjuntos");
   return {};
 }
 

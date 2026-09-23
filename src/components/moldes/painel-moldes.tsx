@@ -45,116 +45,62 @@ export type MoldeNaTela = {
 };
 
 /**
- * A tela de Estrutura, em duas metades separadas por uma linha.
+ * A lista de estruturas de uma das duas telas.
  *
- * Em cima, os **equipamentos**: o manual do que vai montado num veículo
- * inteiro. Não produz nada e não passa pela Montagem — serve para quem está
- * na bancada saber o que entra e onde cada coisa vai.
+ * Em **Estrutura** ficam os equipamentos: o manual do que vai montado num
+ * veículo inteiro. Não produz nada e não passa pela Montagem — serve para
+ * quem está na bancada saber o que entra e onde cada coisa vai.
  *
- * Embaixo, os **itens**: cada um amarrado a um item do estoque. É o domo,
- * que tem quatro câmeras e um GPS dentro e vira uma unidade na prateleira.
- * Esses sim se montam, e é o que destrava a bancada — dá para fazer seis
- * domos na segunda porque chegaram as câmeras, sem esperar o equipamento
- * inteiro estar comprado.
+ * Em **Conjuntos** ficam os que estão amarrados a um item do estoque. É o
+ * domo, que tem quatro câmeras e um GPS dentro e vira uma unidade na
+ * prateleira. Esses sim se montam, e é o que destrava a bancada — dá para
+ * fazer seis domos na segunda porque chegaram as câmeras, sem esperar o
+ * equipamento inteiro estar comprado.
+ *
+ * Já foram as duas metades de uma tela só, separadas por uma linha, e a
+ * separação não bastou: quem abria Estrutura não sabia em qual das duas
+ * listas estava, nem qual delas a Montagem enxergava. Telas diferentes no
+ * menu respondem isso antes do primeiro clique.
  *
  * A divisão, nos dois casos, é só agrupamento de leitura.
  */
 export function PainelMoldes({
+  tipo,
   moldes,
   divisoes,
   itens,
-  itensSemEstrutura,
   podeEditar,
 }: {
+  tipo: "equipamento" | "conjunto";
   moldes: MoldeNaTela[];
   divisoes: OpcaoDivisao[];
   itens: ItemBusca[];
-  /** Só estes podem virar conjunto: um item tem uma receita só. */
-  itensSemEstrutura: ItemBusca[];
   podeEditar: boolean;
 }) {
-  const equipamentos = moldes.filter((m) => !m.itemId);
-  const conjuntos = moldes.filter((m) => m.itemId);
+  if (moldes.length === 0) {
+    return (
+      <Cartao>
+        <p className="px-4 py-10 text-center text-sm text-texto-fraco">
+          {tipo === "conjunto"
+            ? "Nenhum conjunto ainda. É aqui que o domo vira um item montado a partir das peças."
+            : "Nenhum equipamento documentado ainda."}
+        </p>
+      </Cartao>
+    );
+  }
 
   return (
-    <div className="space-y-8">
-      <Secao
-        titulo="Equipamentos"
-        acao={podeEditar ? <NovoMolde tipo="equipamento" /> : undefined}
-        vazio="Nenhum equipamento documentado ainda."
-        moldes={equipamentos}
-        divisoes={divisoes}
-        itens={itens}
-        podeEditar={podeEditar}
-      />
-
-      <Secao
-        separada
-        titulo="Itens"
-        acao={
-          podeEditar ? <NovoMolde tipo="conjunto" itensSemEstrutura={itensSemEstrutura} /> : undefined
-        }
-        vazio="Nenhum item com estrutura ainda. É aqui que o domo vira um conjunto."
-        moldes={conjuntos}
-        divisoes={divisoes}
-        itens={itens}
-        podeEditar={podeEditar}
-      />
+    <div className="space-y-5">
+      {moldes.map((m) => (
+        <CartaoMolde
+          key={m.id}
+          molde={m}
+          divisoes={divisoes}
+          itens={itens}
+          podeEditar={podeEditar}
+        />
+      ))}
     </div>
-  );
-}
-
-function Secao({
-  titulo,
-  acao,
-  vazio,
-  moldes,
-  divisoes,
-  itens,
-  podeEditar,
-  separada,
-}: {
-  titulo: string;
-  acao?: React.ReactNode;
-  vazio: string;
-  moldes: MoldeNaTela[];
-  divisoes: OpcaoDivisao[];
-  itens: ItemBusca[];
-  podeEditar: boolean;
-  /* A linha é o que diz que são dois mundos: em cima o que se consulta,
-     embaixo o que se monta. */
-  separada?: boolean;
-}) {
-  return (
-    <section className={separada ? "border-t border-borda pt-8" : undefined}>
-      <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-semibold text-texto">
-            {titulo}
-            <span className="ml-2 text-sm font-normal text-texto-fraco">{moldes.length}</span>
-          </h2>
-        </div>
-        {acao}
-      </div>
-
-      {moldes.length === 0 ? (
-        <Cartao>
-          <p className="px-4 py-10 text-center text-sm text-texto-fraco">{vazio}</p>
-        </Cartao>
-      ) : (
-        <div className="space-y-5">
-          {moldes.map((m) => (
-            <CartaoMolde
-              key={m.id}
-              molde={m}
-              divisoes={divisoes}
-              itens={itens}
-              podeEditar={podeEditar}
-            />
-          ))}
-        </div>
-      )}
-    </section>
   );
 }
 
@@ -337,10 +283,10 @@ function contar(nos: NoMolde[]): { divisoes: number; pecas: number } {
 }
 
 /**
- * Criar uma estrutura. O tipo não é um campo do formulário: são dois botões,
- * cada um no seu lado da linha, porque a escolha é sobre em qual das duas
- * listas aquilo vai morar — e essa pergunta se responde clicando no lugar
- * certo, não num select.
+ * Criar uma estrutura. O tipo não é um campo do formulário: cada tela tem o
+ * seu botão, porque a escolha é sobre em qual das duas listas aquilo vai
+ * morar — e essa pergunta se responde clicando no lugar certo, não num
+ * select.
  */
 export function NovoMolde({
   tipo,
@@ -369,13 +315,13 @@ export function NovoMolde({
     <>
       <Botao variante={ehConjunto ? "primario" : "contorno"} onClick={() => setAberto(true)}>
         <Plus className="size-4" />
-        {ehConjunto ? "Novo item" : "Novo equipamento"}
+        {ehConjunto ? "Novo conjunto" : "Nova estrutura"}
       </Botao>
 
       <Modal
         aberto={aberto}
         aoFechar={() => setAberto(false)}
-        titulo={ehConjunto ? "Novo item com estrutura" : "Novo equipamento"}
+        titulo={ehConjunto ? "Novo conjunto" : "Nova estrutura"}
         descricao={
           ehConjunto
             ? "Um item do estoque que é montado a partir de outros. Montar consome as peças e coloca uma unidade dele na prateleira."

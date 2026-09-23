@@ -102,8 +102,13 @@ listagem, é bug.
 - **A estrutura tem dois sabores, e a diferença é `moldes.itemId`.**
   Vazio é o **manual** de um equipamento completo: documentação de bancada,
   não vira item, não tem saldo, não passa pela Montagem. Preenchido é o
-  **conjunto** — a receita de um item do estoque. A tela de Estrutura mostra os
-  dois separados por uma linha, equipamentos em cima e itens embaixo.
+  **conjunto** — a receita de um item do estoque. Cada um tem a sua tela:
+  `/estrutura` só com os manuais, `/conjuntos` só com as receitas, vizinhas
+  no menu. Já foram as duas metades de uma tela só, separadas por uma linha,
+  e ninguém sabia em qual lista estava nem qual delas a Montagem enxergava.
+  A árvore das duas sai da mesma função (`carregarTelaEstrutura`, em
+  `lib/estrutura.ts`), porque o manual abre os conjuntos que usa. A Montagem
+  só oferece conjunto.
 - **Uma palavra só: conjunto.** O item que se monta a partir de outros é
   *conjunto*, nunca *kit*. Havia os dois no sistema — "kit" era ao mesmo tempo
   unidade de medida e tipo de item, e na linha do domo apareciam `1 kit` e o
@@ -129,7 +134,7 @@ listagem, é bug.
   entre como peça, inclusive conjunto dentro de conjunto.
 - **A árvore aberta mostra a receita, não o total.** Dois domos no equipamento
   continuam mostrando 4 câmeras, que é o que entra em *um* domo — o bloco é
-  cópia fiel do que está na seção Itens, que é para onde a pessoa vai quando
+  cópia fiel do que está na tela de Conjuntos, que é para onde a pessoa vai quando
   quiser mudar. Multiplicar faria os dois discordarem na cara dela.
 - **Estrutura é planejamento; montagem é execução.** Criar estrutura,
   acrescentar divisão, mudar quantidade — nada disso confere saldo nem pode
@@ -154,14 +159,19 @@ listagem, é bug.
   as abertas ela só empurrava para baixo o que ainda tem trabalho — e a tela
   crescia uma linha por unidade feita desde sempre. `/montagem` é lista de
   trabalho pendente; o histórico é consulta, com recorte por período.
-- **Árvore nasce recolhida, nas duas telas.** Em Estrutura o cartão abre
+- **Árvore nasce recolhida.** Em Estrutura e Conjuntos o cartão abre
   mostrando só as divisões — o desenho do equipamento —, e quem quer o
   detalhe pede; uma divisão sozinha pode trazer a árvore inteira de outro
   item, quando tem conjunto dentro. Em Montagem a árvore fica atrás de um
   "Ver N peças": com meia dúzia de unidades abertas, seis árvores empilhadas
   viram uma parede e some o que importa, que é qual delas dá para montar
   agora. Quem acabou de acrescentar algo dentro de uma divisão vê ela abrir
-  (`aoAdicionar`), senão o clique parece não ter feito nada.
+  (`aoAdicionar`), senão o clique parece não ter feito nada. O "Expandir
+  tudo" do cartão é uma ordem para a árvore, não o estado dela: cada linha
+  continua abrindo e fechando sozinha depois.
+- **A estrutura impressa sai inteira aberta** (`lib/pdf-estrutura.ts`, rota
+  `/api/exportar/estrutura/<id>`). No papel não tem onde clicar para ver o
+  detalhe, e ela existe para ir à bancada sem o sistema junto.
 - **Montagem montada não volta atrás.** Não existe desmontar: enquanto está
   aberta ela se exclui; depois de montada virou movimento, e movimento não se
   apaga.

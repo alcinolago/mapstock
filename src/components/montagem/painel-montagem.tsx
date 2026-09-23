@@ -209,11 +209,11 @@ export function NovaMontagem({ conjuntos }: { conjuntos: OpcaoConjunto[] }) {
         }
       >
         <div className="space-y-4">
-          <Grupo rotulo="Item" obrigatorio htmlFor="nova-montagem-conjunto">
+          <Grupo rotulo="Conjunto" obrigatorio htmlFor="nova-montagem-conjunto">
             {conjuntos.length === 0 ? (
               <p className="rounded-lg bg-superficie-2 px-3 py-2.5 text-sm text-texto-fraco">
-                Nenhum item com estrutura montada. Crie um em Estrutura, na parte de baixo da
-                tela, e coloque pelo menos uma peça dentro.
+                Nenhum conjunto pronto para montar. Crie um na tela de Conjuntos e coloque pelo
+                menos uma peça dentro.
               </p>
             ) : (
               <Selecao

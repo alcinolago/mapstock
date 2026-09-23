@@ -144,10 +144,9 @@ export function Historico({
                   {podeEditar && (
                     <Celula className="text-right">
                       <BotaoConfirmar
-                        rotulo={`Estornar movimentação de ${m.codigo}`}
+                        rotulo="Estornar"
                         Icone={Undo2}
                         tamanho="sm"
-                        somenteIcone
                         tom="alerta"
                         iconeClassName="size-3.5"
                         dica="Estornar (lança o movimento oposto)"

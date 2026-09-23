@@ -87,9 +87,11 @@ export function PainelDivisoes({
                   onClick={() => executar(() => renomear(d.id), () => setEditando(null))}
                 >
                   <Check className="size-3.5" />
+                  Salvar
                 </Botao>
                 <Botao variante="suave" tamanho="sm" onClick={() => setEditando(null)}>
                   <X className="size-3.5" />
+                  Cancelar
                 </Botao>
               </>
             ) : (
@@ -115,28 +117,27 @@ export function PainelDivisoes({
                     <Botao
                       variante="fantasma"
                       tamanho="sm"
-                      title="Renomear"
                       onClick={() => {
                         setRascunho(d.nome);
                         setEditando(d.id);
                       }}
                     >
                       <Pencil className="size-3.5" />
+                      Renomear
                     </Botao>
                     <Botao
                       variante="fantasma"
                       tamanho="sm"
                       disabled={pendente}
-                      title={d.ativo ? "Desativar" : "Reativar"}
                       onClick={() => executar(() => alternarDivisao(d.id))}
                     >
                       {d.ativo ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
+                      {d.ativo ? "Desativar" : "Reativar"}
                     </Botao>
                     <BotaoConfirmar
-                      rotulo={`Excluir ${d.nome}`}
+                      rotulo="Excluir"
                       Icone={Trash2}
                       tamanho="sm"
-                      somenteIcone
                       iconeClassName="size-3.5 text-perigo"
                       dica="Excluir divisão"
                       desabilitado={pendente}

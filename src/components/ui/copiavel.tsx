@@ -13,10 +13,11 @@ import { cn } from "@/lib/utils";
  * branco junto. Quem está com o fornecedor na tela quer o e-mail no Ctrl+V,
  * não na mão.
  *
- * O ícone só aparece no hover: são duas colunas inteiras de texto copiável, e
- * um ícone fixo em cada linha viraria ruído. Depois de copiar ele vira um
- * "check" e fica visível por dois segundos — sem isso não há como saber se o
- * clique pegou, já que a área de transferência não dá sinal nenhum.
+ * O ícone fica sempre à vista. Já foi só no hover, para não encher de ícone
+ * duas colunas inteiras, mas aí ninguém descobria que dava para clicar — e no
+ * celular, sem hover, não aparecia nunca. Depois de copiar ele vira um "check"
+ * por dois segundos: sem isso não há como saber se o clique pegou, já que a
+ * área de transferência não dá sinal nenhum.
  */
 export function Copiavel({
   valor,
@@ -61,7 +62,7 @@ export function Copiavel({
       {copiado ? (
         <Check className="size-3.5 shrink-0 text-ok" />
       ) : (
-        <Copy className="size-3.5 shrink-0 text-texto-fraco opacity-0 transition-opacity group-hover:opacity-100" />
+        <Copy className="size-3.5 shrink-0 text-texto-fraco transition-colors group-hover:text-marca" />
       )}
     </button>
   );

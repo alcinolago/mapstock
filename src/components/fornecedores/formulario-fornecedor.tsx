@@ -112,8 +112,14 @@ export function FormularioFornecedor({
               />
               {whatsapp && (
                 <a href={whatsapp} target="_blank" rel="noopener noreferrer">
-                  <Botao type="button" variante="salvar" tamanho="icone" title="Abrir no WhatsApp">
+                  <Botao
+                    type="button"
+                    variante="salvar"
+                    className="h-9 shrink-0"
+                    title="Abrir no WhatsApp"
+                  >
                     <MessageCircle className="size-4" />
+                    WhatsApp
                   </Botao>
                 </a>
               )}
@@ -161,16 +167,17 @@ export function FormularioFornecedor({
                     <Botao
                       type="button"
                       variante="contorno"
-                      tamanho="icone"
+                      className="h-9 shrink-0"
                       title="Abrir a rota no mapa"
                     >
                       <MapPin className="size-4" />
+                      Ver no mapa
                     </Botao>
                   </a>
                   <Botao
                     type="button"
                     variante="contorno"
-                    tamanho="icone"
+                    className="h-9 shrink-0"
                     onClick={copiarRota}
                     title="Copiar o link da rota"
                   >
@@ -179,6 +186,7 @@ export function FormularioFornecedor({
                     ) : (
                       <Link2 className="size-4" />
                     )}
+                    {copia === "feita" ? "Copiado" : "Copiar rota"}
                   </Botao>
                 </>
               )}

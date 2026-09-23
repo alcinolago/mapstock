@@ -180,9 +180,10 @@ export default async function PaginaFornecedores({
                               target="_blank"
                               rel="noopener noreferrer"
                               title="WhatsApp"
-                              className="rounded-md p-1.5 text-texto-fraco transition-colors hover:bg-ok-suave hover:text-ok"
+                              className="inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium whitespace-nowrap text-texto-suave transition-colors hover:bg-ok-suave hover:text-ok"
                             >
                               <MessageCircle className="size-4" />
+                              WhatsApp
                             </a>
                           )}
                           {rota && (
@@ -191,9 +192,10 @@ export default async function PaginaFornecedores({
                               target="_blank"
                               rel="noopener noreferrer"
                               title="Como chegar"
-                              className="rounded-md p-1.5 text-texto-fraco transition-colors hover:bg-marca-suave hover:text-marca"
+                              className="inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium whitespace-nowrap text-texto-suave transition-colors hover:bg-marca-suave hover:text-marca"
                             >
                               <MapPin className="size-4" />
+                              Como chegar
                             </a>
                           )}
                           {f.site && (
@@ -202,9 +204,10 @@ export default async function PaginaFornecedores({
                               target="_blank"
                               rel="noopener noreferrer"
                               title="Abrir site"
-                              className="rounded-md p-1.5 text-texto-fraco transition-colors hover:bg-marca-suave hover:text-marca"
+                              className="inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium whitespace-nowrap text-texto-suave transition-colors hover:bg-marca-suave hover:text-marca"
                             >
                               <ExternalLink className="size-4" />
+                              Site
                             </a>
                           )}
                         </div>

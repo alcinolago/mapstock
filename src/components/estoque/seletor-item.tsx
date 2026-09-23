@@ -34,6 +34,7 @@ export function SeletorItem({
   /* Quando vem, o papel do item aparece num selo ao lado do codigo. A
      estrutura precisa disso: ali o papel e que decide o que pode entrar. */
   nomePapel,
+  marcados,
 }: {
   itens: ItemBusca[];
   valor?: string;
@@ -41,12 +42,17 @@ export function SeletorItem({
   nome?: string;
   placeholder?: string;
   nomePapel?: (num: number) => string;
+  /* Escolha de varios: a lista fica aberta a cada clique, e o clique num
+     marcado desmarca. Fechar a cada peca obrigaria a reabrir e redigitar a
+     busca dez vezes para os dez parafusos do mesmo conjunto. */
+  marcados?: Set<string>;
 }) {
   const [aberto, setAberto] = useState(false);
   const [busca, setBusca] = useState("");
   const caixa = useRef<HTMLDivElement>(null);
 
   const escolhido = itens.find((i) => i.id === valor);
+  const marcado = (id: string) => (marcados ? marcados.has(id) : id === valor);
 
   const filtrados = useMemo(() => {
     const t = busca.trim().toUpperCase();
@@ -110,7 +116,10 @@ export function SeletorItem({
             />
           </div>
 
-          <ul role="listbox" className="rolagem-fina max-h-72 overflow-y-auto p-1">
+          <ul
+            role="listbox"
+            aria-multiselectable={marcados ? true : undefined}
+            className="rolagem-fina max-h-72 overflow-y-auto p-1">
             {filtrados.length === 0 ? (
               <li className="px-3 py-6 text-center text-sm text-texto-fraco">
                 Nenhum item encontrado.
@@ -121,21 +130,22 @@ export function SeletorItem({
                   <button
                     type="button"
                     role="option"
-                    aria-selected={i.id === valor}
+                    aria-selected={marcado(i.id)}
                     onClick={() => {
                       aoEscolher(i.id);
+                      if (marcados) return;
                       setAberto(false);
                       setBusca("");
                     }}
                     className={cn(
                       "flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left transition-colors",
-                      i.id === valor ? "bg-marca-suave" : "hover:bg-superficie-2",
+                      marcado(i.id) ? "bg-marca-suave" : "hover:bg-superficie-2",
                     )}
                   >
                     <Check
                       className={cn(
                         "size-4 shrink-0 text-marca",
-                        i.id === valor ? "opacity-100" : "opacity-0",
+                        marcado(i.id) ? "opacity-100" : "opacity-0",
                       )}
                     />
                     <MiniaturaItem fotoId={i.fotoId} descricao={i.descricao} />

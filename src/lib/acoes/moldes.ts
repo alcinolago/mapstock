@@ -1,6 +1,6 @@
 "use server";
 
-import { and, asc, eq, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
@@ -270,6 +270,119 @@ export async function adicionarNo(_estado: EstadoNo, formulario: FormData): Prom
     acao: "criar",
     depois: criado,
   });
+  revalidatePath("/estrutura");
+  revalidatePath("/conjuntos");
+  return { ok: true };
+}
+
+const esquemaPecas = z.object({
+  moldeId: z.uuid(),
+  paiId: z.uuid().nullable(),
+  pecas: z
+    .array(
+      z.object({
+        itemId: z.uuid(),
+        quantidade: esquemaNo.shape.quantidade,
+        localMontagem: z.string().trim().optional(),
+      }),
+    )
+    .min(1, "Escolha pelo menos uma peça."),
+});
+
+/**
+ * Varias pecas de uma vez, cada uma com a sua quantidade.
+ *
+ * Existe porque montar a receita de um domo peca por peca era abrir e fechar
+ * a janela vinte vezes. As regras sao as de `adicionarNo`, conferidas para
+ * todas antes de gravar qualquer uma: o driver HTTP do Neon nao tem
+ * transacao, entao o que garante o tudo-ou-nada e conferir antes e gravar
+ * num `insert` so. Meia lista gravada deixaria a pessoa sem saber o que
+ * entrou e o que tem que repetir.
+ */
+export async function adicionarPecas(entrada: {
+  moldeId: string;
+  paiId: string | null;
+  pecas: { itemId: string; quantidade: string; localMontagem?: string }[];
+}): Promise<EstadoNo> {
+  const sessao = await exigirEdicao();
+
+  const dados = esquemaPecas.safeParse(entrada);
+  if (!dados.success) {
+    return { erro: dados.error.issues[0]?.message ?? "Dados inválidos" };
+  }
+  const { moldeId, paiId, pecas } = dados.data;
+
+  if (new Set(pecas.map((p) => p.itemId)).size !== pecas.length) {
+    return { erro: "A mesma peça está duas vezes na lista. Some as quantidades numa linha só." };
+  }
+
+  if (paiId) {
+    const [pai] = await db.select().from(moldeNos).where(eq(moldeNos.id, paiId));
+    if (!pai) return { erro: "Nó pai não encontrado." };
+    if (pai.itemId) {
+      return { erro: "Peça do estoque não contém nada. Pendure dentro de uma divisão." };
+    }
+  }
+
+  const codigos = new Map(
+    (
+      await db
+        .select({ id: itens.id, codigo: itens.codigo })
+        .from(itens)
+        .where(inArray(itens.id, pecas.map((p) => p.itemId)))
+    ).map((i) => [i.id, i.codigo] as const),
+  );
+
+  const [molde] = await db
+    .select({ itemId: moldes.itemId, nome: moldes.nome })
+    .from(moldes)
+    .where(eq(moldes.id, moldeId));
+  if (!molde) return { erro: "Estrutura não encontrada." };
+
+  if (molde.itemId) {
+    for (const p of pecas) {
+      if (await conjuntoConsome(p.itemId, molde.itemId)) {
+        return {
+          erro: `${codigos.get(p.itemId) ?? "Uma das peças"} faz ${molde.nome} entrar em si mesmo — direto ou por dentro de outro conjunto.`,
+        };
+      }
+    }
+  }
+
+  const irmaos = await db
+    .select()
+    .from(moldeNos)
+    .where(and(eq(moldeNos.moldeId, moldeId), paiId ? eq(moldeNos.paiId, paiId) : isNull(moldeNos.paiId)));
+  const repetidas = pecas.filter((p) => irmaos.some((i) => i.itemId === p.itemId));
+  if (repetidas.length > 0) {
+    return {
+      erro: `Já está nesta parte da estrutura: ${repetidas.map((p) => codigos.get(p.itemId)).join(", ")}. Tire da lista para adicionar as outras.`,
+    };
+  }
+
+  const criados = await db
+    .insert(moldeNos)
+    .values(
+      pecas.map((p, i) => ({
+        moldeId,
+        paiId,
+        itemId: p.itemId,
+        quantidade: p.quantidade,
+        localMontagem: p.localMontagem || null,
+        ordem: irmaos.length + 1 + i,
+      })),
+    )
+    .returning();
+
+  for (const criado of criados) {
+    await registrar({
+      usuarioId: sessao.id,
+      tabela: "molde_nos",
+      registroId: criado.id,
+      acao: "criar",
+      depois: criado,
+    });
+  }
   revalidatePath("/estrutura");
   revalidatePath("/conjuntos");
   return { ok: true };

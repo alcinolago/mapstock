@@ -148,6 +148,9 @@ export function Historico({
                         Icone={Undo2}
                         tamanho="sm"
                         tom="alerta"
+                        /* O hover do fantasma é o mesmo cinza do hover da
+                           linha: com o mouse em cima, o botão sumia nela. */
+                        className="hover:bg-alerta-suave hover:text-alerta"
                         iconeClassName="size-3.5"
                         dica="Estornar (lança o movimento oposto)"
                         titulo="Estornar movimentação"

@@ -34,6 +34,7 @@ src/lib/imagem.ts       compactação da foto no navegador (MB → KB)
 src/lib/mapa.ts         endereço do fornecedor → link de rota
 src/lib/acoes/moldes.ts     estrutura (manual e conjunto)  src/lib/acoes/montagem.ts  execução
 src/lib/acoes/divisoes.ts   os nomes das divisões, reutilizáveis entre estruturas
+src/lib/estrutura.ts    árvore das estruturas, com os conjuntos abertos (tela e PDF)
 src/lib/sessao.ts       JWT + cookie          src/lib/auth.ts  guardas de página
 src/lib/acoes/*         server actions, uma por módulo
 src/lib/pdf.ts          montagem de PDF (A4, quebra de linha, link clicável)

@@ -1,6 +1,17 @@
 "use client";
 
-import { AlertCircle, Eye, EyeOff, LoaderCircle, Plus, ShoppingCart, Trash2 } from "lucide-react";
+import {
+  AlertCircle,
+  ChevronsDownUp,
+  ChevronsUpDown,
+  Eye,
+  EyeOff,
+  LoaderCircle,
+  Plus,
+  Printer,
+  ShoppingCart,
+  Trash2,
+} from "lucide-react";
 import Link from "next/link";
 import { useActionState, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
@@ -13,7 +24,7 @@ import { BotaoConfirmar } from "@/components/ui/confirmar";
 import { Modal } from "@/components/ui/modal";
 import { Selo } from "@/components/ui/selo";
 import { AdicionarNo, type OpcaoDivisao } from "./adicionar-no";
-import { ArvoreMolde, type NoMolde } from "./arvore-molde";
+import { ArvoreMolde, type ComandoArvore, type NoMolde } from "./arvore-molde";
 import { alternarMolde, excluirMolde, salvarMolde, type EstadoMolde } from "@/lib/acoes/moldes";
 import { moeda, numero } from "@/lib/utils";
 
@@ -160,8 +171,11 @@ function CartaoMolde({
 }) {
   const router = useRouter();
   const [pendente, iniciar] = useTransition();
+  const [comando, setComando] = useState<ComandoArvore>();
 
   const pecas = contar(molde.nos);
+  /* Árvore só de primeiro nível não tem o que expandir. */
+  const temNivel = molde.nos.some((n) => n.filhos.length > 0);
   const ehConjunto = Boolean(molde.itemId);
 
   return (
@@ -197,6 +211,39 @@ function CartaoMolde({
               <Selo tom="alerta" title="Unidades abertas na tela de Montagem">
                 {molde.emMontagem} em montagem
               </Selo>
+            )}
+
+            {temNivel && (
+              <Botao
+                variante="fantasma"
+                tamanho="sm"
+                onClick={() =>
+                  setComando((c) => ({ aberto: !c?.aberto, vez: (c?.vez ?? 0) + 1 }))
+                }
+              >
+                {comando?.aberto ? (
+                  <ChevronsDownUp className="size-3.5" />
+                ) : (
+                  <ChevronsUpDown className="size-3.5" />
+                )}
+                {comando?.aberto ? "Recolher tudo" : "Expandir tudo"}
+              </Botao>
+            )}
+
+            {/* Link comum, como o PDF do pedido: o navegador abre a folha
+                numa aba e a impressão sai pelo leitor de PDF dele. Leitura
+                imprime também — quem está na bancada nem sempre edita. */}
+            {molde.nos.length > 0 && (
+              <a
+                href={`/api/exportar/estrutura/${molde.id}?visualizar=1`}
+                target="_blank"
+                rel="noopener noreferrer"
+                title="Abrir a estrutura inteira em PDF para imprimir ou salvar"
+                className={botao({ variante: "fantasma", tamanho: "sm" })}
+              >
+                <Printer className="size-3.5" />
+                Imprimir
+              </a>
             )}
 
             {podeEditar && (
@@ -270,6 +317,7 @@ function CartaoMolde({
         divisoes={divisoes}
         itens={itens}
         podeEditar={podeEditar}
+        comando={comando}
       />
     </Cartao>
   );

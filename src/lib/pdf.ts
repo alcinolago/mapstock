@@ -41,6 +41,9 @@ export const CORES = {
 const A4 = { largura: 595.28, altura: 841.89 };
 const MARGEM = 42;
 const RODAPE = 48;
+/* O fio do rodape fica 12pt acima do texto dele; o conteudo para antes do
+   fio, senao a ultima linha de uma tabela encosta nele. */
+const FIM_DO_CONTEUDO = RODAPE + 18;
 
 /* Caracteres que a tabela WinAnsi nao tem, mas que aparecem o tempo todo em
    ficha tecnica copiada de site. Trocar e melhor do que sumir. */
@@ -100,6 +103,20 @@ type OpcoesTexto = {
   entrelinha?: number;
 };
 
+/** Folga entre o texto e a borda de cada celula de tabela. */
+const PREENCHIMENTO = 4;
+
+export type Celula = {
+  texto: string;
+  largura: number;
+  alinhar?: "direita";
+  negrito?: boolean;
+  cor?: RGB;
+  tamanho?: number;
+  /** Recuo dentro da celula — e o que desenha os niveis da arvore. */
+  recuo?: number;
+};
+
 export class Folha {
   private doc!: PDFDocument;
   private pagina!: PDFPage;
@@ -135,9 +152,14 @@ export class Folha {
     this.y = A4.altura - MARGEM;
   }
 
-  /** Abre outra pagina se o que vem a seguir nao cabe no que sobrou. */
-  garantir(altura: number) {
-    if (this.y - altura < RODAPE) this.novaPagina();
+  /**
+   * Abre outra pagina se o que vem a seguir nao cabe no que sobrou. Diz se
+   * abriu, para quem precisa repetir um cabecalho de tabela no topo.
+   */
+  garantir(altura: number): boolean {
+    if (this.y - altura >= FIM_DO_CONTEUDO) return false;
+    this.novaPagina();
+    return true;
   }
 
   espaco(altura: number) {
@@ -356,6 +378,82 @@ export class Folha {
         }),
       ),
     );
+  }
+
+  /** Altura de uma linha de tabela: a da celula que mais quebra. */
+  alturaLinha(celulas: Celula[]): number {
+    return (
+      Math.max(
+        ...celulas.map((c) =>
+          this.alturaDe(c.texto, {
+            tamanho: c.tamanho,
+            negrito: c.negrito,
+            largura: c.largura - PREENCHIMENTO * 2 - (c.recuo ?? 0),
+          }),
+        ),
+      ) +
+      PREENCHIMENTO * 2
+    );
+  }
+
+  /**
+   * Uma linha de tabela, com as celulas lado a lado e o texto quebrando
+   * dentro da propria coluna. Nao quebra de pagina no meio: a linha vai
+   * inteira para a folha seguinte, senao a quantidade ficaria numa pagina e
+   * a descricao na outra.
+   */
+  linhaTabela(celulas: Celula[], o: { fundo?: RGB } = {}) {
+    const altura = this.alturaLinha(celulas);
+    this.garantir(altura);
+    const topo = this.y;
+
+    if (o.fundo) {
+      this.pagina.drawRectangle({
+        x: MARGEM,
+        y: topo - altura,
+        width: this.largura,
+        height: altura,
+        color: o.fundo,
+      });
+    }
+
+    let x = 0;
+    for (const c of celulas) {
+      const tamanho = c.tamanho ?? 9.5;
+      const recuo = c.recuo ?? 0;
+      const largura = c.largura - PREENCHIMENTO * 2 - recuo;
+
+      if (c.alinhar === "direita") {
+        /* Numero nao quebra; alinhado a direita, as unidades formam coluna. */
+        const texto = higienizar(c.texto);
+        const fonte = this.fonte(c.negrito);
+        this.pagina.drawText(texto, {
+          x: MARGEM + x + c.largura - PREENCHIMENTO - fonte.widthOfTextAtSize(texto, tamanho),
+          y: topo - PREENCHIMENTO - tamanho,
+          size: tamanho,
+          font: fonte,
+          color: c.cor ?? CORES.texto,
+        });
+      } else {
+        this.y = topo - PREENCHIMENTO;
+        this.texto(c.texto, {
+          tamanho,
+          negrito: c.negrito,
+          cor: c.cor,
+          recuo: x + PREENCHIMENTO + recuo,
+          largura,
+        });
+      }
+      x += c.largura;
+    }
+
+    this.y = topo - altura;
+    this.pagina.drawLine({
+      start: { x: MARGEM, y: this.y },
+      end: { x: A4.largura - MARGEM, y: this.y },
+      thickness: 0.5,
+      color: CORES.borda,
+    });
   }
 
   /** Bloco com fundo e faixa lateral, para o que nao pode passar batido. */

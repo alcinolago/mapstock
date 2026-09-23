@@ -35,6 +35,16 @@ export type NoMolde = {
 };
 
 /**
+ * Ordem do cartão para a árvore inteira: abrir ou fechar tudo de uma vez.
+ *
+ * Vai como ordem, e não como estado de cada nó, porque cada linha continua
+ * abrindo e fechando sozinha depois. `vez` muda a cada clique: é o que faz
+ * repetir "expandir tudo" valer de novo depois que a pessoa fechou um ramo
+ * na mão.
+ */
+export type ComandoArvore = { aberto: boolean; vez: number };
+
+/**
  * A arvore do molde.
  *
  * Tres coisas seguram a leitura, e todas nasceram de a tela ter ficado
@@ -56,12 +66,14 @@ export function ArvoreMolde({
   divisoes,
   itens,
   podeEditar,
+  comando,
 }: {
   moldeId: string;
   nos: NoMolde[];
   divisoes: OpcaoDivisao[];
   itens: ItemBusca[];
   podeEditar: boolean;
+  comando?: ComandoArvore;
 }) {
   if (nos.length === 0) {
     return (
@@ -85,6 +97,7 @@ export function ArvoreMolde({
           divisoes={divisoes}
           itens={itens}
           podeEditar={podeEditar}
+          comando={comando}
           primeiro={i === 0}
           ultimo={i === nos.length - 1}
         />
@@ -99,6 +112,7 @@ function No({
   divisoes,
   itens,
   podeEditar,
+  comando,
   primeiro,
   ultimo,
 }: {
@@ -107,6 +121,7 @@ function No({
   divisoes: OpcaoDivisao[];
   itens: ItemBusca[];
   podeEditar: boolean;
+  comando?: ComandoArvore;
   /* Nos extremos as setas ficam desabilitadas, em vez de sumirem: assim a
      linha não muda de largura conforme a peça sobe e desce. */
   primeiro: boolean;
@@ -115,8 +130,15 @@ function No({
   const router = useRouter();
   /* Recolhido por padrão: o cartão abre mostrando as divisões, que é o
      desenho do equipamento, e quem quer o detalhe pede. Com um conjunto
-     dentro, uma divisão sozinha já traz a árvore inteira de outro item. */
-  const [aberto, setAberto] = useState(false);
+     dentro, uma divisão sozinha já traz a árvore inteira de outro item.
+     O nó que só nasce depois de um "expandir tudo" (o filho de quem acabou
+     de abrir) já nasce obedecendo. */
+  const [aberto, setAberto] = useState(comando?.aberto ?? false);
+  const [vezAtendida, setVezAtendida] = useState(comando?.vez);
+  if (comando && comando.vez !== vezAtendida) {
+    setVezAtendida(comando.vez);
+    setAberto(comando.aberto);
+  }
   const [pendente, iniciar] = useTransition();
 
   const ehDivisao = !no.itemId;
@@ -305,6 +327,7 @@ function No({
               divisoes={divisoes}
               itens={itens}
               podeEditar={podeEditar}
+              comando={comando}
               primeiro={i === 0}
               ultimo={i === no.filhos.length - 1}
             />
